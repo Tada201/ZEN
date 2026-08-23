@@ -10,17 +10,21 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
-use tokio::sync::{Mutex, RwLock};
+
+use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use crate::services::{
-    AuditEvent, McpCapabilitySummary, McpConfigService, McpConsentStore, McpDiscoveryService,
-    PendingConsent, PermissionDecision, PrivilegedOperation, SecretService, SecurityService,
-};
-use crate::tools::url_safety::validate_public_http_url;
-use crate::tools::ToolRegistry;
+use zen_core::SecretStore;
+use zen_security::risk::RiskLevel;
+use zen_security::service::{AuditEvent, PermissionDecision, PrivilegedOperation, SecurityService};
+use zen_security::url_safety::validate_public_http_url;
+
+use crate::config::McpConfigService;
+use crate::consent::{McpConsentStore, PendingConsent};
+use crate::discovery::McpCapabilitySummary;
+use crate::discovery::McpDiscoveryService;
+
 
 use super::stdio::StdioTransport;
 use super::types::methods;
@@ -121,9 +125,8 @@ fn validate_mcp_endpoint_url(raw_url: &str) -> Result<url::Url, String> {
 ///   resolve to the destructive branch (above), surfaced at
 ///   `High`/`Critical` so the user is forced to confirm.
 pub fn risk_level_from_annotations(
-    ann: Option<&crate::tools::ToolAnnotations>,
-) -> crate::tools::permission::RiskLevel {
-    use crate::tools::permission::RiskLevel;
+    ann: Option<&zen_tools::ToolAnnotations>,
+) -> zen_security::risk::RiskLevel {
 
     match ann {
         None => RiskLevel::Medium,
@@ -321,14 +324,14 @@ fn endpoint_capabilities(endpoint: &ServerEndpoint) -> McpCapabilitySummary {
 
 /// Client for connecting to external MCP servers.
 pub struct McpClient {
-    tool_registry: Arc<RwLock<ToolRegistry>>,
+    registrar: Arc<dyn crate::registrar::ExternalToolRegistrar>,
     mcp_config: Arc<McpConfigService>,
     discovery: Arc<McpDiscoveryService>,
     /// Central security/audit boundary for remote connection attempts. Tool
     /// execution remains gated by ToolService; this field covers the network
     /// connection itself and keeps unsafe endpoints out of the transport.
     security: Arc<SecurityService>,
-    secrets: Arc<SecretService>,
+    secrets: Arc<dyn SecretStore>,
     /// Human-in-the-loop connection consent gate. A server with no matching
     /// approved fingerprint is held in `AwaitingConsent` and never spawned or
     /// contacted until the user approves it in settings.
@@ -357,15 +360,15 @@ pub struct McpClient {
 
 impl McpClient {
     pub fn new(
-        tool_registry: Arc<RwLock<ToolRegistry>>,
+        registrar: Arc<dyn crate::registrar::ExternalToolRegistrar>,
         mcp_config: Arc<McpConfigService>,
         discovery: Arc<McpDiscoveryService>,
         security: Arc<SecurityService>,
-        secrets: Arc<SecretService>,
+        secrets: Arc<dyn SecretStore>,
         consent: Arc<McpConsentStore>,
     ) -> Self {
         Self {
-            tool_registry,
+            registrar,
             mcp_config,
             discovery,
             security,
@@ -397,7 +400,7 @@ impl McpClient {
     /// input yields an empty map.
     async fn expand_str_map(
         value: Option<&Value>,
-        secrets: &SecretService,
+        secrets: &dyn SecretStore,
     ) -> std::collections::BTreeMap<String, String> {
         let mut expanded = std::collections::BTreeMap::new();
         if let Some(map) = value.and_then(|v| v.as_object()) {
@@ -437,12 +440,12 @@ impl McpClient {
     /// `failed` variant; the UI ignores it otherwise.
     fn emit_server_status(
         &self,
-        app: Option<&AppHandle>,
+        ui: Option<&crate::ui::UiBridge>,
         name: &str,
         status: &str,
         error: Option<String>,
     ) {
-        let Some(app) = app else {
+        let Some(ui) = ui else {
             return;
         };
         let mut payload = serde_json::json!({
@@ -454,19 +457,20 @@ impl McpClient {
                 McpDiscoveryService::error_code(&e),
             );
         }
-        if let Err(e) = app.emit("mcp:server:status", payload) {
+        if let Err(e) = ui.sink.emit_result("mcp:server:status", &payload) {
             warn!(
                 server = %name,
                 status = %status,
-                "emit_server_status: app.emit failed: {} (UI may not show status update)",
+                "emit_server_status: sink emit failed: {} (UI may not show status update)",
                 e
             );
         }
-        let app = (*app).clone();
         let discovery = self.discovery.clone();
-        tauri::async_runtime::spawn(async move {
+        let sink = ui.sink.clone();
+        tokio::spawn(async move {
             let inventory = discovery.snapshot().await;
-            if let Err(error) = app.emit("mcp:inventory", inventory) {
+            let inventory = serde_json::to_value(&inventory).unwrap_or_default();
+            if let Err(error) = sink.emit_result("mcp:inventory", &inventory) {
                 warn!("emit_server_status: inventory event failed: {}", error);
             }
         });
@@ -485,7 +489,7 @@ impl McpClient {
     /// rather than feeding a spurious success payload back to the model.
     pub async fn call_external_tool(
         &self,
-        app: Option<&AppHandle>,
+        ui: Option<&crate::ui::UiBridge>,
         server_name: &str,
         tool_name: &str,
         arguments: serde_json::Value,
@@ -497,7 +501,7 @@ impl McpClient {
         });
         let payload = self
             .request_with_mrtr(
-                app,
+                ui,
                 server_name,
                 methods::TOOLS_CALL,
                 base_params,

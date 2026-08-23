@@ -10,20 +10,18 @@
 //! On name collisions the workspace entry wins (project overrides global).
 //! Every read and write is recorded through `SecurityService` for audit.
 
-use crate::services::{AuditEvent, PermissionDecision, PrivilegedOperation, SecurityService};
-use crate::workspace;
+use zen_security::service::SecurityService;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::path::PathBuf;
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::fs;
 use tokio::sync::RwLock;
 
-const MCP_CONFIG_FILENAME: &str = ".mcp.json";
-const USER_CONFIG_SUBDIR: &str = "zen";
-const USER_CONFIG_FILENAME: &str = "mcp.json";
-const AUDIT_CALLER: &str = "mcp_config_service";
+pub(crate) const MCP_CONFIG_FILENAME: &str = ".mcp.json";
+pub(crate) const USER_CONFIG_SUBDIR: &str = "zen";
+pub(crate) const USER_CONFIG_FILENAME: &str = "mcp.json";
+pub(crate) const AUDIT_CALLER: &str = "mcp_config_service";
 
 /// Which catalog a server entry lives in. `User` is the global config;
 /// `Workspace` is the per-project `.mcp.json`.
@@ -41,8 +39,8 @@ impl McpScope {
 
 /// Service that owns MCP config read/write across the User and Workspace scopes.
 pub struct McpConfigService {
-    workspace_root: Arc<RwLock<PathBuf>>,
-    security: Arc<SecurityService>,
+    pub(crate) workspace_root: Arc<RwLock<PathBuf>>,
+    pub(crate) security: Arc<SecurityService>,
 }
 
 impl McpConfigService {
@@ -56,201 +54,7 @@ impl McpConfigService {
     /// Resolve the config file path for `scope`. Workspace resolution is
     /// strict (no `current_dir` fallback); User resolution requires a
     /// discoverable OS config dir.
-    async fn resolve_target_path(&self, scope: McpScope) -> Result<PathBuf, McpConfigError> {
-        match scope {
-            McpScope::Workspace => {
-                let root = self.workspace_root.read().await.clone();
-                if root.as_os_str().is_empty() {
-                    return Err(McpConfigError::NoWorkspace);
-                }
-                workspace::canonicalize_workspace_root(&root)
-                    .map_err(|e| McpConfigError::InvalidWorkspace(e.to_string()))?;
-                Ok(root.join(MCP_CONFIG_FILENAME))
-            }
-            McpScope::User => {
-                let dir = dirs::config_dir()
-                    .ok_or_else(|| {
-                        McpConfigError::InvalidWorkspace(
-                            "OS config directory is not available".to_string(),
-                        )
-                    })?
-                    .join(USER_CONFIG_SUBDIR);
-                Ok(dir.join(USER_CONFIG_FILENAME))
-            }
-        }
-    }
-
-    async fn audit(
-        &self,
-        operation: PrivilegedOperation,
-        decision: PermissionDecision,
-        target: Option<String>,
-        reason: String,
-    ) {
-        self.security
-            .record_audit(AuditEvent {
-                operation,
-                decision,
-                caller: AUDIT_CALLER.to_string(),
-                target,
-                reason: Some(reason),
-            })
-            .await;
-    }
-
-    /// Read the config document for `scope`. A missing file yields an
-    /// empty `{"mcpServers": {}}` default (audited as allow). Parse/IO
     /// failures return `Err` (audited as deny).
-    pub async fn read_config(&self, scope: McpScope) -> Result<Value, McpConfigError> {
-        let target_path = match self.resolve_target_path(scope).await {
-            Ok(p) => p,
-            Err(e) => {
-                self.audit(
-                    PrivilegedOperation::FileRead,
-                    PermissionDecision::Deny,
-                    None,
-                    format!("MCP config read denied: {}", e),
-                )
-                .await;
-                return Err(e);
-            }
-        };
-
-        match fs::read_to_string(&target_path).await {
-            Ok(content) => match serde_json::from_str::<Value>(&content) {
-                Ok(val) => {
-                    self.audit(
-                        PrivilegedOperation::FileRead,
-                        PermissionDecision::Allow,
-                        Some(target_path.display().to_string()),
-                        "MCP config read succeeded".to_string(),
-                    )
-                    .await;
-                    Ok(val)
-                }
-                Err(e) => {
-                    self.audit(
-                        PrivilegedOperation::FileRead,
-                        PermissionDecision::Deny,
-                        Some(target_path.display().to_string()),
-                        format!("MCP config parse failed: {}", e),
-                    )
-                    .await;
-                    Err(McpConfigError::Parse(
-                        target_path.display().to_string(),
-                        e.to_string(),
-                    ))
-                }
-            },
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                self.audit(
-                    PrivilegedOperation::FileRead,
-                    PermissionDecision::Allow,
-                    Some(target_path.display().to_string()),
-                    "MCP config not found, returning empty default".to_string(),
-                )
-                .await;
-                Ok(serde_json::json!({ "mcpServers": {} }))
-            }
-            Err(e) => {
-                self.audit(
-                    PrivilegedOperation::FileRead,
-                    PermissionDecision::Deny,
-                    Some(target_path.display().to_string()),
-                    format!("MCP config read failed: {}", e),
-                )
-                .await;
-                Err(McpConfigError::Io(
-                    target_path.display().to_string(),
-                    e.to_string(),
-                ))
-            }
-        }
-    }
-
-    /// Serialize and write the config document for `scope`. Creates the
-    /// parent directory for the User scope on first write. Fails closed
-    /// when the scope path is unavailable or the file cannot be written.
-    pub async fn save_config(&self, scope: McpScope, config: Value) -> Result<(), McpConfigError> {
-        Self::validate_config_document(&config)?;
-        let target_path = match self.resolve_target_path(scope).await {
-            Ok(p) => p,
-            Err(e) => {
-                self.audit(
-                    PrivilegedOperation::FileWrite,
-                    PermissionDecision::Deny,
-                    None,
-                    format!("MCP config save denied: {}", e),
-                )
-                .await;
-                return Err(e);
-            }
-        };
-
-        let content = match serde_json::to_string_pretty(&config) {
-            Ok(s) => s,
-            Err(e) => {
-                self.audit(
-                    PrivilegedOperation::FileWrite,
-                    PermissionDecision::Deny,
-                    Some(target_path.display().to_string()),
-                    format!("MCP config serialize failed: {}", e),
-                )
-                .await;
-                return Err(McpConfigError::Parse(
-                    target_path.display().to_string(),
-                    e.to_string(),
-                ));
-            }
-        };
-
-        // User scope may not have its parent dir yet — create it lazily.
-        if let Some(parent) = target_path.parent() {
-            if let Err(e) = fs::create_dir_all(parent).await {
-                self.audit(
-                    PrivilegedOperation::FileWrite,
-                    PermissionDecision::Deny,
-                    Some(target_path.display().to_string()),
-                    format!("MCP config dir create failed: {}", e),
-                )
-                .await;
-                return Err(McpConfigError::Io(
-                    target_path.display().to_string(),
-                    e.to_string(),
-                ));
-            }
-        }
-
-        match fs::write(&target_path, content).await {
-            Ok(()) => {
-                self.audit(
-                    PrivilegedOperation::FileWrite,
-                    PermissionDecision::Allow,
-                    Some(target_path.display().to_string()),
-                    "MCP config saved".to_string(),
-                )
-                .await;
-                Ok(())
-            }
-            Err(e) => {
-                self.audit(
-                    PrivilegedOperation::FileWrite,
-                    PermissionDecision::Deny,
-                    Some(target_path.display().to_string()),
-                    format!("MCP config write failed: {}", e),
-                )
-                .await;
-                Err(McpConfigError::Io(
-                    target_path.display().to_string(),
-                    e.to_string(),
-                ))
-            }
-        }
-    }
-
-    /// Parse the `mcpServers` map of one scope document into typed rows.
-    /// Malformed individual entries are skipped best-effort so a partially
-    /// hand-authored file still surfaces its valid rows.
     fn parse_entries(scope: McpScope, config: &Value) -> Vec<McpServerEntry> {
         let mut entries = Vec::new();
         let Some(servers) = config.get("mcpServers").and_then(|v| v.as_object()) else {
@@ -458,7 +262,7 @@ impl McpConfigService {
     /// Validate a complete raw config too, because JSON mode and the public
     /// save command bypass `upsert_server`. This is the last persistence gate
     /// against mixed transports and raw credential headers.
-    fn validate_config_document(config: &Value) -> Result<(), McpConfigError> {
+    pub(crate) fn validate_config_document(config: &Value) -> Result<(), McpConfigError> {
         let Some(root) = config.as_object() else {
             return Err(McpConfigError::Parse(
                 "<root>".to_string(),

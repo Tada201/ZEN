@@ -106,7 +106,7 @@ pub struct StdioTransport {
     /// the job and, via kill-on-close, terminates any process still inside it.
     /// `_sandbox` because it is never read after construction; its Drop is the
     /// entire contract.
-    _sandbox: Option<crate::mcp::sandbox::Sandbox>,
+    _sandbox: Option<crate::sandbox::Sandbox>,
     /// Per-request timeout, from the server config (default 30s).
     request_timeout: Duration,
     /// Receiver for server→client notification method names (e.g.
@@ -156,7 +156,7 @@ impl StdioTransport {
         // platforms) before touching its pipes. Fail closed: if the OS refuses
         // to apply the limits, kill the child rather than run it unconfined.
         #[cfg(windows)]
-        let sandbox = match crate::mcp::sandbox::Sandbox::confine(child.raw_handle()) {
+        let sandbox = match crate::sandbox::Sandbox::confine(child.raw_handle()) {
             Ok(sandbox) => sandbox,
             Err(error) => {
                 let _ = child.kill().await;
@@ -167,7 +167,7 @@ impl StdioTransport {
             }
         };
         #[cfg(not(windows))]
-        let sandbox = crate::mcp::sandbox::Sandbox::confine::<std::convert::Infallible>(None)
+        let sandbox = crate::sandbox::Sandbox::confine::<std::convert::Infallible>(None)
             .ok()
             .flatten();
 

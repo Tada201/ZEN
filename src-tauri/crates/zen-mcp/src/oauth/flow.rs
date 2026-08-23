@@ -12,15 +12,13 @@
 use std::time::Duration;
 
 use serde::Deserialize;
-use tauri::AppHandle;
-use tauri_plugin_opener::OpenerExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 use super::discovery::{self, AuthServerMetadata};
 use super::pkce::{self, PkcePair};
 use super::token::StoredToken;
-use crate::tools::url_safety::build_pinned_http_client;
+use zen_security::url_safety::build_pinned_http_client;
 
 /// Overall wall-clock budget for a user to complete the browser consent.
 const AUTH_TIMEOUT: Duration = Duration::from_secs(300);
@@ -38,12 +36,19 @@ struct TokenResponse {
     expires_in: Option<u64>,
 }
 
+/// Port for opening the system browser during the OAuth loopback flow.
+/// The app impl wraps `tauri_plugin_opener`; tests substitute a no-op.
+pub trait OAuthBrowser: Send + Sync {
+    fn open_url(&self, url: &str) -> Result<(), String>;
+}
+
 /// Perform the full interactive authorization for `server_name` at
 /// `server_url`, starting discovery from an optional 401 `resource_metadata`
-/// challenge URL. Returns the token to persist. Does not touch the keyring
-/// itself — the caller stores the result so this function stays testable.
+/// challenge URL. Returns the token to persist. Does not touch the secret
+/// store itself — the caller stores the result so this function stays
+/// testable.
 pub async fn authorize(
-    app: &AppHandle,
+    browser: &dyn OAuthBrowser,
     server_url: &str,
     challenge_metadata_url: Option<&str>,
     client_id: &str,
@@ -65,8 +70,8 @@ pub async fn authorize(
     let redirect_uri = format!("http://127.0.0.1:{}/callback", port);
 
     let auth_url = build_authorize_url(&meta, client_id, &redirect_uri, &state, &pkce, scopes)?;
-    app.opener()
-        .open_url(auth_url, None::<&str>)
+    browser
+        .open_url(&auth_url)
         .map_err(|e| format!("failed to open browser for OAuth: {}", e))?;
 
     let code = wait_for_code(listener, &state).await?;

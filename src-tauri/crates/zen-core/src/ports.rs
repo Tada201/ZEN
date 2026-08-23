@@ -16,6 +16,15 @@ use crate::error::ZenResult;
 /// emitter; event names and payload shapes are the frontend contract.
 pub trait EventSink: Send + Sync {
     fn emit(&self, event: &str, payload: &Value);
+
+    /// Emit with delivery feedback. Default reports success unconditionally
+    /// (fire-and-forget); backends that can observe emit failures override
+    /// this so callers can log dropped UI updates (Phase 8, MCP status/
+    /// elicitation events).
+    fn emit_result(&self, event: &str, payload: &Value) -> Result<(), String> {
+        self.emit(event, payload);
+        Ok(())
+    }
 }
 
 /// Secret material access (API keys, tokens). The app impl wraps the

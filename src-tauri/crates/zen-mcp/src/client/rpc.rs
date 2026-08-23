@@ -19,8 +19,8 @@ use std::time::{Duration, Instant};
 use serde_json::{Map, Value};
 use tokio_util::sync::CancellationToken;
 
-use crate::mcp::types::modern_request_meta;
-use crate::tools::url_safety::build_pinned_http_client;
+use crate::types::modern_request_meta;
+use zen_security::url_safety::build_pinned_http_client;
 
 use super::http_body::read_rpc_response;
 use super::{next_http_request_id, validate_mcp_endpoint_url, McpClient, ServerEndpoint};

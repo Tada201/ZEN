@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::services::SecretService;
+use zen_core::SecretStore;
 
 /// Keyring key namespace for MCP OAuth tokens. One entry per server name.
 fn token_key(server_name: &str) -> String {
@@ -58,9 +58,9 @@ impl StoredToken {
     }
 }
 
-/// Persist `token` for `server_name` in the OS keyring.
+/// Persist `token` for `server_name` in the secret store.
 pub async fn store_token(
-    secrets: &SecretService,
+    secrets: &dyn SecretStore,
     server_name: &str,
     token: &StoredToken,
 ) -> Result<(), String> {
@@ -73,7 +73,7 @@ pub async fn store_token(
 
 /// Load the stored token for `server_name`, if any.
 pub async fn load_token(
-    secrets: &SecretService,
+    secrets: &dyn SecretStore,
     server_name: &str,
 ) -> Result<Option<StoredToken>, String> {
     let Some(blob) = secrets
@@ -89,7 +89,7 @@ pub async fn load_token(
 }
 
 /// Delete any stored token for `server_name` (e.g. on consent revoke).
-pub async fn clear_token(secrets: &SecretService, server_name: &str) -> Result<(), String> {
+pub async fn clear_token(secrets: &dyn SecretStore, server_name: &str) -> Result<(), String> {
     secrets
         .delete_secret(&token_key(server_name))
         .await
@@ -146,11 +146,27 @@ mod tests {
         assert_eq!(dpop.authorization_header(), "DPoP tok");
     }
 
+    /// In-memory fake of the `zen-core::SecretStore` port (the real impl is
+    /// the app's OS-keyring service; tests must not touch host state).
+    struct MemSecrets(std::sync::Mutex<std::collections::HashMap<String, String>>);
+    #[async_trait::async_trait]
+    impl SecretStore for MemSecrets {
+        async fn get_secret(&self, key: &str) -> zen_core::ZenResult<Option<String>> {
+            Ok(self.0.lock().unwrap().get(key).cloned())
+        }
+        async fn set_secret(&self, key: String, value: String) -> zen_core::ZenResult<()> {
+            self.0.lock().unwrap().insert(key, value);
+            Ok(())
+        }
+        async fn delete_secret(&self, key: &str) -> zen_core::ZenResult<()> {
+            self.0.lock().unwrap().remove(key);
+            Ok(())
+        }
+    }
+
     #[tokio::test]
     async fn keyring_round_trip_stores_loads_and_clears() {
-        let settings = std::sync::Arc::new(crate::services::SettingsService::new());
-        let security = std::sync::Arc::new(crate::services::SecurityService::new());
-        let secrets = crate::services::SecretService::new(settings, security);
+        let secrets = MemSecrets(Default::default());
         let name = format!("zen-oauth-test-{}", uuid::Uuid::new_v4());
         let token = StoredToken {
             access_token: "secret-access".into(),

@@ -13124,6 +13124,7 @@ dependencies = [
  "zen-core",
  "zen-db",
  "zen-llm",
+ "zen-mcp",
  "zen-security",
  "zen-tools",
  "zip 4.6.1",
@@ -13177,6 +13178,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "zen-mcp"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "dirs",
+ "futures",
+ "futures-util",
+ "jsonschema",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+ "windows-sys 0.59.0",
+ "wiremock",
+ "zen-core",
+ "zen-security",
+ "zen-tools",
+]
+
+[[package]]
 name = "zen-policy-tests"
 version = "0.1.0"
 dependencies = [
@@ -13187,6 +13216,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "zen-mcp",
  "zen-security",
 ]
 

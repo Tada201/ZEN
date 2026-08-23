@@ -5,7 +5,7 @@
 //! server responses. The MCP client updates runtime state after each connection
 //! attempt; callers can always distinguish "configured" from "ready".
 
-use crate::services::{McpConfigError, McpConfigService, McpTransport};
+use crate::config::{McpConfigError, McpConfigService, McpTransport};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -249,14 +249,14 @@ fn transport_name(transport: &McpTransport) -> &'static str {
     }
 }
 
-fn scope_name(scope: crate::services::McpScope) -> &'static str {
+fn scope_name(scope: crate::config::McpScope) -> &'static str {
     match scope {
-        crate::services::McpScope::User => "user",
-        crate::services::McpScope::Workspace => "workspace",
+        crate::config::McpScope::User => "user",
+        crate::config::McpScope::Workspace => "workspace",
     }
 }
 
-fn stable_server_id(name: &str, scope: &crate::services::McpScope) -> String {
+fn stable_server_id(name: &str, scope: &crate::config::McpScope) -> String {
     format!("mcp:{}:{}", scope_name(*scope), safe_label(name, 96))
 }
 

@@ -1,24 +1,16 @@
-pub mod client;
-pub mod env;
-pub mod mrtr;
-pub mod oauth;
-pub mod resources;
-pub mod sandbox;
-pub mod tool_schema;
-/// MCP (Model Context Protocol) Module
-///
-/// Client-only: connects to external MCP servers configured via `.mcp.json`.
-/// Each external server's tools are registered with an `ext:{server}:{name}`
-/// prefix and proxied through the agent runner.
-///
-/// Supports two transports:
-/// - **Streamable HTTP** (`url` field): reqwest-based POST with
-///   `MCP-Protocol-Version`/`Mcp-Session-Id` headers.
-/// - **stdio** (`command`+`args` fields): spawns a child process and
-///   pipes newline-delimited JSON-RPC 2.0 over stdin/stdout.
-pub mod stdio;
-pub mod types;
+//! App-side re-export shim for zen-mcp (BIG_MIGRATION.md Phase 8).
+//!
+//! The MCP client/config/consent/discovery logic now lives in the `zen-mcp`
+//! workspace crate. Every historical `crate::mcp::*` path keeps compiling
+//! via these re-exports; Phase 14 deletes this shim after rewriting consumers
+//! to their deliberate final paths (relocation doctrine, BIG_MIGRATION.md
+//! S4.6).
 
-pub use client::McpClient;
-pub use stdio::StdioTransport;
-pub use types::*;
+pub use zen_mcp::{
+    client, config, consent, discovery, env, mrtr, oauth, registrar, resources, sandbox,
+    tool_schema, types, UiBridge,
+};
+pub use zen_mcp::{
+    is_external_tool_name, prefixed_external_tool_name, risk_level_from_annotations, McpClient,
+    McpConfigError, McpConfigService, McpScope, McpServerEntry, McpTransport,
+};

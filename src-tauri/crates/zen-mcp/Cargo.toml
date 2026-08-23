@@ -1,0 +1,40 @@
+[package]
+name = "zen-mcp"
+version = "0.1.0"
+edition = "2021"
+description = "MCP client/config/consent/discovery for the Zen backend workspace (BIG_MIGRATION.md Phase 8)"
+
+[dependencies]
+zen-core = { workspace = true }
+zen-security = { workspace = true }
+zen-tools = { workspace = true }
+async-trait = { workspace = true }
+# Same version pins as the app crate; relocated usage, not new dependencies.
+base64 = "0.22"
+chrono = { workspace = true }
+# Same pin as the app crate: Windows Job Object sandboxing for stdio MCP
+# child processes (relocated usage, not a new dependency).
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+dirs = "6.0"
+futures-util = "0.3"
+jsonschema = "0.42"
+uuid = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true, features = ["native-tls", "json", "stream"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = "0.10"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process", "io-util", "time", "sync"] }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+url = "2"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+wiremock = "0.6"

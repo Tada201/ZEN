@@ -22,7 +22,7 @@
 //! `${secret:}` references, and hashing them would leak nothing useful while
 //! re-prompting on every secret rotation.
 
-use crate::services::{AuditEvent, PermissionDecision, PrivilegedOperation, SecurityService};
+use zen_security::service::{AuditEvent, PermissionDecision, PrivilegedOperation, SecurityService};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};

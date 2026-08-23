@@ -28,6 +28,7 @@ zen-db = { path = "crates/zen-db" }
 zen-security = { path = "crates/zen-security" }
 zen-tools = { path = "crates/zen-tools" }
 zen-llm = { path = "crates/zen-llm" }
+zen-mcp = { path = "crates/zen-mcp" }
 
 [package]
 name = "zen"
@@ -73,6 +74,7 @@ zen-db = { workspace = true }
 zen-security = { workspace = true }
 zen-tools = { workspace = true }
 zen-llm = { workspace = true }
+zen-mcp = { workspace = true }
 sysinfo = "0.38"
 axum = { version = "0.8", features = ["default", "ws"] }
 tower-http = { version = "0.6", features = ["cors"] }

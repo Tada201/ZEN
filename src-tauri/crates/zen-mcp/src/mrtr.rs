@@ -23,8 +23,8 @@
 
 use serde_json::{Map, Value};
 
-use crate::mcp::resources::sanitize_text;
-use crate::mcp::types::methods;
+use crate::resources::sanitize_text;
+use crate::types::methods;
 
 /// Message length cap for an elicitation prompt shown to the user.
 const MAX_MESSAGE_BYTES: usize = 4 * 1024;

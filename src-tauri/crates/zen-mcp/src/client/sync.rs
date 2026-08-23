@@ -11,11 +11,14 @@
 
 use std::sync::Arc;
 
-use tauri::AppHandle;
+
 use tracing::{info, warn};
 
-use crate::services::{McpConfigService, McpConsentStore, McpDiscoveryService, PermissionDecision};
-use crate::tools::url_safety::build_pinned_http_client;
+use crate::config::McpConfigService;
+use crate::consent::McpConsentStore;
+use crate::discovery::McpDiscoveryService;
+use zen_security::service::PermissionDecision;
+use zen_security::url_safety::build_pinned_http_client;
 
 use super::{
     build_pending_consent, endpoint_capabilities, endpoint_protocol_version,
@@ -39,7 +42,7 @@ impl McpClient {
     /// Call via `client.method()` where `client: Arc<McpClient>` —
     /// auto-ref to `&Arc<Self>` rules apply, so no caller change is
     /// required even though the receiver looks unusual.
-    pub async fn sync_external_servers(self: &Arc<Self>, app: Option<&AppHandle>) {
+    pub async fn sync_external_servers(self: &Arc<Self>, ui: Option<&crate::ui::UiBridge>) {
         // Serialize concurrent resyncs so rapid UI clicks can't race
         // on the tool registry; subsequent callers wait for the
         // in-flight sync to finish before grabbing the lock.
@@ -52,8 +55,7 @@ impl McpClient {
         // `prefixed_external_tool_name` — used here as a literal so
         // we don't need a new shared constant.
         {
-            let mut registry = self.tool_registry.write().await;
-            let cleared = registry.remove_by_prefix("ext:");
+            let cleared = self.registrar.clear_external().await;
             if cleared > 0 {
                 info!(
                     cleared,
@@ -97,7 +99,7 @@ impl McpClient {
             let Some(server_object) = server_cfg.as_object() else {
                 let error = "MCP server entry is not an object".to_string();
                 self.discovery.mark_failed(server_name, &error).await;
-                self.emit_server_status(app, server_name, "failed", Some(error));
+                self.emit_server_status(ui, server_name, "failed", Some(error));
                 continue;
             };
             if let Err(error) = McpConfigService::validate_entry(server_name, server_object) {
@@ -109,7 +111,7 @@ impl McpClient {
                 )
                 .await;
                 self.discovery.mark_failed(server_name, &message).await;
-                self.emit_server_status(app, server_name, "failed", Some(message));
+                self.emit_server_status(ui, server_name, "failed", Some(message));
                 continue;
             }
 
@@ -123,7 +125,7 @@ impl McpClient {
                 info!("sync_external_servers: '{}' is disabled, skipping", server_name);
                 self.discovery.mark_disabled(server_name).await;
                 self.consent.clear_pending(server_name).await;
-                self.emit_server_status(app, server_name, "disabled", None);
+                self.emit_server_status(ui, server_name, "disabled", None);
                 continue;
             }
 
@@ -145,7 +147,7 @@ impl McpClient {
                 )
                 .await;
                 self.discovery.mark_awaiting_consent(server_name).await;
-                self.emit_server_status(app, server_name, "awaiting_consent", None);
+                self.emit_server_status(ui, server_name, "awaiting_consent", None);
                 continue;
             }
             self.consent.clear_pending(server_name).await;
@@ -168,12 +170,12 @@ impl McpClient {
                     server_name, url
                 );
                 self.discovery.mark_connecting(server_name).await;
-                self.emit_server_status(app, server_name, "reconnecting", None);
+                self.emit_server_status(ui, server_name, "reconnecting", None);
 
                 // Configured HTTP headers, env-expanded at connect time so
                 // `${env:TOKEN}` never has to be persisted literally.
                 let mut headers =
-                    Self::expand_str_map(server_cfg.get("headers"), &self.secrets).await;
+                    Self::expand_str_map(server_cfg.get("headers"), self.secrets.as_ref()).await;
                 // Layer in a stored OAuth token (keyring-backed) as the
                 // Authorization header unless the operator already set one
                 // explicitly in `.mcp.json`. Expired tokens are skipped so the
@@ -181,7 +183,7 @@ impl McpClient {
                 // rather than sending a stale credential.
                 if !headers.contains_key("Authorization") {
                     if let Ok(Some(token)) =
-                        crate::mcp::oauth::load_token(&self.secrets, server_name).await
+                        crate::oauth::load_token(self.secrets.as_ref(), server_name).await
                     {
                         if !token.is_expired(60) {
                             headers.insert(
@@ -201,7 +203,7 @@ impl McpClient {
                         )
                         .await;
                         self.discovery.mark_failed(server_name, &error).await;
-                        self.emit_server_status(app, server_name, "failed", Some(error));
+                        self.emit_server_status(ui, server_name, "failed", Some(error));
                         continue;
                     }
                 };
@@ -215,7 +217,7 @@ impl McpClient {
                         )
                         .await;
                         self.discovery.mark_failed(server_name, &error).await;
-                        self.emit_server_status(app, server_name, "failed", Some(error));
+                        self.emit_server_status(ui, server_name, "failed", Some(error));
                         continue;
                     }
                 };
@@ -241,7 +243,7 @@ impl McpClient {
                                 server_name, error
                             );
                             self.discovery.mark_failed(server_name, &error).await;
-                            self.emit_server_status(app, server_name, "failed", Some(error));
+                            self.emit_server_status(ui, server_name, "failed", Some(error));
                             continue;
                         }
                     },
@@ -251,7 +253,7 @@ impl McpClient {
                             server_name, error
                         );
                         self.discovery.mark_failed(server_name, &error).await;
-                        self.emit_server_status(app, server_name, "failed", Some(error));
+                        self.emit_server_status(ui, server_name, "failed", Some(error));
                         continue;
                     }
                 };
@@ -278,7 +280,7 @@ impl McpClient {
                             server_name, error
                         );
                         self.discovery.mark_failed(server_name, &error).await;
-                        self.emit_server_status(app, server_name, "failed", Some(error));
+                        self.emit_server_status(ui, server_name, "failed", Some(error));
                         continue;
                     }
                 }
@@ -313,14 +315,14 @@ impl McpClient {
 
                 // stdio `env`, env-expanded so `${env:VAR}` references
                 // resolve from the host at spawn time (never persisted).
-                let env = Self::expand_str_map(server_cfg.get("env"), &self.secrets).await;
+                let env = Self::expand_str_map(server_cfg.get("env"), self.secrets.as_ref()).await;
 
                 info!(
                     "sync_external_servers: spawning '{}' ({} {})",
                     server_name, command, args.join(" ")
                 );
                 self.discovery.mark_connecting(server_name).await;
-                self.emit_server_status(app, server_name, "reconnecting", None);
+                self.emit_server_status(ui, server_name, "reconnecting", None);
 
                 // Steps 1+2: initialize + notifications/initialized
                 let stdio_endpoint =
@@ -332,7 +334,7 @@ impl McpClient {
                                 server_name, e
                             );
                             self.discovery.mark_failed(server_name, &e).await;
-                            self.emit_server_status(app, server_name, "failed", Some(e.clone()));
+                            self.emit_server_status(ui, server_name, "failed", Some(e.clone()));
                             continue;
                         }
                     };
@@ -359,7 +361,7 @@ impl McpClient {
                     self.spawn_stdio_subscription(
                         server_name.clone(),
                         notifications,
-                        app.cloned(),
+                        ui.map(|b| std::sync::Arc::new(b.clone())),
                     );
                 }
 
@@ -376,7 +378,7 @@ impl McpClient {
                     .mark_failed(server_name, "missing 'url' or 'command' field")
                     .await;
                 self.emit_server_status(
-                    app,
+                    ui,
                     server_name,
                     "failed",
                     Some("missing 'url' or 'command' field".to_string()),
@@ -396,7 +398,7 @@ impl McpClient {
                     )
                     .await;
                 self.emit_server_status(
-                    app,
+                    ui,
                     server_name,
                     "connected",
                     Some("handshake ok, server advertised no tools".to_string()),
@@ -404,12 +406,6 @@ impl McpClient {
                 continue;
             }
 
-            // Build the Weak<McpClient> back-reference once per server so
-            // each adapter's `execute` can upgrade to a Strong ref for the
-            // duration of the call without extending the client's lifetime.
-            let mcp_weak = Arc::downgrade(self);
-
-            let mut registry = self.tool_registry.write().await;
             let mut registered = 0usize;
             let mut seen_names: std::collections::HashSet<String> = std::collections::HashSet::new();
             for tool_json in tools {
@@ -442,12 +438,12 @@ impl McpClient {
                 // Untrusted descriptor validation (Phase 4): a malformed input
                 // or output schema, or an unsafe `x-mcp-header` extension, drops
                 // just this tool — the rest of the server's tools still register.
-                if let Err(error) = crate::mcp::tool_schema::validate_tool_schema("inputSchema", &parameters)
+                if let Err(error) = crate::tool_schema::validate_tool_schema("inputSchema", &parameters)
                     .and_then(|_| match &output_schema {
-                        Some(schema) => crate::mcp::tool_schema::validate_tool_schema("outputSchema", schema),
+                        Some(schema) => crate::tool_schema::validate_tool_schema("outputSchema", schema),
                         None => Ok(()),
                     })
-                    .and_then(|_| crate::mcp::tool_schema::tool_header_extension_is_safe(&tool_json))
+                    .and_then(|_| crate::tool_schema::tool_header_extension_is_safe(&tool_json))
                 {
                     warn!(
                         server = %server_name,
@@ -458,7 +454,7 @@ impl McpClient {
                     continue;
                 }
 
-                let annotations: Option<crate::tools::ToolAnnotations> =
+                let annotations: Option<zen_tools::ToolAnnotations> =
                     match serde_json::from_value(tool_json["annotations"].clone()) {
                         Ok(a) => Some(a),
                         Err(e) if tool_json.get("annotations").is_some() => {
@@ -472,20 +468,26 @@ impl McpClient {
                         }
                         Err(_) => None,
                     };
-                let annotations = crate::mcp::tool_schema::fold_title(&tool_json, annotations);
+                let annotations = crate::tool_schema::fold_title(&tool_json, annotations);
                 let risk_level = risk_level_from_annotations(annotations.as_ref());
 
-                let adapter = crate::services::mcp_adapter::McpToolAdapter::new(
-                    server_name.clone(),
-                    name.clone(),
-                    description,
-                    parameters,
-                    output_schema,
-                    annotations,
-                    risk_level,
-                    mcp_weak.clone(),
-                );
-                registry.register(Arc::new(adapter));
+                // Phase 8 construction inversion: the adapter type lives in
+                // the host crate (it implements `Tool<AppHandle>`), so the
+                // client hands a validated spec to the registrar port and
+                // the app wraps it. The `Weak<McpClient>` back-reference is
+                // owned by the registrar impl, preserving the old cycle
+                // break.
+                self.registrar
+                    .register_external(crate::registrar::ExternalToolSpec {
+                        server_name: server_name.clone(),
+                        tool_name: name.clone(),
+                        description,
+                        parameters,
+                        output_schema,
+                        annotations,
+                        risk_level,
+                    })
+                    .await;
                 registered += 1;
                 info!(
                     "sync_external_servers: registered {} as {:?} from '{}'",
@@ -508,7 +510,7 @@ impl McpClient {
                     endpoint_capabilities(&_endpoint),
                 )
                 .await;
-            self.emit_server_status(app, server_name, "connected", None);
+            self.emit_server_status(ui, server_name, "connected", None);
         }
     }
 }

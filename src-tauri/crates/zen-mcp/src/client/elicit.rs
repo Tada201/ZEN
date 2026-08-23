@@ -6,7 +6,7 @@
 //! interim `InputRequiredResult` the client gathers the requested input and
 //! retries the *original* request with a **new** JSON-RPC id, the gathered
 //! `inputResponses`, and the opaque `requestState` echoed back verbatim. The
-//! wire parsing/validation lives in `crate::mcp::mrtr`; this file owns only the
+//! wire parsing/validation lives in `crate::mrtr`; this file owns only the
 //! loop, the user prompt, and the safety rules that decide when we refuse to
 //! prompt at all.
 //!
@@ -22,13 +22,12 @@
 //!   prefetched and is only opened, in the OS browser, after explicit accept.
 
 use serde_json::{Map, Value};
-use tauri::{AppHandle, Emitter};
-use tauri_plugin_opener::OpenerExt;
+
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use crate::mcp::mrtr::{
+use crate::mrtr::{
     build_elicit_result, build_retry_params, is_input_required, parse_input_required, ElicitMode,
     ElicitationRequest,
 };
@@ -59,7 +58,7 @@ impl McpClient {
     /// `None` handle fails closed on an input-required result.
     pub(crate) async fn request_with_mrtr(
         &self,
-        app: Option<&AppHandle>,
+        ui: Option<&crate::ui::UiBridge>,
         server_name: &str,
         method: &str,
         base_params: Value,
@@ -81,7 +80,7 @@ impl McpClient {
             }
             let parsed = parse_input_required(&result);
             let responses = self
-                .gather_input_responses(app, server_name, cancel, &parsed.requests)
+                .gather_input_responses(ui, server_name, cancel, &parsed.requests)
                 .await?;
             params = build_retry_params(params, responses, parsed.request_state.as_ref());
         }
@@ -96,7 +95,7 @@ impl McpClient {
     /// rules for the ones we're not.
     async fn gather_input_responses(
         &self,
-        app: Option<&AppHandle>,
+        ui: Option<&crate::ui::UiBridge>,
         server_name: &str,
         cancel: Option<&CancellationToken>,
         requests: &[ElicitationRequest],
@@ -120,7 +119,7 @@ impl McpClient {
                 continue;
             }
             let value = self
-                .prompt_elicitation(app, server_name, cancel, req)
+                .prompt_elicitation(ui, server_name, cancel, req)
                 .await?;
             responses.insert(req.key.clone(), value);
         }
@@ -136,12 +135,12 @@ impl McpClient {
     /// itself, and a `cancel` result is returned to the server.
     async fn prompt_elicitation(
         &self,
-        app: Option<&AppHandle>,
+        ui: Option<&crate::ui::UiBridge>,
         server_name: &str,
         cancel: Option<&CancellationToken>,
         req: &ElicitationRequest,
     ) -> Result<Value, String> {
-        let Some(app) = app else {
+        let Some(ui) = ui else {
             return Err(
                 "MCP server requested user input, but no UI is attached to prompt for it"
                     .to_string(),
@@ -172,7 +171,7 @@ impl McpClient {
                 },
             );
         }
-        if let Err(e) = app.emit("mcp:elicitation:request", payload) {
+        if let Err(e) = ui.sink.emit_result("mcp:elicitation:request", &payload) {
             self.elicitations.lock().unwrap().remove(&request_id);
             return Err(format!("failed to surface MCP elicitation: {}", e));
         }
@@ -191,8 +190,8 @@ impl McpClient {
                 // Sender dropped (session teardown) ⇒ treat as cancel.
                 Err(_) => build_elicit_result("cancel", None),
             },
-            _ = timeout => self.abandon_elicitation(app, &request_id),
-            _ = cancelled => self.abandon_elicitation(app, &request_id),
+            _ = timeout => self.abandon_elicitation(ui, &request_id),
+            _ = cancelled => self.abandon_elicitation(ui, &request_id),
         };
 
         let action = decision.get("action").and_then(Value::as_str).unwrap_or("cancel");
@@ -203,7 +202,7 @@ impl McpClient {
         if req.mode == ElicitMode::Url {
             if action == "accept" {
                 if let Some(url) = &req.url {
-                    if let Err(e) = app.opener().open_url(url.clone(), None::<&str>) {
+                    if let Err(e) = ui.browser.open_url(&url.clone()) {
                         warn!(server = %server_name, "failed to open elicitation URL: {}", e);
                     }
                 }
@@ -219,11 +218,11 @@ impl McpClient {
     /// Drop a pending entry the user never answered (timeout / cancel) and tell
     /// the UI to dismiss its modal so a stale prompt can't be submitted into a
     /// call that already moved on. Returns the `cancel` result for the server.
-    fn abandon_elicitation(&self, app: &AppHandle, request_id: &str) -> Value {
+    fn abandon_elicitation(&self, ui: &crate::ui::UiBridge, request_id: &str) -> Value {
         self.elicitations.lock().unwrap().remove(request_id);
-        let _ = app.emit(
+        let _ = ui.sink.emit_result(
             "mcp:elicitation:close",
-            serde_json::json!({ "requestId": request_id }),
+            &serde_json::json!({ "requestId": request_id }),
         );
         build_elicit_result("cancel", None)
     }
@@ -231,13 +230,13 @@ impl McpClient {
     /// Re-emit every in-flight elicitation so a freshly-mounted or reloaded UI
     /// picks up prompts that fired before it was listening. Called from the
     /// command layer when the frontend (re)subscribes.
-    pub fn replay_elicitations(&self, app: &AppHandle) {
+    pub fn replay_elicitations(&self, ui: &crate::ui::UiBridge) {
         let payloads: Vec<Value> = {
             let pending = self.elicitations.lock().unwrap();
             pending.values().map(|p| p.payload.clone()).collect()
         };
         for payload in payloads {
-            let _ = app.emit("mcp:elicitation:request", payload);
+            let _ = ui.sink.emit_result("mcp:elicitation:request", &payload);
         }
     }
 
@@ -268,32 +267,26 @@ impl McpClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::mrtr::ElicitationRequest;
+    use crate::mrtr::ElicitationRequest;
 
     /// A client with no live endpoints, enough to exercise the fail-closed
     /// elicitation paths that never touch the transport.
     fn test_client() -> McpClient {
         use std::sync::Arc;
-        use tokio::sync::RwLock;
-        let settings = Arc::new(crate::services::SettingsService::new());
-        let security = Arc::new(crate::services::SecurityService::new());
-        let secrets = Arc::new(crate::services::SecretService::new(
-            settings,
-            security.clone(),
-        ));
-        let workspace = Arc::new(RwLock::new(std::env::temp_dir()));
-        let config = Arc::new(crate::services::McpConfigService::new(
+        let security = Arc::new(zen_security::service::SecurityService::new());
+        let workspace = Arc::new(tokio::sync::RwLock::new(std::env::temp_dir()));
+        let config = Arc::new(crate::config::McpConfigService::new(
             workspace,
             security.clone(),
         ));
-        let discovery = Arc::new(crate::services::McpDiscoveryService::new(config.clone()));
-        let consent = Arc::new(crate::services::McpConsentStore::new(security.clone()));
+        let discovery = Arc::new(crate::discovery::McpDiscoveryService::new(config.clone()));
+        let consent = Arc::new(crate::consent::McpConsentStore::new(security.clone()));
         McpClient::new(
-            Arc::new(RwLock::new(crate::tools::ToolRegistry::new())),
+            Arc::new(crate::registrar::NoopRegistrar),
             config,
             discovery,
             security,
-            secrets,
+            Arc::new(crate::oauth::test_support::MemSecrets::new()),
             consent,
         )
     }

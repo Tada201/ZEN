@@ -26,4 +26,10 @@ impl EventSink for TauriEventSink {
             tracing::warn!(event, error = %e, "EventSink emit failed");
         }
     }
+
+    fn emit_result(&self, event: &str, payload: &Value) -> Result<(), String> {
+        self.app
+            .emit(event, payload.clone())
+            .map_err(|e| e.to_string())
+    }
 }

@@ -893,20 +893,52 @@ checks that already live in zen-security.
 **Prerequisites:** Phases 4, 7.
 
 **Tasks**
-- [ ] Move `src/mcp/**` logic cores + `services/mcp_config.rs` (761 → split:
-      config parsing vs persistence), `mcp_consent.rs`, `mcp_discovery.rs`,
-      `mcp_adapter.rs` cores.
-- [ ] zen-mcp deps: zen-core, zen-security (incl. url_safety from Phase 4),
-      zen-tools (`ToolRegistry`/`ToolAnnotations` consumed at mcp/mod.rs:22-23,124-126
-      and tool_schema.rs:113-166), reqwest/jsonschema as used, tokio,
-      tracing. NO tauri. Local HTTP server bits that bind localhost stay in app
-      unless cleanly separable (RULES.md: bind localhost default).
-- [ ] Consent/approval flows call zen-security approval types; elicitation
-      events go through EventSink.
+- [x] Move `src/mcp/**` logic cores → `crates/zen-mcp` (client/{mod,elicit,
+      features,http_body,http_handshake,rpc,stdio_helpers,sync,subscriptions},
+      oauth/{discovery,flow,pkce,token}, env, mrtr, resources, sandbox, stdio,
+      tool_schema, types) + `services/mcp_config.rs` → `config.rs` +
+      NEW `config_store.rs` (parsing vs persistence split per plan; 609/218)
+      + `mcp_consent.rs` → `consent.rs` + `mcp_discovery.rs` → `discovery.rs`.
+      App keeps pure re-export shims (`src/mcp/mod.rs`, services re-exports).
+- [x] Construction inversion (§3.4 row 3): no service construction remains
+      inside zen-mcp —
+      - secrets: concrete `SecretService` → `Arc<dyn SecretStore>` /
+        `&dyn SecretStore` (env expansion, oauth token store/load/clear);
+      - UI: `Option<&AppHandle>` threading replaced by
+        `zen_mcp::ui::UiBridge { sink: Arc<dyn EventSink>,
+        browser: Arc<dyn OAuthBrowser> }`; app impls in NEW
+        `services/mcp_registrar.rs` (`OpenerBrowser` via tauri_plugin_opener,
+        `ui_bridge(app)` helper); `EventSink::emit_result` added to the port
+        (overridable) so MCP status/elicitation emit-failure logging is kept;
+      - registry: because `ToolRegistry<A>` is host-context-generic, adapter
+        construction inverted behind NEW `registrar::ExternalToolRegistrar`
+        port + `ExternalToolSpec` DTO; app impl `McpRegistrar` wraps specs in
+        `McpToolAdapter` (Weak back-ref via `set_client_weak`, same cycle
+        break); `McpClient.tool_registry` field deleted (was sync-only);
+      - `SecurityService` stays CONCRETE (sanctioned dep per plan task list;
+        audit/consent paths byte-identical). `tauri::async_runtime::spawn` →
+        `tokio::spawn`.
+- [x] `services/mcp_adapter.rs` STAYS in the app crate as integration glue
+      (implements `zen_tools::Tool<AppHandle>` + reaches AppState cancellation
+      tokens) — the P6 sanctioned-exception pattern; its call into the client
+      now passes a `UiBridge`. Deviation from plan's "mcp_adapter core moves"
+      noted here deliberately.
+- [x] zen-mcp deps: zen-core (ports incl. new `emit_result`), zen-security
+      (service/policy/risk/url_safety), zen-tools (ToolAnnotations),
+      reqwest(native-tls,json,stream), tokio(process/io-util/time/sync/macros/
+      rt), tokio-util, futures-util, serde(_json), thiserror, tracing, url,
+      dirs(6.0), base64(0.22), sha2(0.10), jsonschema(0.42), windows-sys
+      (0.59 JobObjects — relocated pin), uuid/chrono. NO tauri. NO sqlx.
+- [x] Provider/model discovery endpoints unchanged; policy checks unchanged.
 
 **Verification gates**
-- MCP unit tests green in-crate; connect to at least one stdio server manually.
-- Gate suite green.
+- MCP unit tests green in-crate: `cargo test -p zen-mcp` 55 passed (+33
+  policy-tests mrtr mirror repointed at crate sources). Connect to at least
+  one stdio server manually: pending user-side check before release cut
+  (recorded, non-blocking).
+- Gate suite green (check / clippy -D warnings / crate tests / npm build;
+  guards: 0 tauri code refs in zen-mcp, 0 AppState refs (comment only),
+  0 raw AppHandle emits in agent core, all files <700 after config split).
 
 **Rollback:** revert commit range.
 

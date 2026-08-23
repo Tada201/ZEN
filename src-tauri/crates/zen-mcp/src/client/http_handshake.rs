@@ -11,13 +11,13 @@
 use serde_json::{Map, Value};
 use tracing::warn;
 
-use crate::mcp::types::{
+use crate::types::{
     initialized_notification, methods, modern_request_meta, ClientCapabilities, Implementation,
     InitializeParams, InitializeResult, ServerCapabilities, ACCEPT_JSON_OR_SSE, HEADER_METHOD,
     HEADER_NAME, HEADER_PROTOCOL_VERSION, HEADER_SESSION_ID, MODERN_PROTOCOL_VERSION,
     PROTOCOL_VERSION,
 };
-use crate::services::McpCapabilitySummary;
+use crate::discovery::McpCapabilitySummary;
 
 use super::http_body::read_rpc_response;
 use super::{next_http_request_id, HttpEndpoint, McpClient, ServerEndpoint};

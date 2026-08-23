@@ -18,7 +18,7 @@
 
 use serde::Deserialize;
 
-use crate::tools::url_safety::build_pinned_http_client;
+use zen_security::url_safety::build_pinned_http_client;
 
 /// The metadata needed to drive the authorization-code + PKCE flow.
 #[derive(Debug, Clone)]

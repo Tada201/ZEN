@@ -10,18 +10,29 @@ pub use zen_security::url_safety;
 #[path = "../../src/services/runtime_resource.rs"]
 pub mod runtime_resource;
 
-// MRTR parse + elicitation safety logic (Phase 6). `mrtr.rs` is pure and only
-// depends on `crate::mcp::{resources::sanitize_text, types::methods}`, both of
+// MRTR parse + elicitation safety logic (Phase 6; sources relocated to the
+// zen-mcp crate in Phase 8). `mrtr.rs` is pure and only depends on
+// `crate::mcp::{resources::sanitize_text, types::methods}`, both of
 // which are themselves serde-only, so we mirror that path here to run its
 // `#[cfg(test)]` tests on Windows (the full-app `cargo test --lib` hits the
 // STATUS_ENTRYPOINT_NOT_FOUND loader bug).
 pub mod mcp {
-    #[path = "../../../src/mcp/resources.rs"]
+    #[path = "../../../crates/zen-mcp/src/resources.rs"]
     pub mod resources;
-    #[path = "../../../src/mcp/types.rs"]
+    #[path = "../../../crates/zen-mcp/src/types.rs"]
     pub mod types;
-    #[path = "../../../src/mcp/mrtr.rs"]
+    #[path = "../../../crates/zen-mcp/src/mrtr.rs"]
     pub mod mrtr;
+}
+
+// Phase 8: mrtr.rs moved into zen-mcp and now addresses its siblings via
+// `crate::resources` / `crate::types`; provide those paths here so the
+// #[path]-included copy keeps compiling against the same code.
+pub mod resources {
+    pub use zen_mcp::resources::sanitize_text;
+}
+pub mod types {
+    pub use zen_mcp::types::methods;
 }
 
 #[cfg(test)]

@@ -10,12 +10,12 @@
 use serde_json::{Map, Value};
 use tracing::warn;
 
-use crate::mcp::stdio::StdioTransport;
-use crate::mcp::types::{
+use crate::stdio::StdioTransport;
+use crate::types::{
     methods, modern_request_meta, ClientCapabilities, Implementation, InitializeParams,
     InitializeResult, ServerCapabilities, MODERN_PROTOCOL_VERSION, PROTOCOL_VERSION,
 };
-use crate::services::McpCapabilitySummary;
+use crate::discovery::McpCapabilitySummary;
 
 
 use super::{McpClient, StdioEndpoint};

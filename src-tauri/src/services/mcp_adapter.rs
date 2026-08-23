@@ -182,8 +182,11 @@ impl zen_tools::Tool<tauri::AppHandle> for McpToolAdapter {
             let tokens = state.chat_cancellation_tokens.lock().await;
             tokens.get(&chat_id).cloned()
         };
+        // Phase 8: the client is tauri-free; hand it the host UI bridge
+        // (tauri event sink + opener browser) for elicitation prompts.
+        let ui = crate::services::mcp_registrar::ui_bridge(&app);
         client
-            .call_external_tool(Some(&app), &self.server_name, &self.origin_tool_name, args, cancel)
+            .call_external_tool(Some(&ui), &self.server_name, &self.origin_tool_name, args, cancel)
             .await
             .map(|content| ToolOutput {
                 content,

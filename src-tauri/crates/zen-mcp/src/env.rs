@@ -59,13 +59,10 @@ pub fn expand_env_refs(input: &str) -> String {
 }
 
 /// Resolve `${secret:KEY}` references through the OS keyring-backed
-/// `SecretService`. Missing values stay literal so an absent credential is
-/// visible to the server as an authentication failure rather than silently
-/// becoming an empty string.
-pub async fn expand_secret_refs(
-    input: &str,
-    secrets: &crate::services::SecretService,
-) -> String {
+/// secret store (the app's `SecretStore` port impl). Missing values stay
+/// literal so an absent credential is visible to the server as an
+/// authentication failure rather than silently becoming an empty string.
+pub async fn expand_secret_refs(input: &str, secrets: &dyn zen_core::SecretStore) -> String {
     let mut output = String::with_capacity(input.len());
     let mut cursor = 0;
     while let Some(relative_start) = input[cursor..].find("${secret:") {
@@ -113,6 +110,21 @@ fn push_var(out: &mut String, name: &str, literal: &str) {
 mod tests {
     use super::*;
 
+    /// In-memory fake of the `zen-core::SecretStore` port for tests.
+    struct FakeSecrets;
+    #[async_trait::async_trait]
+    impl zen_core::SecretStore for FakeSecrets {
+        async fn get_secret(&self, _key: &str) -> zen_core::ZenResult<Option<String>> {
+            Ok(None)
+        }
+        async fn set_secret(&self, _key: String, _value: String) -> zen_core::ZenResult<()> {
+            Ok(())
+        }
+        async fn delete_secret(&self, _key: &str) -> zen_core::ZenResult<()> {
+            Ok(())
+        }
+    }
+
     #[test]
     fn expands_known_and_preserves_unknown() {
         std::env::set_var("ZEN_MCP_TEST_TOKEN", "secret123");
@@ -135,10 +147,8 @@ mod tests {
 
     #[tokio::test]
     async fn preserves_secret_reference_when_keyring_value_is_unavailable() {
-        let settings = std::sync::Arc::new(crate::services::SettingsService::new());
-        let security = std::sync::Arc::new(crate::services::SecurityService::new());
-        let secrets = crate::services::SecretService::new(settings, security);
-        let expanded = expand_secret_refs("Bearer ${secret:missing-mcp-token}", &secrets).await;
+        let expanded =
+            expand_secret_refs("Bearer ${secret:missing-mcp-token}", &FakeSecrets).await;
         assert_eq!(expanded, "Bearer ${secret:missing-mcp-token}");
     }
 }

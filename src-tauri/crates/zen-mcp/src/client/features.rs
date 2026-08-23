@@ -3,7 +3,7 @@
 //! These are the non-tool MCP surfaces. Unlike tools they are never
 //! auto-registered or auto-executed: the UI lists them and the user explicitly
 //! reads a resource or fetches a prompt. Every value a server returns is passed
-//! through the validators in `crate::mcp::resources` before it leaves this
+//! through the validators in `crate::resources` before it leaves this
 //! module, so nothing reaches the UI or the model with an unsafe URI, an
 //! oversized/binary payload decoded as text, or embedded control characters.
 //!
@@ -13,12 +13,12 @@
 
 use serde_json::{Map, Value};
 
-use crate::mcp::resources::{
+use crate::resources::{
     sanitize_blob, sanitize_field, sanitize_mime, sanitize_text, validate_resource_uri,
     McpPrompt, McpPromptArgument, McpPromptMessage, McpResource, McpResourceContents,
     McpResourceTemplate, MAX_LIST_ITEMS, MAX_RESOURCE_BLOB_BYTES, MAX_RESOURCE_TEXT_BYTES,
 };
-use crate::mcp::types::methods;
+use crate::types::methods;
 
 use super::McpClient;
 
@@ -115,14 +115,14 @@ impl McpClient {
     /// handle fails closed on an input-required result.
     pub async fn read_resource(
         &self,
-        app: Option<&tauri::AppHandle>,
+        ui: Option<&crate::ui::UiBridge>,
         server_name: &str,
         uri: &str,
     ) -> Result<Vec<McpResourceContents>, String> {
         validate_resource_uri(uri)?;
         let params = serde_json::json!({ "uri": uri });
         let result = self
-            .request_with_mrtr(app, server_name, methods::RESOURCES_READ, params, None, None)
+            .request_with_mrtr(ui, server_name, methods::RESOURCES_READ, params, None, None)
             .await?;
         let contents = result
             .get("contents")
@@ -152,7 +152,7 @@ impl McpClient {
     /// elicits input, and a `None` handle fails closed.
     pub async fn get_prompt(
         &self,
-        app: Option<&tauri::AppHandle>,
+        ui: Option<&crate::ui::UiBridge>,
         server_name: &str,
         name: &str,
         arguments: Value,
@@ -162,7 +162,7 @@ impl McpClient {
             params["arguments"] = arguments;
         }
         let result = self
-            .request_with_mrtr(app, server_name, methods::PROMPTS_GET, params, None, None)
+            .request_with_mrtr(ui, server_name, methods::PROMPTS_GET, params, None, None)
             .await?;
         let messages = result
             .get("messages")
@@ -197,7 +197,7 @@ fn normalize_template(raw: &Value) -> Option<McpResourceTemplate> {
     let uri_template = raw.get("uriTemplate").and_then(Value::as_str)?;
     // A template contains `{var}` placeholders, so full URI validation would
     // reject it; we only bound length and strip control chars here.
-    let (uri_template, _) = sanitize_text(uri_template, crate::mcp::resources::MAX_URI_LEN);
+    let (uri_template, _) = sanitize_text(uri_template, crate::resources::MAX_URI_LEN);
     if uri_template.is_empty() {
         return None;
     }

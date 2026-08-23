@@ -26,11 +26,10 @@
 
 use std::sync::Arc;
 
-use tauri::AppHandle;
 use tokio::sync::mpsc;
 use tracing::info;
 
-use crate::mcp::types::methods;
+use crate::types::methods;
 
 use super::McpClient;
 
@@ -43,10 +42,10 @@ impl McpClient {
         self: &Arc<Self>,
         server_name: String,
         mut notifications: mpsc::UnboundedReceiver<String>,
-        app: Option<AppHandle>,
+        ui: Option<Arc<crate::ui::UiBridge>>,
     ) {
         let client = Arc::clone(self);
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             while let Some(method) = notifications.recv().await {
                 match method.as_str() {
                     methods::NOTIFICATIONS_TOOLS_LIST_CHANGED => {
@@ -60,9 +59,9 @@ impl McpClient {
                         // is spawned for the new transport. `recv()` returns
                         // `None` right after, so we break cleanly below.
                         let resync = Arc::clone(&client);
-                        let app = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            resync.sync_external_servers(app.as_ref()).await;
+                        let ui = ui.clone();
+                        tokio::spawn(async move {
+                            resync.sync_external_servers(ui.as_deref()).await;
                         });
                     }
                     methods::NOTIFICATIONS_RESOURCES_LIST_CHANGED

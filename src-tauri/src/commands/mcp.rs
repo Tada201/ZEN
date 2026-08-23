@@ -79,8 +79,9 @@ pub async fn mcp_upsert_server(
         .await
         .map_err(|e| ZenError::Custom(format!("MCP upsert server failed: {}", e)))?;
     let client = state.mcp_client.clone();
+    let ui = crate::services::mcp_registrar::ui_bridge(&app);
     tokio::spawn(async move {
-        client.sync_external_servers(Some(&app)).await;
+        client.sync_external_servers(Some(&ui)).await;
     });
     Ok(())
 }
@@ -104,8 +105,9 @@ pub async fn mcp_set_enabled(
         .map_err(|e| ZenError::Custom(format!("MCP set enabled failed: {}", e)))?;
     if existed {
         let client = state.mcp_client.clone();
+        let ui = crate::services::mcp_registrar::ui_bridge(&app);
         tokio::spawn(async move {
-            client.sync_external_servers(Some(&app)).await;
+            client.sync_external_servers(Some(&ui)).await;
         });
     }
     Ok(existed)
@@ -129,8 +131,9 @@ pub async fn mcp_remove_server(
         .map_err(|e| ZenError::Custom(format!("MCP remove server failed: {}", e)))?;
     if removed {
         let client = state.mcp_client.clone();
+        let ui = crate::services::mcp_registrar::ui_bridge(&app);
         tokio::spawn(async move {
-            client.sync_external_servers(Some(&app)).await;
+            client.sync_external_servers(Some(&ui)).await;
         });
     }
     Ok(removed)
@@ -142,8 +145,9 @@ pub async fn mcp_remove_server(
 #[tauri::command]
 pub async fn mcp_reconnect(state: State<'_, AppState>, app: AppHandle) -> ZenResult<()> {
     let client = state.mcp_client.clone();
+    let ui = crate::services::mcp_registrar::ui_bridge(&app);
     tokio::spawn(async move {
-        client.sync_external_servers(Some(&app)).await;
+        client.sync_external_servers(Some(&ui)).await;
     });
     Ok(())
 }
@@ -176,8 +180,9 @@ pub async fn mcp_approve_server(
         .await
         .map_err(|e| ZenError::Custom(format!("MCP consent approve failed: {}", e)))?;
     let client = state.mcp_client.clone();
+    let ui = crate::services::mcp_registrar::ui_bridge(&app);
     tokio::spawn(async move {
-        client.sync_external_servers(Some(&app)).await;
+        client.sync_external_servers(Some(&ui)).await;
     });
     Ok(())
 }
@@ -197,10 +202,11 @@ pub async fn mcp_deny_server(
     // Best-effort: revoke any keyring-stored OAuth token so a re-approve
     // re-authorizes from scratch rather than reusing a credential the user
     // just rejected.
-    let _ = crate::mcp::oauth::clear_token(&state.secret_manager, &name).await;
+    let _ = crate::mcp::oauth::clear_token(state.secret_manager.as_ref(), &name).await;
     let client = state.mcp_client.clone();
+    let ui = crate::services::mcp_registrar::ui_bridge(&app);
     tokio::spawn(async move {
-        client.sync_external_servers(Some(&app)).await;
+        client.sync_external_servers(Some(&ui)).await;
     });
     Ok(())
 }
@@ -223,7 +229,7 @@ pub async fn mcp_authorize_oauth(
     resource_metadata_url: Option<String>,
 ) -> ZenResult<()> {
     let token = crate::mcp::oauth::authorize(
-        &app,
+        &crate::services::mcp_registrar::OpenerBrowser::new(app.clone()),
         &server_url,
         resource_metadata_url.as_deref(),
         &client_id,
@@ -231,12 +237,13 @@ pub async fn mcp_authorize_oauth(
     )
     .await
     .map_err(|e| ZenError::Custom(format!("MCP OAuth authorization failed: {}", e)))?;
-    crate::mcp::oauth::store_token(&state.secret_manager, &name, &token)
+    crate::mcp::oauth::store_token(state.secret_manager.as_ref(), &name, &token)
         .await
         .map_err(|e| ZenError::Custom(format!("MCP OAuth token store failed: {}", e)))?;
     let client = state.mcp_client.clone();
+    let ui = crate::services::mcp_registrar::ui_bridge(&app);
     tokio::spawn(async move {
-        client.sync_external_servers(Some(&app)).await;
+        client.sync_external_servers(Some(&ui)).await;
     });
     Ok(())
 }
@@ -285,7 +292,7 @@ pub async fn mcp_read_resource(
 ) -> ZenResult<Vec<McpResourceContents>> {
     state
         .mcp_client
-        .read_resource(Some(&app), &server_name, &uri)
+        .read_resource(Some(&crate::services::mcp_registrar::ui_bridge(&app)), &server_name, &uri)
         .await
         .map_err(|e| ZenError::Custom(format!("MCP read resource failed: {}", e)))
 }
@@ -316,7 +323,7 @@ pub async fn mcp_get_prompt(
 ) -> ZenResult<Vec<McpPromptMessage>> {
     state
         .mcp_client
-        .get_prompt(Some(&app), &server_name, &name, arguments.unwrap_or(Value::Null))
+        .get_prompt(Some(&crate::services::mcp_registrar::ui_bridge(&app)), &server_name, &name, arguments.unwrap_or(Value::Null))
         .await
         .map_err(|e| ZenError::Custom(format!("MCP get prompt failed: {}", e)))
 }
@@ -343,7 +350,9 @@ pub async fn mcp_resolve_elicitation(
 /// silently waiting out its timeout.
 #[tauri::command]
 pub async fn mcp_replay_elicitations(state: State<'_, AppState>, app: AppHandle) -> ZenResult<()> {
-    state.mcp_client.replay_elicitations(&app);
+    state
+        .mcp_client
+        .replay_elicitations(&crate::services::mcp_registrar::ui_bridge(&app));
     Ok(())
 }
 

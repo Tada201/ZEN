@@ -13,3 +13,4 @@ pub mod token;
 
 pub use flow::authorize;
 pub use token::{clear_token, load_token, store_token, StoredToken};
+pub mod test_support;

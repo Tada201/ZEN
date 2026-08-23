@@ -18,7 +18,7 @@
 
 use serde_json::Value;
 
-use crate::services::mcp_config::{is_reserved_mcp_header, is_sensitive_header};
+use crate::config::{is_reserved_mcp_header, is_sensitive_header};
 
 /// Max nesting depth accepted in a tool schema. A deeper schema is rejected
 /// before compilation so a hostile server can't drive the validator into
@@ -110,8 +110,8 @@ pub fn tool_header_extension_is_safe(tool_json: &Value) -> Result<(), String> {
 /// name is preserved regardless of where the server placed it.
 pub fn fold_title(
     tool_json: &Value,
-    annotations: Option<crate::tools::ToolAnnotations>,
-) -> Option<crate::tools::ToolAnnotations> {
+    annotations: Option<zen_tools::ToolAnnotations>,
+) -> Option<zen_tools::ToolAnnotations> {
     let top_title = tool_json
         .get("title")
         .and_then(Value::as_str)
@@ -124,7 +124,7 @@ pub fn fold_title(
             Some(ann)
         }
         (Some(ann), None) => Some(ann),
-        (None, Some(title)) => Some(crate::tools::ToolAnnotations {
+        (None, Some(title)) => Some(zen_tools::ToolAnnotations {
             title: Some(title.to_string()),
             ..Default::default()
         }),
@@ -163,7 +163,7 @@ mod tests {
         let folded = fold_title(&json!({"title": "Nice Name"}), None).unwrap();
         assert_eq!(folded.title.as_deref(), Some("Nice Name"));
         // Existing annotation title is not overwritten.
-        let existing = Some(crate::tools::ToolAnnotations {
+        let existing = Some(zen_tools::ToolAnnotations {
             title: Some("Kept".to_string()),
             ..Default::default()
         });

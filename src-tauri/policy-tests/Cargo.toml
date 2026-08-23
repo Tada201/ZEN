@@ -9,6 +9,7 @@ edition = "2021"
 # app source files. runtime_resource + mcp trio stay mirrored until their
 # phases.
 zen-security = { workspace = true }
+zen-mcp = { workspace = true }
 regex = "1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

@@ -542,6 +542,11 @@ impl AppState {
         ));
         let mcp_discovery = Arc::new(crate::services::McpDiscoveryService::new(mcp_config.clone()));
         let mcp_consent = Arc::new(crate::services::McpConsentStore::new(security.clone()));
+        // Phase 8: registrar port wraps the v2 registry; the client's Weak
+        // back-reference is wired right after the Arc exists (cycle break).
+        let mcp_registrar = Arc::new(crate::services::mcp_registrar::McpRegistrar::new(
+            tool_registry_v2.clone(),
+        ));
 
         Self {
             db: Arc::new(InitState::new()),
@@ -572,14 +577,18 @@ impl AppState {
             graph_sessions: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             session_memory: Arc::new(RwLock::new(shared_session_memory)),
             mcp_config: mcp_config.clone(),
-            mcp_client: Arc::new(crate::mcp::McpClient::new(
-                tool_registry_v2.clone(),
-                mcp_config.clone(),
-                mcp_discovery.clone(),
-                security.clone(),
-                secret_manager.clone(),
-                mcp_consent.clone(),
-            )),
+            mcp_client: {
+                let client = Arc::new(crate::mcp::McpClient::new(
+                    mcp_registrar.clone(),
+                    mcp_config.clone(),
+                    mcp_discovery.clone(),
+                    security.clone(),
+                    secret_manager.clone(),
+                    mcp_consent.clone(),
+                ));
+                mcp_registrar.set_client_weak(&client);
+                client
+            },
             mcp_discovery,
             mcp_consent,
             pending_tool_approvals,
