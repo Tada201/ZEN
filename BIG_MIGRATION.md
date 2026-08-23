@@ -191,11 +191,12 @@ and wire concrete impls into trait seams); their *logic cores* move down.
 Shared wire/domain types used by 2+ crates live in `zen-core` — specifically:
 `ToolInfo` (historically duplicated across `llm/{anthropic,chat,ollama,openai_compat}`;
 since Phase 2 defined once at `zen-core/src/types.rs:12`, with all llm sites
-consuming it via re-export),
-`llm/mod.rs:87,228`), a `ProviderConfig` **DTO** (the persistence model stays
-in zen-db; app converts at the boundary), event payloads, and risk/approval
-enums consumed by UI-facing types. Rule of thumb: if two crates would need it,
-it belongs in core; persistence shapes stay in db.
+consuming it via re-export), a `ProviderConfig` **DTO** (single definition at
+`zen-core/src/types.rs:24`; the persistence model stays in zen-db and
+re-exports it — `zen-db/src/models.rs:451` — so app converts at the boundary),
+event payloads, and risk/approval enums consumed by UI-facing types. Rule of
+thumb: if two crates would need it, it belongs in core; persistence shapes
+stay in db.
 
 ### 3.4 Known cross-crate coupling to resolve (review findings)
 
@@ -225,7 +226,11 @@ These edges exist today inside the single crate and block naive extraction:
    symbols from their old path (`pub use zen_db::...` in app's `db` module) so
    call sites — including `tests/agentic_test.rs`, which imports
    `tauri_app_lib::{commands::AppState, db::models, llm::*, agent::*}` — keep
-   compiling unchanged. Shims are deleted in Phase 14 in one sweep.
+   compiling unchanged. Shims are deleted in Phase 14 in one sweep. That
+   sweep must also collapse **multi-hop** shim chains — e.g.
+   `llm/registry.rs:6` → `crate::db::models` → app `db/mod.rs` re-export →
+   `zen-db/src/models.rs:451` → `zen_core::ProviderConfig` — rewriting each
+   consumer to its deliberate final path, not just stripping the first hop.
 7. **Cold builds are expected.** After Phase 0's clean and after every crate
    extraction, the first full build is slow. On this MSVC/win32 box expect a
    multi-minute full rebuild per phase; warm rebuilds still improve vs today.
