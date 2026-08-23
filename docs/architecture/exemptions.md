@@ -175,12 +175,16 @@ Reason: (historical) Ollama client and streaming in one file.
 Split or Fix Plan: Done in Phase 7 (split into ollama/{mod,wire} inside zen-llm).
 Expires: resolved migration/phase-07-done
 
-File: src-tauri/src/services/mcp_config.rs (805)
+File: src-tauri/src/services/mcp_config.rs (805) — RESOLVED Phase 8: moved to
+crates/zen-mcp/src/ and split per plan into config.rs (609, parse/merge/
+validate) + config_store.rs (220, path/file-I/O/audit persistence); both
+sub-threshold, no successor exemption. The app path is now part of the §4.6
+services re-export shim.
 Owner: backend/mcp
 Rule Exempted: Rust warning file-size limit
-Reason: MCP config parsing and persistence orchestration share one service file.
-Split or Fix Plan: Logic core moves to zen-mcp during Phase 8, split config parsing vs persistence.
-Expires: migration/phase-08-done
+Reason: (historical) MCP config parsing and persistence orchestration share one service file.
+Split or Fix Plan: Done in Phase 8 (config parsing vs persistence split inside zen-mcp).
+Expires: resolved migration/phase-08-done
 
 File: src-tauri/src/services/speech_service/mod.rs (784)
 Owner: backend/media

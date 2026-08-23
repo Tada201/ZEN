@@ -51,10 +51,9 @@ impl McpConfigService {
         }
     }
 
-    /// Resolve the config file path for `scope`. Workspace resolution is
-    /// strict (no `current_dir` fallback); User resolution requires a
-    /// discoverable OS config dir.
-    /// failures return `Err` (audited as deny).
+    /// Parse the `mcpServers` map of one scope document into typed rows.
+    /// Malformed individual entries are skipped best-effort so a partially
+    /// hand-authored file still surfaces its valid rows.
     fn parse_entries(scope: McpScope, config: &Value) -> Vec<McpServerEntry> {
         let mut entries = Vec::new();
         let Some(servers) = config.get("mcpServers").and_then(|v| v.as_object()) else {

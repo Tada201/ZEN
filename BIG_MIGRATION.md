@@ -897,7 +897,7 @@ checks that already live in zen-security.
       features,http_body,http_handshake,rpc,stdio_helpers,sync,subscriptions},
       oauth/{discovery,flow,pkce,token}, env, mrtr, resources, sandbox, stdio,
       tool_schema, types) + `services/mcp_config.rs` → `config.rs` +
-      NEW `config_store.rs` (parsing vs persistence split per plan; 609/218)
+      NEW `config_store.rs` (parsing vs persistence split per plan; 609/220)
       + `mcp_consent.rs` → `consent.rs` + `mcp_discovery.rs` → `discovery.rs`.
       App keeps pure re-export shims (`src/mcp/mod.rs`, services re-exports).
 - [x] Construction inversion (§3.4 row 3): no service construction remains
@@ -925,10 +925,11 @@ checks that already live in zen-security.
       noted here deliberately.
 - [x] zen-mcp deps: zen-core (ports incl. new `emit_result`), zen-security
       (service/policy/risk/url_safety), zen-tools (ToolAnnotations),
-      reqwest(native-tls,json,stream), tokio(process/io-util/time/sync/macros/
+      reqwest(native-tls,json,stream), async-trait, tokio(process/io-util/time/sync/macros/
       rt), tokio-util, futures-util, serde(_json), thiserror, tracing, url,
       dirs(6.0), base64(0.22), sha2(0.10), jsonschema(0.42), windows-sys
-      (0.59 JobObjects — relocated pin), uuid/chrono. NO tauri. NO sqlx.
+      (0.59 JobObjects — relocated pin), uuid/chrono; dev: wiremock. NO tauri.
+      NO sqlx.
 - [x] Provider/model discovery endpoints unchanged; policy checks unchanged.
 
 **Verification gates**

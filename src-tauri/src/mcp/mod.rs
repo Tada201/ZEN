@@ -7,10 +7,11 @@
 //! S4.6).
 
 pub use zen_mcp::{
-    client, config, consent, discovery, env, mrtr, oauth, registrar, resources, sandbox,
+    client, config, consent, discovery, env, mrtr, oauth, registrar, resources, sandbox, stdio,
     tool_schema, types, UiBridge,
 };
 pub use zen_mcp::{
     is_external_tool_name, prefixed_external_tool_name, risk_level_from_annotations, McpClient,
-    McpConfigError, McpConfigService, McpScope, McpServerEntry, McpTransport,
+    McpConfigError, McpConfigService, McpScope, McpServerEntry, McpTransport, StdioTransport,
 };
+pub use zen_mcp::types::*;

@@ -27,6 +27,9 @@ pub(crate) fn canonicalize_workspace_root(path: &Path) -> Result<PathBuf, String
 }
 
 impl McpConfigService {
+    /// Resolve the config file path for `scope`. Workspace resolution is
+    /// strict (no `current_dir` fallback); User resolution requires a
+    /// discoverable OS config dir.
     pub(crate) async fn resolve_target_path(&self, scope: McpScope) -> Result<PathBuf, McpConfigError> {
         match scope {
             McpScope::Workspace => {
@@ -71,6 +74,7 @@ impl McpConfigService {
 
     /// Read the config document for `scope`. A missing file yields an
     /// empty `{"mcpServers": {}}` default (audited as allow). Parse/IO
+    /// failures return `Err` (audited as deny).
     pub async fn read_config(&self, scope: McpScope) -> Result<Value, McpConfigError> {
         let target_path = match self.resolve_target_path(scope).await {
             Ok(p) => p,
