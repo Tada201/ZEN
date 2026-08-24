@@ -4,9 +4,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info};
+use zen_core::ports::EventSink;
 
 use crate::services::runtime_resource::{configure_std_command_for_binary, RuntimeResources};
 
@@ -142,7 +142,7 @@ impl TtsService {
         Ok(())
     }
 
-    pub async fn speak(&self, text: &str, app: AppHandle) -> Result<(), String> {
+    pub async fn speak(&self, text: &str, events: Arc<dyn EventSink>) -> Result<(), String> {
         if text.trim().is_empty() {
             return Ok(());
         }
@@ -234,7 +234,7 @@ impl TtsService {
                         e, piper_exe
                     );
                     error!("{}", msg);
-                    let _ = app.emit("tts:error", serde_json::json!({ "error": msg }));
+                    events.emit("tts:error", &serde_json::json!({ "error": msg }));
                     return;
                 }
             };
@@ -245,7 +245,7 @@ impl TtsService {
             // Register with process manager if available
             if let Some(ref pm) = process_manager_clone {
                 let pm_clone = pm.clone();
-                tauri::async_runtime::spawn(async move {
+                tokio::spawn(async move {
                     pm_clone
                         .register(&format!("piper-{}", pid), "piper-tts", pid)
                         .await;
@@ -272,7 +272,7 @@ impl TtsService {
             // Unregister from process manager after completion
             if let Some(ref pm) = process_manager_clone {
                 let pm_clone = pm.clone();
-                tauri::async_runtime::spawn(async move {
+                tokio::spawn(async move {
                     pm_clone.unregister(&format!("piper-{}", pid)).await;
                 });
             }
@@ -304,9 +304,9 @@ impl TtsService {
 
                 if let Ok(handle_lock) = audio_handle_clone.try_lock() {
                     if let Some(AudioHandle(_stream, _stream_handle, sink)) = handle_lock.as_ref() {
-                        let _ = app.emit(
+                        events.emit(
                             "tts:start",
-                            serde_json::json!({
+                            &serde_json::json!({
                                 "text": text_owned,
                                 "sentences": cues,
                                 "duration_ms": duration_ms,
@@ -338,25 +338,25 @@ impl TtsService {
                                     }
                                     let rms = (sum_sq / frame.len() as f32).sqrt();
                                     let level = (rms * 5.0).min(1.0);
-                                    let _ = app
-                                        .emit("tts:level", serde_json::json!({ "level": level }));
+                                    events
+                                        .emit("tts:level", &serde_json::json!({ "level": level }));
                                 }
                             }
                             std::thread::sleep(std::time::Duration::from_millis(30));
                         }
                         sink.sleep_until_end();
 
-                        let _ = app.emit("tts:stop", ());
+                        events.emit("tts:stop", &serde_json::Value::Null);
                     } else {
-                        let _ = app.emit(
+                        events.emit(
                             "tts:error",
-                            serde_json::json!({ "error": "Audio output is not initialized" }),
+                            &serde_json::json!({ "error": "Audio output is not initialized" }),
                         );
                     }
                 } else {
-                    let _ = app.emit(
+                    events.emit(
                         "tts:error",
-                        serde_json::json!({ "error": "Audio output is busy" }),
+                        &serde_json::json!({ "error": "Audio output is busy" }),
                     );
                 }
             } else {
@@ -371,7 +371,7 @@ impl TtsService {
                     }
                 );
                 error!("{}", msg);
-                let _ = app.emit("tts:error", serde_json::json!({ "error": msg }));
+                events.emit("tts:error", &serde_json::json!({ "error": msg }));
             }
         });
 

@@ -303,7 +303,9 @@ pub async fn speak_text(
 ) -> Result<(), ZenError> {
     let tts_lock = state.tts.read().await;
     if let Some(tts) = tts_lock.as_ref() {
-        tts.speak(&text, app).await.map_err(ZenError::Internal)?;
+        let events: std::sync::Arc<dyn zen_core::ports::EventSink> =
+            std::sync::Arc::new(crate::services::event_sink::TauriEventSink::new(app));
+        tts.speak(&text, events).await.map_err(ZenError::Internal)?;
     } else {
         return Err(ZenError::Internal(
             "TTS service is not initialized. Check Settings → Audio to configure TTS.".into(),
