@@ -27,7 +27,9 @@ const chatCommand = [
   await read("src-tauri/src/commands/chat/mod.rs"),
   await read("src-tauri/src/commands/chat/send.rs"),
 ].join("\n");
-const phases = await read("src-tauri/src/agent/deep_research/phases.rs");
+const phases = (await Promise.all([
+  "analyze.rs", "dispatch.rs", "plan.rs", "report.rs", "search.rs",
+].map((f) => read(`src-tauri/src/agent/deep_research/phases/${f}`)))).join("");
 
 expect(engine.includes("fn milestone_progress") && engine.includes("AtomicU8"),
   "Deep research must maintain monotonic backend milestone progress.");

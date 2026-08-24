@@ -11,7 +11,10 @@ const sendMessageSource = readFileSync(new URL("../src/atlas/hooks/chat/useSendM
 const stageStoreSource = readFileSync(new URL("../src/atlas/components/voice/voiceStageStore.ts", import.meta.url), "utf8");
 const overlaySource = readFileSync(new URL("../src/atlas/components/voice/VoiceModeOverlay.tsx", import.meta.url), "utf8");
 const middlewareSource = readFileSync(new URL("../src-tauri/src/agent/middleware/system_prompt.rs", import.meta.url), "utf8");
-const spawnToolSource = readFileSync(new URL("../src-tauri/src/agent/tools/spawn_tools.rs", import.meta.url), "utf8");
+const spawnToolSource = [
+  "child.rs", "completion.rs", "deps.rs", "failure.rs", "messaging.rs",
+  "model_select.rs", "outcome.rs", "params.rs", "tool.rs",
+].map((f) => readFileSync(new URL(`../src-tauri/src/agent/tools/spawn_tools/${f}`, import.meta.url), "utf8")).join("");
 const toolPipelineSource = readFileSync(new URL("../src-tauri/src/agent/runner/tool_pipeline.rs", import.meta.url), "utf8");
 const toolDispatchSource = readFileSync(new URL("../src-tauri/src/agent/runner/tool_dispatch.rs", import.meta.url), "utf8");
 const displayContextSource = readFileSync(new URL("../src/atlas/components/voice/voiceDisplayContext.ts", import.meta.url), "utf8");

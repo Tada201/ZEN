@@ -25,7 +25,10 @@ const agentsSettings = read("src/components/settings/Tabs/AgentsSettings.tsx");
 const agentEditor = read("src/components/settings/Tabs/AgentEditor.tsx");
 const agentsApi = read("src/api/agentsApi.ts");
 const childRunner = read("src-tauri/src/agent/tools/child_runner.rs");
-const spawnTools = read("src-tauri/src/agent/tools/spawn_tools.rs");
+const spawnTools = [
+  "child.rs", "completion.rs", "deps.rs", "failure.rs", "messaging.rs",
+  "model_select.rs", "outcome.rs", "params.rs", "tool.rs",
+].map((f) => read(`src-tauri/src/agent/tools/spawn_tools/${f}`)).join("");
 const settingsSchema = read("src/lib/stores/settings/schema.ts");
 const audioSlice = read("src/lib/stores/settings/createAudioSlice.ts");
 const audioTypes = read("src/lib/stores/settings/types.ts");

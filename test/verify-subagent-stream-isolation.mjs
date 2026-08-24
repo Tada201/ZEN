@@ -14,13 +14,13 @@ const runnerLifecycle = readFileSync(
   "utf8",
 );
 check(
-  "Runner::child clears on_event",
-  /fn child\([\s\S]*?on_event:\s*None,[\s\S]*?\}/m.test(runnerLifecycle),
-  "expected 'on_event: None,' in Runner::child() body",
+  "Runner::child drops the live-stream on_event callback entirely",
+  !runnerLifecycle.includes("on_event"),
+  "the dead tauri::ipc::Channel path must stay deleted",
 );
 
 const escalation = readFileSync(
-  "src-tauri/src/agent/runner/escalation.rs",
+  "src-tauri/src/agent/runner/streaming.rs",
   "utf8",
 );
 check(
@@ -47,10 +47,12 @@ check(
   /Self::new\(4096\)/.test(eventBus),
 );
 
-const spawn = readFileSync(
-  "src-tauri/src/agent/tools/spawn_tools.rs",
-  "utf8",
-);
+const spawn = [
+  "child.rs", "completion.rs", "deps.rs", "failure.rs", "messaging.rs",
+  "model_select.rs", "outcome.rs", "params.rs", "tool.rs",
+]
+  .map((f) => readFileSync(`src-tauri/src/agent/tools/spawn_tools/${f}`, "utf8"))
+  .join("");
 check(
   "spawn emits SubagentStep instead of inline chat:message",
   /AgentEvent::SubagentStep/.test(spawn) && !spawn.includes("should_emit_inline_chat_message_for_spawn"),

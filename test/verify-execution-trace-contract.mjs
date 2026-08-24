@@ -59,7 +59,10 @@ assert.deepEqual(
 const eventBus = readFileSync(new URL("../src-tauri/src/agent/event_bus.rs", import.meta.url), "utf8");
 const runner = readFileSync(new URL("../src-tauri/src/agent/runner/lifecycle.rs", import.meta.url), "utf8");
 const dispatch = readFileSync(new URL("../src-tauri/src/agent/runner/tool_dispatch.rs", import.meta.url), "utf8");
-const spawn = readFileSync(new URL("../src-tauri/src/agent/tools/spawn_tools.rs", import.meta.url), "utf8");
+const spawn = [
+  "child.rs", "completion.rs", "deps.rs", "failure.rs", "messaging.rs",
+  "model_select.rs", "outcome.rs", "params.rs", "tool.rs",
+].map((f) => readFileSync(new URL(`../src-tauri/src/agent/tools/spawn_tools/${f}`, import.meta.url), "utf8")).join("");
 const service = readFileSync(new URL("../src-tauri/src/services/tool.rs", import.meta.url), "utf8");
 
 for (const field of ["parent_tool_call_id", "sequence", "timestamp", "phase"]) {

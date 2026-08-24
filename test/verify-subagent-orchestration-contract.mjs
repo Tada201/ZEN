@@ -17,7 +17,10 @@ const contextHeader = read("src/atlas/components/chat/WorkspaceContextHeader.tsx
 const chatApi = read("src/api/chatApi.ts");
 const lifecycle = read("src-tauri/src/commands/chat/lifecycle.rs");
 const tauriLib = read("src-tauri/src/lib.rs");
-const spawnTools = read("src-tauri/src/agent/tools/spawn_tools.rs");
+const spawnTools = [
+  "child.rs", "completion.rs", "deps.rs", "failure.rs", "messaging.rs",
+  "model_select.rs", "outcome.rs", "params.rs", "tool.rs",
+].map((f) => read(`src-tauri/src/agent/tools/spawn_tools/${f}`)).join("");
 
 assert(tree.includes("export function buildDelegationTree"), "subagent hierarchy must have one canonical tree builder");
 assert(!tree.includes("childrenByParent"), "root-only delegation must not rebuild nested parent-child trees");
