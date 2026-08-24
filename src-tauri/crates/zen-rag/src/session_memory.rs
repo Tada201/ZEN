@@ -16,11 +16,11 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 // Re-export MemoryEntry for backward compatibility
-pub use crate::rag::hybrid_backend::MemorySearchResult;
+pub use crate::hybrid_backend::MemorySearchResult;
 
 // Re-export embedding types for convenience
-pub use crate::rag::embedding::{EmbeddingBackend, EmbeddingConfig, EmbeddingModel};
-pub use crate::rag::hybrid_backend::{HybridBackendConfig, HybridMemoryBackend};
+pub use crate::embedding::{EmbeddingBackend, EmbeddingConfig, EmbeddingModel};
+pub use crate::hybrid_backend::{HybridBackendConfig, HybridMemoryBackend};
 
 /// Session memory entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,12 +102,16 @@ impl SessionMemoryManager {
             }
         }
 
-        // Fallback: in-memory storage
-        let mut memories = self.memories.write().await;
-        let entries = memories
-            .entry(session_id.to_string())
-            .or_insert_with(Vec::new);
-        entries.push(entry);
+        // Fallback: in-memory storage. The write guard is scoped so it is
+        // released before `persist_session`, which re-acquires the same lock
+        // for reading — holding it across that call deadlocks `tokio::RwLock`.
+        {
+            let mut memories = self.memories.write().await;
+            let entries = memories
+                .entry(session_id.to_string())
+                .or_insert_with(Vec::new);
+            entries.push(entry);
+        }
         let _ = self.persist_session(session_id).await;
         Ok(())
     }

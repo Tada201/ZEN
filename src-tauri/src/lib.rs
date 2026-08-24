@@ -1,5 +1,3 @@
-extern crate pdf_inspector;
-
 pub mod agent;
 pub mod browser;
 pub mod canvas;

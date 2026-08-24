@@ -18,9 +18,9 @@ use sqlx::SqlitePool;
 /// - For larger datasets, consider LanceDB HNSW integration (future enhancement)
 use std::sync::Arc;
 
-use crate::db::queries;
-use crate::rag::embedding::EmbeddingModel;
-use crate::rag::session_memory::MemoryEntry;
+use zen_db::queries;
+use crate::embedding::EmbeddingModel;
+use crate::session_memory::MemoryEntry;
 
 /// Hybrid memory backend configuration
 pub struct HybridBackendConfig {
@@ -331,7 +331,7 @@ pub struct TimeRange {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rag::embedding::{EmbeddingBackend, EmbeddingConfig};
+    use crate::embedding::{EmbeddingBackend, EmbeddingConfig};
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -347,7 +347,7 @@ mod tests {
             model_path: None,
         };
 
-        let embedding = crate::rag::embedding::OllamaEmbedding::new(config);
+        let embedding = crate::embedding::OllamaEmbedding::new(config);
         if !embedding.health_check().await {
             println!("Skipping test - Ollama not available");
             return;

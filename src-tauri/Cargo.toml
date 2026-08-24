@@ -29,6 +29,7 @@ zen-security = { path = "crates/zen-security" }
 zen-tools = { path = "crates/zen-tools" }
 zen-llm = { path = "crates/zen-llm" }
 zen-mcp = { path = "crates/zen-mcp" }
+zen-rag = { path = "crates/zen-rag" }
 
 [package]
 name = "zen"
@@ -75,6 +76,7 @@ zen-security = { workspace = true }
 zen-tools = { workspace = true }
 zen-llm = { workspace = true }
 zen-mcp = { workspace = true }
+zen-rag = { workspace = true }
 sysinfo = "0.38"
 axum = { version = "0.8", features = ["default", "ws"] }
 tower-http = { version = "0.6", features = ["cors"] }
@@ -87,19 +89,12 @@ futures-util = "0.3"
 base64 = "0.22"
 image = "0.25"
 dashmap = "6.1"
-lancedb = "0.26"
-arrow-array = "57"
-arrow-schema = "57"
 lazy_static = "1.5"
 tempfile = "3"
 url = "2"
 tiktoken-rs = "0.6"
 tokio-stream = "0.1"
 moka = { version = "0.12", features = ["future"] }
-tokenizers = "0.21"
-candle-core = "0.9"
-candle-transformers = "0.9"
-candle-nn = "0.9"
 sgp4 = "0.2"
 jsonschema = "0.42"
 similar = "2.7"
@@ -117,15 +112,10 @@ zip = "4.6.1"
 # Magic-byte file-type sniffing for chat attachment validation. Pinned to the
 # version already resolved transitively (see Cargo.lock) — no new provenance.
 infer = "=0.19.0"
-# Native (MSI-safe) office extraction, replacing the Python markitdown path.
-# calamine: pure-Rust xlsx/xls/ods reader, 0.35.0 published 2026-05-10 (>30d).
-# quick-xml pinned to the version already resolved transitively (Cargo.lock)
-# — used to strip text from docx/pptx OOXML parts unzipped via `zip`.
-calamine = "=0.35.0"
-quick-xml = "=0.41.0"
-text-splitter = { version = "0.16", features = ["tiktoken-rs"] }
+# Office extraction (calamine/quick-xml), chunking (text-splitter) and PDF
+# text (pdf-inspector) moved to the zen-rag crate in Phase 9; the app crate
+# reaches them through `zen_rag::{office_extract, ingestion}`.
 ab_glyph = "0.2"
-pdf-inspector = { git = "https://github.com/firecrawl/pdf-inspector" }
 meval = "0.2"
 keyring = { version = "3", features = ["windows-native"] }
 geojson = "0.24"

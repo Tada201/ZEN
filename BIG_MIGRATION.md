@@ -957,20 +957,59 @@ lancedb+arrow stop recompiling with everything else.
 zen-db).
 
 **Tasks**
-- [ ] Move `src/rag/**` → zen-rag: lancedb_store, conversation_store,
-      embedding providers, VectorStore trait.
-- [ ] Decide ingestion home: document parsing stack currently spans services
-      (attachment/document). Move *pure parsing/extraction* libs usage
-      (calamine, zip, infer, text-splitter, pdf-inspector, scraper/spider if
-      crawl-fed) into zen-rag `ingest/`; keep attachment orchestration in app.
-- [ ] zen-rag deps: zen-core, zen-db (hybrid_backend uses db queries),
-      lancedb, arrow-*, text-splitter (+tiktoken feature),
-      calamine, quick-xml, zip, infer, scraper/spider as actually used,
-      reqwest, tokio, zen-core. NO tauri.
+- [x] Move `src/rag/**` → zen-rag: `lancedb_store`, `conversation_store`,
+      `embedding`, `ingestion`, `office_extract`, `hybrid_backend`,
+      `session_memory`, and the `VectorStore`/`DocumentChunk`/`SearchResult`
+      contract (former `rag/mod.rs` → crate `lib.rs`). All 8 files moved via
+      `git mv` (rename-tracked); largest is `embedding.rs` at 512 lines, so no
+      RULES.md split was needed. App keeps a pure re-export shim at
+      `src/rag/mod.rs`; all 31 historical `crate::rag::*` reference lines
+      across 8 consumer files compile unchanged. Shim deleted in Phase 14.
+- [x] Ingestion home decided by measured usage rather than the plan's guess:
+      `calamine`/`quick-xml` (office_extract), `text-splitter`+`tiktoken-rs`
+      and `pdf-inspector` (ingestion), `candle-*`/`tokenizers` (local BERT
+      embeddings) and `lancedb`/`arrow-*` moved to zen-rag and **removed from
+      the app crate** — none had a non-rag consumer. Deliberately NOT moved:
+      `infer` (only `services/document.rs` magic-byte sniffing), `zip` (shared
+      with `commands/backup.rs`, `commands/dependency.rs`,
+      `services/gtsm/geojson.rs`; declared in both crates at the same pin),
+      `scraper`/`spider` (only `search/tool.rs`, never rag). Attachment and
+      document orchestration stay app-side as planned. The app root's
+      `extern crate pdf_inspector;` was deleted with the dependency.
+- [x] zen-rag deps: zen-core, zen-db (hybrid_backend session-memory CRUD),
+      lancedb 0.26, arrow-array/arrow-schema 57, candle-core/-transformers/-nn
+      0.9, tokenizers 0.21, text-splitter 0.16 (+tiktoken-rs feature),
+      tiktoken-rs 0.6, calamine =0.35.0, quick-xml =0.41.0, zip 4.6.1,
+      pdf-inspector (git), dirs 6.0, sqlx, reqwest(native-tls,json), tokio,
+      futures, uuid, serde(+derive), serde_json, tracing, anyhow, async-trait;
+      dev: tempfile, tokio. Every pin matches the app crate — relocated usage,
+      no new provenance under Security.md. NO tauri (verified by `cargo tree`).
 
 **Verification gates**
-- Ingest a test document end-to-end; query returns vectors (manual script).
-- `cargo test -p zen-rag`; gate suite green.
+- `cargo test -p zen-rag`: 8/8 passed. One latent pre-existing bug surfaced on
+  the first-ever gated execution of these tests and was fixed forward:
+  `session_memory::write_memory` held the `memories` write guard across
+  `persist_session()`, which re-acquires the same `tokio::RwLock` for reading
+  — a self-deadlock. Both `session_memory` tests hung indefinitely (harness
+  killed the process, exit 143). The guard is now scoped; behavior is otherwise
+  identical, and the affected fallback path is unreachable in production today
+  (no hybrid backend is wired at either `SessionMemoryManager::new` call site
+  and `write_memory` has exactly one caller). Confirmed against the frozen
+  `Zen_rs_old/` snapshot that the deadlock predates the migration.
+- Gate suite green: `cargo metadata` valid; `cargo check --workspace
+  --all-targets` clean; `cargo clippy --workspace --all-targets -- -D warnings`
+  clean; per-crate suites zen-db 5, zen-security 53, zen-tools 30, zen-llm 82,
+  zen-mcp 55, zen-rag 8, zen-policy-tests 33 all green; `npm run build` green.
+  Guards: 0 tauri in `cargo tree -p zen-rag`; 0 `AppState` /
+  `crate::commands` / `crate::services` / `crate::agent` references in
+  zen-rag; every crate file <900 lines.
+- `cargo test --workspace` still cannot run the app-crate lib target on this
+  dev box (`STATUS_ENTRYPOINT_NOT_FOUND`, exit 0xc0000139 — the environmental
+  tauri-linked-test-binary loader failure recorded in Phase 6). Per-crate
+  suites are run individually instead; unchanged by this phase.
+- Manual end-to-end document ingest → vector query: pending user-side check
+  before release cut (recorded, non-blocking — same disposition as the
+  Phase 7/8 manual smokes).
 
 **Rollback:** revert commit range.
 
@@ -1263,6 +1302,24 @@ verified byte-identical modulo import rewrites):
    second) never served and the rate-limit mock absorbed every retry, so the
    `.expect(1)` verification could not hold. Fix: `up_to_n_times(1)` +
    `.expect(1)` on the 429 mock, mount order unchanged.
+
+## Appendix F — Latent pre-existing defect fixed forward (Phase 9)
+
+`cargo test -p zen-rag` was the **first gate ever to execute the rag suites**
+(same cause as Appendix E: no CI `cargo test` yet, app-crate test binaries
+abort on this box).
+
+1. `session_memory::write_memory` self-deadlocked on its in-memory fallback
+   path: the `memories` write guard was still held when `persist_session()`
+   re-acquired the same `tokio::RwLock` for reading. `test_write_and_search_memory`
+   and `test_delete_session_memory` both hung until the harness killed the
+   process (exit 143). Fix: scope the write guard so it drops before the
+   persist call. Verified against `Zen_rs_old/src/rag/session_memory.rs` — the
+   defect predates the workspace migration. Production impact was nil: no call
+   site constructs a `SessionMemoryManager` with a hybrid backend, and the sole
+   `write_memory` caller (`agent/tools/session_memory_tools.rs`) would have hit
+   the same hang had a backend ever been wired.
+
 
 ## Appendix C — Manual E2E verification script
 

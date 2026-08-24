@@ -96,7 +96,7 @@ impl IngestionEngine {
     async fn extract_spreadsheet(&self, path: &Path) -> Result<ExtractedText> {
         let path_buf = path.to_path_buf();
         let (text, _sheets) = tokio::task::spawn_blocking(move || {
-            crate::rag::office_extract::extract_spreadsheet(&path_buf)
+            crate::office_extract::extract_spreadsheet(&path_buf)
         })
         .await
         .context("spreadsheet extraction task failed")??;
@@ -110,7 +110,7 @@ impl IngestionEngine {
     async fn extract_ooxml(&self, path: &Path) -> Result<ExtractedText> {
         let path_buf = path.to_path_buf();
         let text =
-            tokio::task::spawn_blocking(move || crate::rag::office_extract::extract_ooxml(&path_buf))
+            tokio::task::spawn_blocking(move || crate::office_extract::extract_ooxml(&path_buf))
                 .await
                 .context("OOXML extraction task failed")??;
         Ok(ExtractedText {
