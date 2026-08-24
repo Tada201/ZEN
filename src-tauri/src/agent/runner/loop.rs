@@ -1,7 +1,8 @@
 use super::actions::{
     emit_action_only, persist_and_emit_action, ActionEmitParams, ActionPersistParams,
 };
-use super::escalation::{EarlyToolExecutionContext, EarlyToolExecutionState, EscalationParams};
+use super::escalation::EscalationParams;
+use super::streaming::{EarlyToolExecutionContext, EarlyToolExecutionState};
 use super::helpers::{
     parse_file_changes, parse_text_tool_calls,
     strip_text_tool_call_blocks, FileReadTracker,
@@ -654,7 +655,6 @@ impl Runner {
                         tools: tools_arg.clone(),
                         config: config.clone(),
                         token: token.clone(),
-                        app: &app_inner,
                         chat_id: &chat_id_inner,
                         early_tools,
                         agent_stream,

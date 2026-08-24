@@ -14,6 +14,7 @@ mod background;
 pub mod config;
 pub mod context_breakdown;
 mod escalation;
+mod streaming;
 pub mod helpers;
 mod lifecycle;
 #[allow(clippy::module_inception)]
