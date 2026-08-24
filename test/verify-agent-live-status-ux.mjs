@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const runner = readFileSync("src-tauri/src/agent/runner/loop.rs", "utf8");
+const runner = readFileSync("src-tauri/src/agent/runner/turn_loop.rs", "utf8") +
+  readFileSync("src-tauri/src/agent/runner/step_exec.rs", "utf8");
 const assistant = readFileSync("src/atlas/components/chat/AssistantMessage.tsx", "utf8");
 const assistantLogic = readFileSync("src/atlas/components/chat/AssistantMessage.logic.ts", "utf8");
 const trace = readFileSync("src/atlas/components/chat/AssistantMessageTrace.tsx", "utf8");

@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const eventBus = readFileSync("src-tauri/src/agent/event_bus.rs", "utf8");
-const escalation = readFileSync("src-tauri/src/agent/runner/escalation.rs", "utf8");
-const loop = readFileSync("src-tauri/src/agent/runner/loop.rs", "utf8");
+const escalation = readFileSync("src-tauri/src/agent/runner/streaming.rs", "utf8");
+const loop = readFileSync("src-tauri/src/agent/runner/turn_loop.rs", "utf8") +
+  readFileSync("src-tauri/src/agent/runner/step_exec.rs", "utf8");
 const events = readFileSync("src/api/events.ts", "utf8");
 const useAgentEvents = readFileSync("src/atlas/hooks/stream/useAgentEvents.ts", "utf8");
 const ledger = readFileSync("src/atlas/hooks/stream/agentActionLedger.ts", "utf8");

@@ -13,10 +13,9 @@ const chatCommandSource = readFileSync(
   new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url),
   "utf8",
 );
-const runnerSource = readFileSync(
-  new URL("../src-tauri/src/agent/runner/loop.rs", import.meta.url),
-  "utf8",
-);
+const runnerSource =
+  readFileSync(new URL("../src-tauri/src/agent/runner/turn_loop.rs", import.meta.url), "utf8") +
+  readFileSync(new URL("../src-tauri/src/agent/runner/step_exec.rs", import.meta.url), "utf8");
 const orchestratorSource = readFileSync(
   new URL("../src-tauri/src/agent/orchestrator/loop.rs", import.meta.url),
   "utf8",

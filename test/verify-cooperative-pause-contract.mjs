@@ -6,7 +6,8 @@ const check = (name, condition) => checks.push({ name, condition });
 
 const state = read("src-tauri/src/commands/mod.rs");
 const lifecycle = read("src-tauri/src/commands/chat/lifecycle.rs");
-const runner = read("src-tauri/src/agent/runner/loop.rs");
+const runner = read("src-tauri/src/agent/runner/turn_loop.rs") +
+  read("src-tauri/src/agent/runner/step_exec.rs");
 const orchestrator = read("src-tauri/src/agent/orchestrator/loop.rs");
 const research = read("src-tauri/src/agent/deep_research/engine.rs");
 const lib = read("src-tauri/src/lib.rs");

@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const resource = JSON.parse(readFileSync(new URL("../src-tauri/resources/agents/voice_display.json", import.meta.url), "utf8"));
-const loopSource = readFileSync(new URL("../src-tauri/src/agent/runner/loop.rs", import.meta.url), "utf8");
+const loopSource =
+  readFileSync(new URL("../src-tauri/src/agent/runner/turn_loop.rs", import.meta.url), "utf8") +
+  readFileSync(new URL("../src-tauri/src/agent/runner/step_exec.rs", import.meta.url), "utf8");
 const runnerSource = readFileSync(new URL("../src-tauri/src/agent/runner/voice_display.rs", import.meta.url), "utf8");
 const chatSource = readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8");
 const boardToolSource = readFileSync(new URL("../src-tauri/src/agent/tools/manage_board.rs", import.meta.url), "utf8");

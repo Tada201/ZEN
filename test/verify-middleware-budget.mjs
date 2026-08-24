@@ -46,9 +46,14 @@ import { strict as assert } from "node:assert";
 const read = (rel) =>
   readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
-const middleware = read("src-tauri/src/agent/middleware.rs");
-const helpers = read("src-tauri/src/agent/runner/helpers.rs");
-const loop = read("src-tauri/src/agent/runner/loop.rs");
+const middleware = [
+  "mod.rs", "core.rs", "system_prompt.rs", "compaction.rs", "summary.rs", "recall.rs", "skills.rs",
+].map((f) => read(`src-tauri/src/agent/middleware/${f}`)).join("");
+const helpers = ["mod.rs", "budget.rs", "compact.rs", "parse.rs"]
+  .map((f) => read(`src-tauri/src/agent/runner/helpers/${f}`))
+  .join("");
+const loop = read("src-tauri/src/agent/runner/turn_loop.rs") +
+  read("src-tauri/src/agent/runner/step_exec.rs");
 const memoryBootstrap = read("src-tauri/src/agent/runner/memory_bootstrap.rs");
 
 let failed = 0;

@@ -8,7 +8,9 @@ const backend = [
 const progressive = readFileSync(new URL("../src-tauri/src/agent/tools/progressive.rs", import.meta.url), "utf8");
 const capability = readFileSync(new URL("../src-tauri/src/tools/capability.rs", import.meta.url), "utf8");
 const systemPrompt = readFileSync(new URL("../src-tauri/src/agent/middleware/system_prompt.rs", import.meta.url), "utf8");
-const runner = readFileSync(new URL("../src-tauri/src/agent/runner/loop.rs", import.meta.url), "utf8");
+const runner =
+  readFileSync(new URL("../src-tauri/src/agent/runner/turn_loop.rs", import.meta.url), "utf8") +
+  readFileSync(new URL("../src-tauri/src/agent/runner/step_exec.rs", import.meta.url), "utf8");
 const generalist = readFileSync(new URL("../src-tauri/resources/agents/generalist.json", import.meta.url), "utf8");
 // ZEN-DOCS (researcher) and ZEN-TAC (operational_expert) were retired; the
 // shipped defaults are generalist, explore, and voice_display.

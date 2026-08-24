@@ -34,9 +34,12 @@ const read = (rel) =>
   readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
 const safety = read("src-tauri/src/agent/prompt_safety.rs");
-const loop = read("src-tauri/src/agent/runner/loop.rs");
+const loop = read("src-tauri/src/agent/runner/turn_loop.rs") +
+  read("src-tauri/src/agent/runner/step_exec.rs");
 const fragment = read("src-tauri/src/agent/skills/fragment.rs");
-const middleware = read("src-tauri/src/agent/middleware.rs");
+const middleware = [
+  "mod.rs", "core.rs", "system_prompt.rs", "compaction.rs", "summary.rs", "recall.rs", "skills.rs",
+].map((f) => read(`src-tauri/src/agent/middleware/${f}`)).join("");
 const toolDispatch = read("src-tauri/src/agent/runner/tool_dispatch.rs");
 const agentMod = read("src-tauri/src/agent/mod.rs");
 
@@ -391,13 +394,13 @@ const fail = (name, detail) => {
   // Pin the call. `\s+` and `\s*` together allow newlines and indentation
   // but still require the exact arg names.
   if (
-    /wrap_tool_result\s*\(\s*&tool_call\.name\s*,\s*&content_str\s*,/.test(loop)
+    /wrap_tool_result\s*\(\s*&tool_call\.name\s*,\s*&content_str\s*,?\s*\)/.test(loop)
   ) {
     pass(name);
   } else {
     fail(
       name,
-      "loop.rs tool result push must call `wrap_tool_result(&tool_call.name, &content_str,)`",
+      "loop.rs tool result push must call `wrap_tool_result(&tool_call.name, &content_str)`",
     );
   }
 }

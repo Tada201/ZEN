@@ -4,9 +4,11 @@
 //! |---------------|----------------------------------------------------------|
 //! | `config`      | `RunConfig`, `ContextTracker`                            |
 //! | `helpers`     | Token estimation, conversation utils, tool call parsing  |
-//! | `loop`        | `Runner` struct + main `run()` agent loop                |
+//! | `turn_loop`   | `Runner` struct + main `run()` agent loop                |
+//! | `step_exec`   | Step handlers extracted from the turn loop               |
 //! | `actions`     | Action timeline: persist_and_emit_action, emit_action_only |
-//! | `escalation`  | LLM auto-escalation + streaming callback wrapper         |
+//! | `escalation`  | LLM auto-escalation policy                               |
+//! | `streaming`   | LLM streaming callback wrapper                           |
 //! | `background`  | Background compaction, embedding, recall-cache refresh   |
 
 pub mod actions;
@@ -17,12 +19,12 @@ mod escalation;
 mod streaming;
 pub mod helpers;
 mod lifecycle;
-#[allow(clippy::module_inception)]
-mod r#loop;
 mod memory_bootstrap;
+mod step_exec;
 mod tool_actions;
 mod tool_dispatch;
 mod tool_pipeline;
+mod turn_loop;
 mod turn_persistence;
 mod voice_display;
 

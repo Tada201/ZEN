@@ -6,16 +6,24 @@ const utilityPath = new URL("../src/atlas/lib/toolProtocolText.ts", import.meta.
 const chunkBufferPath = new URL("../src/atlas/hooks/stream/chatChunkBuffer.ts", import.meta.url);
 const voiceEventsPath = new URL("../src/atlas/components/voice/useVoiceChatEvents.ts", import.meta.url);
 const voiceTextPath = new URL("../src/atlas/components/voice/voiceTextUtils.ts", import.meta.url);
-const runnerPath = new URL("../src-tauri/src/agent/runner/loop.rs", import.meta.url);
-const helpersPath = new URL("../src-tauri/src/agent/runner/helpers.rs", import.meta.url);
+const runnerPath = [
+  new URL("../src-tauri/src/agent/runner/turn_loop.rs", import.meta.url),
+  new URL("../src-tauri/src/agent/runner/step_exec.rs", import.meta.url),
+];
+const helpersPath = [
+  new URL("../src-tauri/src/agent/runner/helpers/mod.rs", import.meta.url),
+  new URL("../src-tauri/src/agent/runner/helpers/budget.rs", import.meta.url),
+  new URL("../src-tauri/src/agent/runner/helpers/compact.rs", import.meta.url),
+  new URL("../src-tauri/src/agent/runner/helpers/parse.rs", import.meta.url),
+];
 const chatTypesPath = new URL("../src/atlas/components/chat/types.ts", import.meta.url);
 
 const utilitySource = readFileSync(utilityPath, "utf8");
 const chunkBufferSource = readFileSync(chunkBufferPath, "utf8");
 const voiceEventsSource = readFileSync(voiceEventsPath, "utf8");
 const voiceTextSource = readFileSync(voiceTextPath, "utf8");
-const runnerSource = readFileSync(runnerPath, "utf8");
-const helpersSource = readFileSync(helpersPath, "utf8");
+const runnerSource = runnerPath.map((p) => readFileSync(p, "utf8")).join("");
+const helpersSource = helpersPath.map((p) => readFileSync(p, "utf8")).join("");
 const chatTypesSource = readFileSync(chatTypesPath, "utf8");
 
 const transpiled = ts.transpileModule(utilitySource, {
