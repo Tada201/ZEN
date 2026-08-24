@@ -191,7 +191,7 @@ Owner: backend/media
 Rule Exempted: Rust warning file-size limit
 Reason: Speech service owns capture, VAD pipeline wiring, and transcription orchestration in one module.
 Split or Fix Plan: Move to zen-media during Phase 10 and split during the move.
-Expires: migration/phase-10-done
+Expires: resolved migration/phase-10-done (moved to crates/zen-media/src/speech_service/; split into mod.rs 565 + server.rs 230, both under the 700 warn band; the app path is now a §4.6 re-export shim).
 
 File: src-tauri/src/agent/router.rs (779)
 Owner: backend/agent

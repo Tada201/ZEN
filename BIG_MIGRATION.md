@@ -1044,15 +1044,15 @@ these numbers if the tree has moved):**
   STAYS app-side; it is startup glue, not media logic.
 
 **Tasks**
-- [ ] Invert the tts seam FIRST, as its own commit inside the phase: replace the
+- [x] Invert the tts seam FIRST, as its own commit inside the phase: replace the
       `app: AppHandle` parameter on `speak` with `Arc<dyn EventSink>` (already
       in zen-core), swap the 2 `tauri::async_runtime::spawn` for `tokio::spawn`,
       and update the single `commands/voice.rs:306` call site. Event names and
       payload shapes stay byte-identical (R5).
-- [ ] Move `services/speech_service/` and `services/tts_service/` → zen-media.
+- [x] Move `services/speech_service/` and `services/tts_service/` → zen-media.
       Split `speech_service/mod.rs` (784) during the move per RULES.md; it is
       over the 700 warn band.
-- [ ] Resolve the transitive deps — this is the real work of the phase, and the
+- [x] Resolve the transitive deps — this is the real work of the phase, and the
       original plan did not mention it. Both media services import
       `services::{hardware, runtime_resource, process_manager}` and
       `utils::{default_http_client, model_download_http_client}`:
@@ -1070,7 +1070,7 @@ these numbers if the tree has moved):**
         `validate_generated_image_path(&AppHandle, ..)` line 98) but the two
         HTTP-client helpers media needs are clean. Extract just those two into
         a tauri-free home rather than moving the module.
-- [ ] zen-media deps (corrected — the old list was written pre-Phase 9 and is
+- [x] zen-media deps (corrected — the old list was written pre-Phase 9 and is
       wrong in both directions):
       - **Remove from the plan:** candle-core/transformers/nn and tokenizers.
         All four left the app crate in Phase 9 for zen-rag; `src/` now has ZERO
@@ -1085,14 +1085,51 @@ these numbers if the tree has moved):**
         `commands/voice.rs` (VAD gate before transcription, ~lines 113/221).
       - `cpal` is declared in both crates (shared with `commands/audio.rs`,
         87 lines, which stays app-side) — same disposition as `zip` in Phase 9.
-- [ ] Add the app-side `src/services/{speech_service,tts_service}/mod.rs`
+- [x] Add the app-side `src/services/{speech_service,tts_service}/mod.rs`
       re-export shims per §4.6; delete at Phase 14.
 
 **Verification gates**
-- `cargo test -p zen-media`; gate suite green (§5).
-- `cargo tree -p zen-media | grep tauri` empty.
-- Manual transcribe + speak smoke; audio device listing commands still work;
-  `tts:level`/`tts:stop` still drive the frontend meter (R5 event parity).
+- `cargo test -p zen-media`: 13/13 passed (11 runtime_resource + 2 tts).
+  `cargo test -p zen-policy-tests`: 22/22 — was 33 in Phase 9; the 11
+  runtime_resource tests moved with the module and now run under zen-media
+  (35 total across the two suites, nothing dropped).
+- Gate suite green: `cargo metadata` valid; `cargo check --workspace
+  --all-targets` clean; `cargo clippy --workspace --all-targets -- -D warnings`
+  clean; `npm run build` green. Post-review sanity re-check of
+  `-p zen-media -p zen-policy-tests` also clean.
+- `cargo tree -p zen-media`: zero `tauri` and zero `keyring` edges; the
+  standing workspace guard shows every extracted crate tauri/keyring-free.
+- Code review: APPROVE, no P0/P1. R5 parity confirmed on all 7 tts emit
+  sites; `tts:stop` now sends `Value::Null`, and `()` vs `Value::Null` both
+  serializing to JSON `null` was verified empirically in a scratch project;
+  the frontend (`src/api/events.ts`) types `tts:stop` as `EmptyEventPayload`
+  and ignores the body. Two P2 nits recorded and accepted as-is (cosmetic):
+  mixed `tracing::`-qualified macros in `speech_service/server.rs`, and
+  `tokio::spawn` inside `spawn_blocking` closures in tts_service relying on
+  entered runtime context (a latent constraint only if `speak()` is ever
+  called off-runtime).
+- Manual transcribe + speak smoke, audio device listing, and `tts:level`/
+  `tts:stop` frontend meter checks: deferred to the user-side pre-release
+  check (no audio path on this dev box) — same disposition as the
+  Phase 7/8/9 manual smokes.
+
+**Completion record (2026-08-24):** seam inversion landed as `c1b4b46`,
+extraction as `60129ad` (git mv history preserved). Splits/sizes:
+`speech_service/mod.rs` 565 + `server.rs` 230 (start_server + watchdog as a
+child-module split-impl block); `tts_service.rs` moved whole (485); all
+under the 700 warn band. Dep dispositions as measured: rodio + hound left
+the app crate entirely; cpal and sysinfo declared in both crates
+(commands/audio.rs and commands/mod.rs stay app-side); webrtc-vad stays
+app-side (voice.rs VAD gate); `nix =0.28.0` pinned for non-Windows
+`kill_pid_sync`, already present transitively in Cargo.lock (Security.md
+30-day rule: no new supply-chain surface). The §4.6 shim is a single
+`pub use zen_media::{hardware, process_manager, runtime_resource,
+speech_service, tts_service};` in `services/mod.rs` — wider than the
+planned two-module shim because the transitive moves must keep their old
+app paths alive too. utils/mod.rs re-exports the two HTTP clients from
+`zen_media::http` (single OnceLock instances, SSOT); the policy-tests
+`#[path]` mirror for runtime_resource became `pub use
+zen_media::runtime_resource;` (Phase 4/8 crate-alias pattern).
 
 **Rollback:** revert commit range.
 
