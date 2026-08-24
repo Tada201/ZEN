@@ -1019,30 +1019,86 @@ zen-db).
 
 ## Phase 10 — Extract `zen-media`
 
-**Goal:** audio/VAD/TTS/whisper-model runtime isolated; candle cluster gets a
-stable home and stops inflating unrelated rebuilds.
+**Goal:** the speech (whisper) and TTS (piper) runtimes plus their audio
+plumbing isolated behind ports, so native-audio deps stop rebuilding with
+unrelated code.
 
-**Prerequisites:** Phase 2 AND Phase 6 media-seam completion (review finding
-#6: speech/tts cores carry ~9 AppHandle sites; they must consume EventSink/
-ProcessPort before the crate can be tauri-free).
+**Prerequisites:** Phase 2 only. **The original prerequisite was retired on
+2026-08-24 after measurement** — see Appendix G. It read "Phase 6 media-seam
+completion (review finding #6: speech/tts cores carry ~9 AppHandle sites)".
+That is not the current tree: `services/speech_service/mod.rs` (784 lines) has
+ZERO tauri references, and the entire host coupling is one file. Inverting it
+is in-phase work, not a blocking predecessor.
+
+**Measured coupling surface (verify before starting; re-measure, do not trust
+these numbers if the tree has moved):**
+- `services/tts_service/mod.rs` (485) — the only tauri-coupled media file:
+  `use tauri::{AppHandle, Emitter}` (line 7); `speak(&self, text, app:
+  AppHandle)` (line 145) with exactly ONE caller, `commands/voice.rs:306`;
+  9 `app.emit` sites (`tts:error`, `tts:level`, `tts:stop`, word-timing);
+  2 `tauri::async_runtime::spawn` → plain `tokio::spawn`.
+- `services/speech_service/mod.rs` (784) — tauri-free already. Whisper is NOT
+  an in-process candle model: it shells out to a `whisper-server` binary
+  (`Command::new(&resolved_binary.path)`, ~line 411) and talks HTTP/TCP to it.
+- `services/media.rs` (259) — `use tauri::Manager` + `setup(&AppHandle)`.
+  STAYS app-side; it is startup glue, not media logic.
 
 **Tasks**
-- [ ] Move `services/speech_service/` (702 → split mod), `tts_service/`, voice/
-      audio stacks, whisper/candle runtime wrappers → zen-media.
-- [ ] Process management dependency (`process_manager`) becomes a port
-      (`ProcessPort`) implemented by app.
-- [ ] zen-media deps: candle-core/transformers/nn, tokenizers, rodio, cpal,
-      hound, webrtc-vad, image (if used here), sysinfo? (verify), zen-core.
-- [ ] Hardware detection handoff stays orchestrated by app (hardware service
-      passes info in constructors as today's `with_process_manager` pattern).
+- [ ] Invert the tts seam FIRST, as its own commit inside the phase: replace the
+      `app: AppHandle` parameter on `speak` with `Arc<dyn EventSink>` (already
+      in zen-core), swap the 2 `tauri::async_runtime::spawn` for `tokio::spawn`,
+      and update the single `commands/voice.rs:306` call site. Event names and
+      payload shapes stay byte-identical (R5).
+- [ ] Move `services/speech_service/` and `services/tts_service/` → zen-media.
+      Split `speech_service/mod.rs` (784) during the move per RULES.md; it is
+      over the 700 warn band.
+- [ ] Resolve the transitive deps — this is the real work of the phase, and the
+      original plan did not mention it. Both media services import
+      `services::{hardware, runtime_resource, process_manager}` and
+      `utils::{default_http_client, model_download_http_client}`:
+      - `process_manager.rs` (151) is ALREADY tauri-free. **Do not build the
+        `ProcessPort` the old plan called for** — move the concrete type into
+        zen-media (or zen-core) and keep passing `Arc<ProcessManager>` exactly
+        as today's `with_process_manager` constructors do. Its only non-media
+        consumer is `terminal/mod.rs`, which can use the moved type.
+      - `hardware.rs` (320) is tauri-free but has 8 consumers across `agent/`
+        and `commands/`. It must MOVE (shared, re-exported via shim), not be
+        duplicated — a second copy would be an SSOT violation.
+      - `runtime_resource.rs` (449) is tauri-free; non-media consumer is
+        `commands/voice.rs`. Same treatment as hardware.
+      - `utils/mod.rs` (143) is tauri-tainted (line 7 `use tauri::Manager`;
+        `validate_generated_image_path(&AppHandle, ..)` line 98) but the two
+        HTTP-client helpers media needs are clean. Extract just those two into
+        a tauri-free home rather than moving the module.
+- [ ] zen-media deps (corrected — the old list was written pre-Phase 9 and is
+      wrong in both directions):
+      - **Remove from the plan:** candle-core/transformers/nn and tokenizers.
+        All four left the app crate in Phase 9 for zen-rag; `src/` now has ZERO
+        `candle` references. Whisper here is an out-of-process binary.
+      - **Remove from the plan:** `image` (zero Rust references anywhere; see
+        Phase 12) and `sysinfo` (used by `hardware.rs` + `commands/mod.rs`, so
+        it follows hardware rather than being a media dep in its own right).
+      - **Actual deps:** `rodio` (tts only), `hound` (speech only), `cpal`
+        (tts + `commands/audio.rs`), `reqwest`, `tokio`, `serde`, `serde_json`,
+        `tracing`, `uuid`, `zen-core`. NO tauri.
+      - `webrtc-vad` STAYS in the app crate: its only consumer is
+        `commands/voice.rs` (VAD gate before transcription, ~lines 113/221).
+      - `cpal` is declared in both crates (shared with `commands/audio.rs`,
+        87 lines, which stays app-side) — same disposition as `zip` in Phase 9.
+- [ ] Add the app-side `src/services/{speech_service,tts_service}/mod.rs`
+      re-export shims per §4.6; delete at Phase 14.
 
 **Verification gates**
-- Transcribe + speak smoke tests (manual script); device listing commands OK.
-- Gate suite green.
+- `cargo test -p zen-media`; gate suite green (§5).
+- `cargo tree -p zen-media | grep tauri` empty.
+- Manual transcribe + speak smoke; audio device listing commands still work;
+  `tts:level`/`tts:stop` still drive the frontend meter (R5 event parity).
 
 **Rollback:** revert commit range.
 
-**Risk:** Low-Medium. Feature-gated native deps; Windows-first validation.
+**Risk:** Low-Medium. Native audio deps are Windows-first; the transitive
+hardware/runtime_resource move touches more call sites than the media code
+itself does.
 
 ---
 
@@ -1051,31 +1107,68 @@ ProcessPort before the crate can be tauri-free).
 **Goal:** the crown jewels — runner loop, orchestrator, deep research, swarm,
 middleware, skills — in their own crate, fully UI-agnostic.
 
-**Prerequisites:** Phase 6 MUST be 100% complete (zero AppState reach-throughs),
-Phases 5,7,8 done (agent depends on tools/llm/mcp crates).
+**Prerequisites:** Phases 5, 7, 8 done (agent depends on the tools/llm/mcp
+crates) — all complete. Phase 6 must be complete in the sense of **zero LIVE
+`AppState` reach-throughs in the agent core**; that is already true as of
+2026-08-24. A naive grep is misleading here, so use this wording rather than a
+count: `src/agent` has 52 `AppState` occurrences, of which 36 are in `tools/`
+(sanctioned to keep `AppHandle` until this phase, per the Phase 6 re-scope) and
+all 16 in the core are **doc/explanatory comments** ("Phase 6 seam: shared
+service handles (same Arcs as AppState)"). Verify live references, not text
+matches.
 
 **Tasks**
 - [ ] Move `src/agent/**` → `crates/zen-agent/src/**` preserving submodule
       layout (agents/, deep_research/, middleware/, orchestrator/, runner/,
-      skills/, swarm/, tools/).
-- [ ] Split hard-fail files DURING the move (do not carry them across):
-      - tools/spawn_tools.rs (1,593) → spawn/{registry.rs, handlers.rs}
-      - deep_research/phases.rs (1,421) → deep_research/phases/{mod.rs, phase_*.rs}
-      - runner/loop.rs (1,337) → runner/{turn_loop.rs, step_exec.rs}
-      - runner/helpers.rs (1,188) → runner/support/{...} by topic
-      - runner/tool_dispatch.rs (1,186) → runner/dispatch/{router.rs, executors.rs}
-      - runner/escalation.rs (1,052) → runner/escalation/{policy.rs, flow.rs}
-      - tools/fs_tools.rs (787) → fs/{read_tools.rs, write_tools.rs}
-      - event_bus.rs (775): port type → zen-core (already defined), bus impl →
-        zen-agent or app bridge per ownership decision in Phase 6.
-      - router.rs (715), context_breakdown.rs (710), voice_display.rs (733):
-        split or justify exemption entries.
+      skills/, swarm/, tools/). Current size: 29,974 lines.
+- [ ] Split hard-fail files DURING the move (do not carry them across).
+      **Line counts re-measured 2026-08-24; the original figures were stale by
+      up to 12% and two paths had moved. Re-measure again at phase start.**
+      Over the 900 hard-fail line:
+      - tools/spawn_tools.rs (1,715) → spawn/{registry.rs, handlers.rs}
+      - deep_research/phases.rs (1,608) → deep_research/phases/{mod.rs, phase_*.rs}
+      - runner/loop.rs (1,429) → runner/{turn_loop.rs, step_exec.rs}
+      - runner/helpers.rs (1,297) → runner/support/{...} by topic
+      - runner/tool_dispatch.rs (1,243) → runner/dispatch/{router.rs, executors.rs}
+      - runner/escalation.rs (1,118) → runner/escalation/{policy.rs, flow.rs}
+      In the 700–900 warn band — split or carry a justified exemption entry:
+      - tools/fs_tools.rs (875) → fs/{read_tools.rs, write_tools.rs}
+      - event_bus.rs (865): port type → zen-core (already defined), bus impl →
+        zen-agent or app bridge per ownership decision in Phase 6. NOTE this
+        file owns `AgentEvent::event_name()` (~line 710), the R5 event-name
+        SSOT — the mapping must survive the split byte-identical.
+      - router.rs (779)
+      - runner/voice_display.rs (771) — was listed as `voice_display.rs`
+      - plugins.rs (755) — NOT in the original list
+      - runner/context_breakdown.rs (748) — was listed as `context_breakdown.rs`
+      - orchestrator/execution.rs (726) — NOT in the original list
 - [ ] zen-agent deps: zen-{core,tools,llm,mcp,security,db}, tokio, futures,
-      serde_json, tracing, async-recursion. NO tauri, NO reqwest (LLM I/O goes
-      through zen-llm types). rag/search/media access flows through the
-      Phase 6 ports (`VectorStorePort`, `WebSearchPort`, `ProcessPort`) —
-      not direct crate deps.
+      serde_json, tracing, async-recursion. NO tauri. NO reqwest (LLM I/O goes
+      through zen-llm types; the sole `reqwest` mention in `src/agent` today is
+      a comment in spawn_tools.rs:328, so this is already satisfied).
+- [ ] Decide the rag/search/media edges from measured usage, not the original
+      plan's assumption of `VectorStorePort`/`WebSearchPort`/`ProcessPort`.
+      There are only four such call sites today:
+      - `runner/background.rs` → `crate::rag::conversation_store`
+      - `runner/config.rs` → `crate::rag::embedding::cosine_similarity`
+      - `tools/session_memory_tools.rs` → `crate::rag::session_memory`
+      - `tools/progressive.rs` → `crate::search::tool`
+      Three of four are zen-rag, which is already a tauri-free sibling crate, so
+      a plain `zen-rag` dependency is simpler and more honest than inventing a
+      `VectorStorePort` — take it unless a cycle appears. Only `crate::search`
+      genuinely needs a port (it lives in the app crate). No media edge exists,
+      so `ProcessPort` is not needed here either (see Phase 10).
 - [ ] Sub-agent spawning uses context handles only.
+- [ ] OPTIONAL sub-decision (do not let it block the move): replace the
+      host-generic `AgentTool<A>`/`Tool<A>` with a `ToolContext` struct
+      parameter carrying `Arc<dyn …>` handles, the pattern both non-Tauri
+      reference implementations use (Appendix G). It would delete 73
+      `Tool<tauri::AppHandle>` spellings across 31 files that only exist because
+      Rust has no trait aliases (E0782). But measurement shows `A` is mostly a
+      carrier for `app.state::<AppState>()` (36 sites in `agent/tools`) plus 11
+      direct `app.emit` calls, so the prerequisite is the AppState/emit sweep
+      this phase already performs — the trait reshape unblocks nothing and can
+      land later.
 - [ ] Update `tests/agentic_test.rs` imports; keep it in app crate (it drives
       the composed system).
 
@@ -1089,8 +1182,9 @@ Phases 5,7,8 done (agent depends on tools/llm/mcp crates).
 **Rollback:** revert commit range. Highest-risk phase; schedule dedicated
 session(s); do not rush.
 
-**Risk:** High. Largest module (27K lines). Mitigation: phases 5–10 already
-moved its dependencies; the move itself is mechanical once seams hold.
+**Risk:** High. Largest module (29,974 lines as of 2026-08-24). Mitigation:
+phases 5–10 already moved its dependencies; the move itself is mechanical once
+seams hold.
 
 ---
 
@@ -1101,16 +1195,46 @@ moved its dependencies; the move itself is mechanical once seams hold.
 **Prerequisites:** Phases 3–11 complete (most offenders already relocated/split).
 
 **Tasks**
-- [ ] Remaining known offenders (verify against current tree):
-      - commands/chat/send.rs (843) → split validation vs orchestration vs
-        response mapping.
-      - canvas/session.rs (828) → session state vs command application.
-- [ ] lib.rs (666): extract command registration groups into per-domain
-      `commands/mod.rs` builder fns; boot logic into `boot.rs` (keep run() thin).
-- [ ] Re-scan: any file >700 needs exemption entry or split; >900 must be split
-      or carry documented exemption with expiration.
-- [ ] services/tool.rs (1,321, stays as composition shell) → thin facade over
-      zen-tools/zen-security; split approval execution vs lookup.
+- [ ] **The original three-file list was badly under-scoped.** A full re-scan on
+      2026-08-24 found 20 app-crate files over 700 lines, and every count in the
+      old list had drifted upward. Re-measure at phase start; the snapshot below
+      is the true current picture. Files under `src/agent` are excluded because
+      Phase 11 relocates and splits them.
+      Over 900 (hard fail):
+      - services/tool.rs (1,408 — was listed as 1,321; stays as composition
+        shell) → thin facade over zen-tools/zen-security; split approval
+        execution vs lookup.
+      - commands/chat/send.rs (941 — was 843) → split validation vs
+        orchestration vs response mapping.
+      In the 700-900 warn band — split or carry a justified exemption:
+      - canvas/session.rs (897 — was 828) → session state vs command application.
+      - services/speech_service/mod.rs (784) — Phase 10 relocates AND splits
+        this, so it should already be gone. If Phase 10 deferred the split, it
+        lands here.
+      - commands/settings.rs (756) — NOT in the original list.
+      - commands/spatial.rs (724) — NOT in the original list.
+      - commands/mod.rs (714) — NOT in the original list; this is the AppState
+        definition site, so split with care.
+- [ ] lib.rs (670 — was listed as 666): extract command registration groups into
+      per-domain `commands/mod.rs` builder fns; boot logic into `boot.rs` (keep
+      run() thin).
+- [ ] Close or renew the `crates/zen-security/src/policy.rs` exemption
+      (1,393 lines, ~720 of which are inline tests). It is recorded as expiring
+      at THIS phase. The file-size gate script only scans `src-tauri/src` and
+      will NOT flag it, so this must be handled by hand or Definition-of-Done
+      item 3 ("no file >900 anywhere in src-tauri") silently fails.
+- [ ] Also re-scan `crates/*`, which the gate script does not cover today:
+      zen-tools/src/manager.rs (818), zen-llm/src/ollama/mod.rs (738) and
+      zen-llm/src/openai_compat/stream_tests.rs (718) sit in the warn band.
+- [ ] Extend the file-size check script to cover `crates/**` in addition to
+      `src-tauri/src/**`; otherwise this phase's result cannot be enforced going
+      forward and Phase 13's guards have a blind spot.
+- [ ] Remove the unused `image = "0.25"` app-crate dependency — a full scan of
+      `src/` and `crates/` finds ZERO `image::` references. Confirm once more
+      before deleting in case a Tauri feature needs it transitively; if so,
+      record why it is a direct dependency.
+- [ ] Re-scan: any file >700 needs an exemption entry or a split; >900 must be
+      split or carry a documented exemption with an expiration.
 
 **Verification gates**
 - File-size check script green; exemptions.md accurate and minimal.
@@ -1129,11 +1253,54 @@ moved its dependencies; the move itself is mechanical once seams hold.
       like codex-rs: docs/codegen only rebuild affected crates).
 - [ ] Add boundary guards to CI:
       - grep gate: `tauri` must not appear in any crates/*/Cargo.toml
+      - grep gate: `keyring` must not appear in any crates/*/Cargo.toml either
+        (the constraint has always been "no tauri AND no keyring"; only the
+        tauri half was ever written down here)
       - `cargo deny`/audit config unified at workspace root (.cargo/audit.toml)
-- [ ] Clippy: workspace-level `-D warnings`; consider crate-level lint caps
-      mirroring codex-rs style rules where cheap.
+      - file-size scan extended to `crates/**` (see Phase 12)
+- [ ] Move clippy enforcement from a CLI flag into the manifest. Today `-D
+      warnings` only applies when someone remembers the flag; a bare `cargo
+      clippy` enforces nothing. Adopt the codex-rs arrangement (Appendix G):
+      add `[workspace.lints.clippy]` at the workspace root with an explicit deny
+      set, and `[lints]
+workspace = true` in all nine crate manifests plus the
+      app crate. Start from the high-value denies that match this codebase's
+      known failure modes: `unwrap_used`, `expect_used`, `await_holding_lock`
+      (would have caught the Phase 9 `session_memory` RwLock deadlock class),
+      `redundant_clone`, `needless_borrow`, `uninlined_format_args`. Expect a
+      one-time debt sweep; land the sweep and the lint block in the same commit
+      so the tree never sits red.
+- [ ] Fix workspace manifest drift (all cosmetic today, but it compounds):
+      - Adopt `[workspace.package]` for shared `version`/`edition`/`license` and
+        have members inherit via `version.workspace = true` etc. Currently all
+        seven crate manifests repeat `version = "0.1.0"` and
+        `edition = "2021"` by hand.
+      - Normalise `publish`. zen-core/zen-db/zen-security set `publish = false`;
+        zen-llm/zen-mcp/zen-rag/zen-tools do not. Nothing here is publishable —
+        set it uniformly (or once, via `[workspace.package]`).
+      - Hoist the 12 dependencies currently pinned at IDENTICAL versions in two
+        or three separate manifests into `[workspace.dependencies]`, then switch
+        the sites to `{ workspace = true }`: `dirs` 6.0 (app, zen-mcp, zen-rag),
+        `regex` 1 (app, zen-llm, zen-security), `url` 2 (app, zen-mcp,
+        zen-security), `base64` 0.22 (app, zen-llm, zen-mcp), `jsonschema` 0.42
+        (app, zen-mcp, zen-tools), `wiremock` 0.6 (app, zen-llm, zen-mcp),
+        `tempfile` 3 (app, zen-db, zen-rag), `sha2` 0.10 (app, zen-mcp),
+        `zip` 4.6.1 (app, zen-rag), `tiktoken-rs` 0.6 (app, zen-rag),
+        `dashmap` 6.1 (app, zen-llm), `futures-util` 0.3 (app, zen-mcp).
+        Duplicated pins are how version skew starts; a single source also means
+        Security.md's 30-day rule is checked in one place.
 - [ ] Coverage ratchet for zen-security + zen-tools (privileged code) per
       RULES.md testing gates.
+- [ ] CI must run `cargo test --workspace`, which no local box can do (the
+      app-crate lib target aborts with STATUS_ENTRYPOINT_NOT_FOUND on
+      tauri-linked test executables). This phase is the first point where the
+      full suite is actually exercised end-to-end, so budget for latent-red
+      tests surfacing here the way Phase 7 and Phase 9 each surfaced their own
+      (Appendices E and F).
+- [ ] Capture the outstanding runtime event-contract baseline fixture
+      (`test/fixtures/event-snapshot-baseline.jsonl`) in CI. It has been carried
+      as a standing debt since Phase 6 because it cannot be produced locally;
+      CI is the mechanism. Procedure in `test/fixtures/README.md`.
 - [ ] Optional: adopt cargo-nextest for speed; insta snapshot tests for any
       future TUI-visible/CLI output if introduced.
 - [ ] Nightly full-matrix job (all crates, all targets) mirroring fast-PR path.
@@ -1151,12 +1318,29 @@ moved its dependencies; the move itself is mechanical once seams hold.
 **Goal:** make the new structure the documented law of the land.
 
 **Tasks**
+- [ ] Delete every §4.6 re-export shim and rewrite consumers to their deliberate
+      final paths. This is the largest task in the phase and was previously
+      implicit. Current shim inventory (16 files; re-verify at phase start):
+      `src/db/mod.rs` (5), `src/services/security.rs` (10), `src/rag/mod.rs`
+      (13), `src/llm/mod.rs` (16), `src/mcp/mod.rs` (18), `src/error.rs` (38,
+      re-export plus boundary helpers), `src/agent/tools/mod.rs` (74),
+      `src/tools/mod.rs` (97), plus `src/services/{permissions,secret_policy}.rs`
+      and `src/tools/{calculator,capability,url_safety,permission,manager,
+      patch_parser}.rs`. Phase 10 adds speech/tts shims. Do this crate-by-crate
+      with a compile between each, not as one sweep.
 - [ ] Update RULES.md: Target Layering section gains the workspace/crate map;
       add "resist adding code to zen-app" guidance; dependency direction now
       cites compiler enforcement.
 - [ ] Update AGENTS.md / CLAUDE.md pointers and docs/architecture/* for:
       tool architecture ownership (zen-tools), security policy location
-      (zen-security), streaming behavior (zen-llm), DB rules (zen-db paths).
+      (zen-security), streaming behavior (zen-llm), DB rules (zen-db paths),
+      RAG/ingestion (zen-rag), media runtimes (zen-media), agent loop
+      (zen-agent).
+- [ ] Remove the temporary migration banners: AGENTS.md rule 0.2 and the RULES.md
+      migration banner both say to delete themselves at this phase. Also decide
+      the fate of `Zen_rs_old/` (the frozen pre-migration snapshot) — it is
+      preserved by the `pre-workspace-migration` tag, so the working-tree copy
+      can go, which also removes it from the codegraph .gitignore special-case.
 - [ ] Close out docs/architecture/exemptions.md entries resolved by phases;
       every surviving exemption has owner + expiration.
 - [ ] Refresh Appendix A metrics post-migration (cold/warm build, clippy count,
@@ -1189,12 +1373,26 @@ moved its dependencies; the move itself is mechanical once seams hold.
 
 ## 8. Definition of Done (whole migration)
 
-1. `crates/*` contains 9 crates; none depend on tauri (CI-enforced).
+1. `crates/*` contains 9 crates; none depend on tauri OR keyring (CI-enforced).
+   Current count is 7 (zen-core, zen-db, zen-security, zen-tools, zen-llm,
+   zen-mcp, zen-rag); zen-media and zen-agent bring it to 9.
 2. Zero `crate::commands::AppState` references outside app crate (grep-gated).
-3. No file >900 lines anywhere in src-tauri without a current exemption entry.
+3. No file >900 lines anywhere in src-tauri — **including `crates/**`** —
+   without a current exemption entry. The file-size script must actually scan
+   `crates/**` for this to be enforceable (Phase 12).
 4. Gate suite green on `--workspace --all-targets` in CI, plus frontend build.
-5. Manual E2E script (Appendix C) passes fully.
-6. RULES.md/docs updated; exemptions ledger current; `migration/complete` tagged.
+   Note `cargo test --workspace` cannot run on a Windows dev box
+   (STATUS_ENTRYPOINT_NOT_FOUND on tauri-linked test binaries), so CI is the
+   only place this criterion can be evaluated.
+5. Manual E2E script (Appendix C) passes fully, plus the per-phase manual smokes
+   deferred along the way: real-provider streaming (Phase 7), stdio MCP connect
+   (Phase 8), document ingest → vector query (Phase 9), transcribe/speak
+   (Phase 10).
+6. Every §4.6 re-export shim is deleted and consumers use final paths (Phase 14).
+7. The runtime event-contract baseline fixture exists and the post-migration
+   capture diffs clean against it (R5).
+8. RULES.md/docs updated, migration banners removed; exemptions ledger current;
+   `migration/complete` tagged.
 
 ## 9. Out of scope
 
@@ -1320,6 +1518,70 @@ abort on this box).
    `write_memory` caller (`agent/tools/session_memory_tools.rs`) would have hit
    the same hang had a backend ever been wired.
 
+
+## Appendix G — Reference-implementation survey (2026-08-24, pre-Phase 10)
+
+Three read-only Rust projects under `EXAMPLE_NO_EDITS/` were surveyed against
+this plan. They usefully bracket the design space at 129 / 10 / 2 crates. Only
+conclusions that changed a phase are recorded; the survey itself is not a
+source of truth for Zen — the repository is.
+
+**`codex-main/codex-rs` (OpenAI Codex CLI, ~129 crates) — manifest hygiene and
+port isolation.** Adopted into Phase 13: `[workspace.lints.clippy]` with an
+explicit deny set inherited by members via `[lints] workspace = true` (strictly
+stronger than a CLI `-D warnings` flag, which enforces nothing when someone runs
+a bare `cargo clippy`); `[workspace.package]` inheritance for
+version/edition/license; test-support crates wired as path deps in
+`[workspace.dependencies]` so siblings import mocks via `[dev-dependencies]`.
+Their crate-splitting convention is `X-protocol` (serde DTOs, zero logic) /
+`X` (engine) / `X-client` / `X-host`. **Deliberately NOT adopted:** they isolate
+`keyring` in its own 227-line crate behind a `KeyringStore` trait so secret
+tests can run headless. Zen has exactly one `keyring::` consumer
+(`src/services/secret.rs`) already inverted behind the zen-core `SecretStore`
+port, so that crate would buy a boundary Zen already has.
+
+**`claude-code-RUSTS` (10 crates) — the closest analogue to the unbuilt
+zen-agent.** Their tools take a concrete context struct
+(`execute(&self, input: Value, ctx: &ToolContext)`) with `Arc<dyn …>` handles
+inside it, and registries are `Vec<Box<dyn Tool>>`. Their turn loop takes an
+`mpsc::UnboundedSender<QueryEvent>` plus a `CancellationToken`; their spec
+states the engine "has zero knowledge of Ratatui, Crossterm, or CLI output".
+This is the alternative to Zen's host-generic `AgentTool<A>`, recorded as an
+optional Phase 11 sub-decision. They also keep MCP ignorant of the tool trait
+and wrap MCP tools in a host-side adapter — the same call Zen already made by
+keeping `mcp_adapter.rs` app-side.
+
+**`terax-ai-main` (2 crates) — structurally identical to Zen (Tauri app crate as
+workspace root, crates under `src-tauri/crates/*`), and the useful negative
+control.** It extracted only `terax-control-protocol` (167 lines of serde DTOs)
+and `terax-cli` (717-line binary talking to the app over loopback TCP with a
+token). Its selection rule is narrow: a crate exists only because two processes
+must agree on a wire format. Its own `TERAX.md` states the same layering rule
+this migration enforces — "new or changed logic lives in pure, dependency-light
+functions (functional core); tauri commands and React components stay thin
+(imperative shell)" — and then violates it routinely, because nothing checks:
+`AppHandle` reaches deep domain functions (`secrets.rs` takes `&AppHandle`
+merely to resolve a path), the tauri commands ARE the domain logic, events are
+bare `app.emit("terax:…")` string literals with `Value` payloads, and modules
+run past 1,200 lines in a 13,983-line app crate. That is the counterfactual for
+this migration: a documented boundary with no compiler behind it. It offers no
+precedent for Phase 10 (all its audio is webview MediaRecorder + HTTP Whisper,
+zero Rust audio) or Phase 11 (its agent loop runs in JS via the Vercel AI SDK,
+with tools calling `invoke()`).
+
+**Where Zen already leads all three, and should not "improve":** none of them
+generate TypeScript types from Rust (no ts-rs, specta, schemars, typeshare), and
+none has a typed event contract. Zen's `AgentEvent` enum with a single
+`event_name()` mapping (`src/agent/event_bus.rs`, ~line 710) leaving only 13
+stringly-typed `.emit("…")` literals in the whole app crate, plus the
+`event-snapshot` feature for payload diffing, serves R5 better than codegen
+would. Do not add type generation.
+
+**Phase entries changed by this survey:** Phase 10 prerequisite retired and dep
+list corrected; Phase 11 prerequisite wording, split-target line counts, and the
+rag/search edge decision; Phase 12 offender list; Phase 13 lint/manifest tasks;
+Phase 14 shim inventory; Definition of Done items 1, 3, 4, 5, plus new items 6
+and 7.
 
 ## Appendix C — Manual E2E verification script
 
