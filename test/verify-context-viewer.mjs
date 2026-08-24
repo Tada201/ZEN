@@ -159,9 +159,9 @@ if (/AgentEvent::ContextBreakdown\(_[\s\S]*?"context:breakdown"/.test(eventBusSr
 }
 
 if (/AgentEvent::ContextBreakdown\(p\)[\s\S]+serde_json::to_value\(p\)/.test(eventBusSrc)) {
-  pass("event_bus bridge_to_tauri serialises ContextBreakdown payload");
+  pass("event_bus bridge_payload serialises ContextBreakdown payload");
 } else {
-  fail("event_bus bridge_to_tauri serialises ContextBreakdown", "missing arm");
+  fail("event_bus bridge_payload serialises ContextBreakdown", "missing arm");
 }
 
 // ─── Backend: middleware instrumentation ────────────────────────────

@@ -308,7 +308,7 @@ impl Runner {
             timestamp: chrono::Utc::now().to_rfc3339(),
             child_tool_call_ids: None,
         })
-        .emit_via(&self.app);
+        .emit_to(self.ctx.events.as_ref());
     }
 
     pub(super) fn parent_tool_call_id(&self) -> Option<String> {
@@ -336,7 +336,7 @@ impl Runner {
     }
 
     pub(super) fn emit(&self, event: AgentEvent) {
-        event.emit_via(&self.app);
+        event.emit_to(self.ctx.events.as_ref());
     }
 
     /// Emit a terminal chat error only when this runner owns the chat. A

@@ -1301,7 +1301,7 @@ impl Runner {
 
                 if let Some(ref db) = self.db_pool {
                     let _ = persist_and_emit_action(ActionPersistParams {
-                        app: &self.app,
+                        events: self.ctx.events.as_ref(),
                         db_pool: db,
                         chat_id: &chat_id,
                         id: None,
@@ -1314,7 +1314,7 @@ impl Runner {
                     .await;
                 } else {
                     let _ = emit_action_only(ActionEmitParams {
-                        app: &self.app,
+                        events: self.ctx.events.as_ref(),
                         chat_id: &chat_id,
                         id: None,
                         kind: MessageKind::ToolResult,

@@ -5,7 +5,7 @@ use crate::agent::types::{ActionMeta, MessageKind};
 use crate::db::queries;
 use anyhow::Result;
 use sqlx::SqlitePool;
-use tauri::AppHandle;
+use zen_core::ports::EventSink;
 
 impl std::fmt::Display for MessageKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -24,7 +24,7 @@ impl std::fmt::Display for MessageKind {
 
 /// Parameters for persisting and emitting an action to the frontend.
 pub struct ActionPersistParams<'a> {
-    pub app: &'a AppHandle,
+    pub events: &'a dyn EventSink,
     pub db_pool: &'a SqlitePool,
     pub chat_id: &'a str,
     pub id: Option<String>,
@@ -80,10 +80,10 @@ pub async fn persist_and_emit_action(params: ActionPersistParams<'_>) -> Result<
         content: params.content.clone(),
         metadata: Some(serde_json::to_value(params.meta.clone())?),
     })
-    .emit_via(params.app);
+    .emit_to(params.events);
 
     bridge_lifecycle_events(BridgeContext {
-        app: params.app,
+        events: params.events,
         kind: &params.kind,
         meta: &params.meta,
         msg_id: &msg_id,
@@ -97,7 +97,7 @@ pub async fn persist_and_emit_action(params: ActionPersistParams<'_>) -> Result<
 
 /// Parameters for emitting an action-only event (no DB persist).
 pub struct ActionEmitParams<'a> {
-    pub app: &'a AppHandle,
+    pub events: &'a dyn EventSink,
     pub chat_id: &'a str,
     pub id: Option<String>,
     pub kind: MessageKind,
@@ -121,10 +121,10 @@ pub fn emit_action_only(params: ActionEmitParams<'_>) -> Result<String> {
         content: params.content.clone(),
         metadata: Some(serde_json::to_value(params.meta.clone())?),
     })
-    .emit_via(params.app);
+    .emit_to(params.events);
 
     bridge_lifecycle_events(BridgeContext {
-        app: params.app,
+        events: params.events,
         kind: &params.kind,
         meta: &params.meta,
         msg_id: &msg_id,
@@ -138,7 +138,7 @@ pub fn emit_action_only(params: ActionEmitParams<'_>) -> Result<String> {
 
 /// Context for bridging lifecycle events.
 pub struct BridgeContext<'a> {
-    pub app: &'a AppHandle,
+    pub events: &'a dyn EventSink,
     pub kind: &'a MessageKind,
     pub meta: &'a ActionMeta,
     pub msg_id: &'a str,
@@ -165,7 +165,7 @@ fn bridge_lifecycle_events(ctx: BridgeContext<'_>) {
                     chat_id: ctx.chat_id.to_string(),
                     timestamp: ctx.msg_ts.to_string(),
                 })
-                .emit_via(ctx.app);
+                .emit_to(ctx.events);
             }
         }
         MessageKind::AgentComplete => {
@@ -193,7 +193,7 @@ fn bridge_lifecycle_events(ctx: BridgeContext<'_>) {
                     duration_ms: spawn.duration_ms.unwrap_or(0),
                     timestamp: ctx.msg_ts.to_string(),
                 })
-                .emit_via(ctx.app);
+                .emit_to(ctx.events);
             }
         }
         MessageKind::AgentHandoff => {
@@ -205,7 +205,7 @@ fn bridge_lifecycle_events(ctx: BridgeContext<'_>) {
                     chat_id: ctx.chat_id.to_string(),
                     timestamp: ctx.msg_ts.to_string(),
                 })
-                .emit_via(ctx.app);
+                .emit_to(ctx.events);
             }
         }
         _ => {}

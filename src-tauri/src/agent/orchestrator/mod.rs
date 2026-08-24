@@ -103,7 +103,7 @@ impl Orchestrator {
 
     /// Internal helper to emit events to the frontend
     pub(crate) fn emit(&self, event: crate::agent::event_bus::AgentEvent) -> Result<()> {
-        event.emit_via(&self.app);
+        event.emit_to(self.ctx.events.as_ref());
         Ok(())
     }
 

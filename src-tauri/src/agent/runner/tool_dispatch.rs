@@ -262,7 +262,7 @@ impl Runner {
             }));
 
             emit_tool_call_action(ToolActionParams {
-                app: &self.app,
+                events: self.ctx.events.as_ref(),
                 db_pool: self.db_pool.as_ref(),
                 chat_id,
                 tool_call,
@@ -287,7 +287,7 @@ impl Runner {
                 tracing::info!("Cache HIT for tool '{}'", tool_call.name);
 
                 emit_cached_tool_result_action(CachedResultParams {
-                    app: &self.app,
+                    events: self.ctx.events.as_ref(),
                     db_pool: self.db_pool.as_ref(),
                     chat_id,
                     tool_call,
@@ -565,6 +565,7 @@ impl Runner {
                                 let tool = None;
                                 let tool_service = self.ctx.tool_service.clone();
                                 let app = self.app.clone();
+                                let events = self.ctx.events.clone();
                                 let hook_reg = self.hook_registry.clone();
                                 let cache = self.cache.clone();
                                 let cache_key_clone = cache_key.clone();
@@ -677,7 +678,7 @@ impl Runner {
                                         chat_id: chat_id_inner.clone(),
                                         iteration,
                                     })
-                                    .emit_via(&app);
+                                    .emit_to(events.as_ref());
 
                                     let start = std::time::Instant::now();
                                     let mut result = tool_service

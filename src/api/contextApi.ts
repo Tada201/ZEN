@@ -6,8 +6,8 @@ import type {
 } from "@/lib/types/contextBreakdown";
 
 // Backend → frontend bridge: the Rust runner emits per-iteration
-// breakdowns on `context:breakdown`. The Tauri-bridge task in
-// `event_bus.rs::bridge_to_tauri::bridge_to_tauri` ships the inner
+// breakdowns on `context:breakdown`. The UI-bridge task in
+// `event_bus.rs::EventBus::bridge_to_ui` ships the inner
 // payload (NOT the tagged enum wrapper), so we listen on the flat
 // event name `context:breakdown`.
 export const CONTEXT_BREAKDOWN_EVENT = "context:breakdown";

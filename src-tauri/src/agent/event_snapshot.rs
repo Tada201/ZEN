@@ -8,7 +8,7 @@
 //! ZEN_EVENT_SNAPSHOT_PATH=<file> npx tauri dev --features event-snapshot
 //! ```
 //! Every frontend-bound agent event that passes through
-//! `AgentEvent::emit_via` or `EventBus::bridge_to_tauri` is appended to the
+//! `AgentEvent::emit_to` or `EventBus::bridge_to_ui` is appended to the
 //! JSONL file as `{"event": <name>, "shape": <payload-shape>}` where the shape
 //! recursively replaces values with type names (objects keep sorted keys,
 //! arrays collapse to their first element's shape). Diffing the capture

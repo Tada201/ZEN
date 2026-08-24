@@ -21,8 +21,8 @@ cargo test --test agentic_test --features event-snapshot
 ```
 
 The integration test builds a real Tauri app in-process with a MockProvider,
-so the full agent event funnel (`AgentEvent::emit_via` +
-`EventBus::bridge_to_tauri`) is exercised and recorded.
+so the full agent event funnel (`AgentEvent::emit_to` +
+`EventBus::bridge_to_ui`) is exercised and recorded.
 
 For a richer interactive capture (tools, approvals, subagents) run the app:
 

@@ -405,7 +405,7 @@ pub struct AppState {
     /// Rust closes the splash window and shows the main window. See
     /// `SetupFlags` for the contract.
     pub setup_flags: Arc<tokio::sync::Mutex<SetupFlags>>,
-    /// Per-chat context breakdown cache. The bridge_to_tauri task in
+    /// Per-chat context breakdown cache. The `bridge_to_ui` task in
     /// `event_bus.rs` clones the latest `ContextBreakdownPayload` keyed
     /// by `chat_id` on every `context:breakdown` event so the
     /// `get_context_breakdown` / `get_context_snapshot` Tauri commands

@@ -246,7 +246,6 @@ pub(super) struct LlmCallbackParams<'a> {
     pub tools: Option<Vec<crate::tools::ToolInfo>>,
     pub config: crate::llm::ChatRequestConfig,
     pub token: CancellationToken,
-    pub app: &'a AppHandle,
     pub chat_id: &'a str,
     pub early_tools: Option<EarlyToolExecutionContext>,
     pub agent_stream: Option<(String, String)>,
@@ -282,7 +281,6 @@ impl Runner {
                     tools: tools.clone(),
                     config: config.clone(),
                     token: token.clone(),
-                    app,
                     chat_id,
                     early_tools: early_tools.clone(),
                     agent_stream: agent_stream.clone(),
@@ -328,7 +326,6 @@ impl Runner {
                                 tools: None,
                                 config: config.clone(),
                                 token: token.clone(),
-                                app,
                                 chat_id,
                                 early_tools: None,
                                 agent_stream: agent_stream.clone(),
@@ -468,7 +465,6 @@ impl Runner {
                                         tools,
                                         config,
                                         token,
-                                        app,
                                         chat_id,
                                         early_tools,
                                         agent_stream,
@@ -584,12 +580,11 @@ impl Runner {
             tools,
             config,
             token,
-            app,
             chat_id,
             early_tools,
             agent_stream,
         } = params;
-        let app_clone = app.clone();
+        let events_clone = self.ctx.events.clone();
         let chat_id_clone = chat_id.to_string();
         let agent_stream_clone = agent_stream.clone();
         let spawn_id_clone = self.trace_id();
@@ -624,7 +619,7 @@ impl Runner {
                         "isComplete": false,
                     })),
                 })
-                .emit_via(&app_clone);
+                .emit_to(events_clone.as_ref());
                 if let Some(db) = self.db_pool.clone() {
                     let chat_id = chat_id.to_string();
                     let model = model.to_string();
@@ -682,9 +677,9 @@ impl Runner {
         // Artifact detector for <nexus_artifact> tag lifecycle events
         let detector = std::sync::Arc::new(std::sync::Mutex::new(
             crate::agent::event_bus::StreamingArtifactDetector::new({
-                let app = app_clone.clone();
+                let events = events_clone.clone();
                 move |ev| {
-                    ev.emit_via(&app);
+                    ev.emit_to(events.as_ref());
                 }
             }),
         ));
@@ -788,7 +783,7 @@ impl Runner {
                                         }
                                     })),
                                 })
-                                .emit_via(&app_clone);
+                                .emit_to(events_clone.as_ref());
                             }
                             return;
                         }
@@ -825,7 +820,7 @@ impl Runner {
                                         }
                                     })),
                                 })
-                                .emit_via(&app_clone);
+                                .emit_to(events_clone.as_ref());
                             }
                             if let Some(ctx) = early_tools_clone.clone() {
                                 let key = EarlyToolExecutionState::key_for(
@@ -889,7 +884,7 @@ impl Runner {
                                 delta: chunk_text.clone(),
                                 r#type: chunk_type.to_string(),
                             })
-                            .emit_via(&app_clone);
+                            .emit_to(events_clone.as_ref());
                         }
                     }
                     if chunk_type == "text" && !chunk_text.is_empty() {
@@ -912,7 +907,7 @@ impl Runner {
                             message_id: Some(msg_id_for_chunks.clone()),
                             sequence: Some(early_runner.peek_event_sequence()),
                         })
-                        .emit_via(&app_clone);
+                        .emit_to(events_clone.as_ref());
                     }
 
                     let mut data = match buffer_clone.lock() {
@@ -943,7 +938,7 @@ impl Runner {
                                 message_id: Some(msg_id_for_chunks.clone()),
                                 sequence: Some(early_runner.peek_event_sequence()),
                             })
-                            .emit_via(&app_clone);
+                            .emit_to(events_clone.as_ref());
                         }
 
                         data.0.push_str(&chunk_text);
@@ -972,7 +967,7 @@ impl Runner {
                                     message_id: Some(msg_id_for_chunks.clone()),
                                     sequence: Some(early_runner.peek_event_sequence()),
                                 })
-                                .emit_via(&app_clone);
+                                .emit_to(events_clone.as_ref());
                             }
                         }
                     }
@@ -994,7 +989,7 @@ impl Runner {
                     message_id: Some(msg_id.clone()),
                     sequence: Some(self.peek_event_sequence()),
                 })
-                .emit_via(app);
+                .emit_to(self.ctx.events.as_ref());
             }
         }
 

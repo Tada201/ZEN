@@ -121,7 +121,9 @@ pub fn run() {
                 state.security.set_db_pool(pool.clone()).await;
 
                 // Event bus bridge
-                state.agent.event_bus.bridge_to_tauri(critical_handle.clone());
+                state.agent.event_bus.bridge_to_ui(Arc::new(
+                    crate::services::event_sink::TauriEventSink::new(critical_handle.clone()),
+                ));
 
                 // Settings service (near-instant)
                 state.settings_manager.set_db_pool(pool.clone()).await;

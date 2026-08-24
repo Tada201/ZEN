@@ -7,12 +7,13 @@ pub(crate) mod types;
 pub(crate) use types::DeepResearchParams;
 
 use serde_json::json;
-use tauri::{AppHandle, Manager};
+use tauri::Manager;
 use tracing::{error, info};
 
 use crate::agent::event_bus::{AgentEvent, ChatDonePayload};
 use crate::db::queries;
 use crate::services::agent_context::AgentContext;
+use zen_core::ports::EventSink;
 
 /// Run the iterative deep research pipeline.
 ///
@@ -132,7 +133,7 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
             "content": content,
             "metadata": metadata,
         }));
-        emit_chat_done(&app, &chat_id, "clarification_required", Some(message_id.clone()));
+        emit_chat_done(ctx.events.as_ref(), &chat_id, "clarification_required", Some(message_id.clone()));
         return;
     }
     engine.apply_scope(scope);
@@ -202,7 +203,7 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
             save_artifact(&db, &chat_id, &message_id, &query, &final_report).await;
 
             info!("Iterative Deep Research completed");
-            emit_chat_done(&app, &chat_id, "complete", Some(message_id.clone()));
+            emit_chat_done(ctx.events.as_ref(), &chat_id, "complete", Some(message_id.clone()));
         }
         Err(err_msg) => {
             let is_cancelled = token.is_cancelled();
@@ -287,7 +288,7 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
                     "error": if done_reason == "cancelled" { serde_json::Value::Null } else { json!(err_msg) },
                 }),
             );
-            emit_chat_done(&app, &chat_id, done_reason, Some(message_id.clone()));
+            emit_chat_done(ctx.events.as_ref(), &chat_id, done_reason, Some(message_id.clone()));
         }
     }
 }
@@ -320,7 +321,12 @@ async fn save_artifact(
     .await;
 }
 
-fn emit_chat_done(app: &AppHandle, chat_id: &str, reason: &str, message_id: Option<String>) {
+fn emit_chat_done(
+    events: &dyn EventSink,
+    chat_id: &str,
+    reason: &str,
+    message_id: Option<String>,
+) {
     let event = AgentEvent::ChatDone(ChatDonePayload {
         chat_id: chat_id.to_string(),
         content: None,
@@ -330,5 +336,5 @@ fn emit_chat_done(app: &AppHandle, chat_id: &str, reason: &str, message_id: Opti
         done: reason == "complete",
         message_id,
     });
-    event.emit_via(app);
+    event.emit_to(events);
 }

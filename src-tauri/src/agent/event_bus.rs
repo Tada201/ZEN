@@ -4,10 +4,12 @@
 /// Subsystems (SwarmCoordinator, WorkflowEngine, Memory) subscribe to events
 /// and react without tight coupling.
 ///
-/// A bridge task forwards events to the Tauri frontend via `app.emit()`.
+/// A bridge task forwards events to the frontend through the UI event sink.
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing;
+use zen_core::ports::EventSink;
 
 // ─── Events ───
 
@@ -738,12 +740,11 @@ impl AgentEvent {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
 
-    /// Emit to the frontend via the app handle.
+    /// Emit to the frontend through the UI event sink.
     ///
     /// The outer enum tag is dropped and the inner payload hoisted, so the
     /// wire shape stays exactly what the R5 frontend contract expects.
-    pub fn emit_via(&self, app: &tauri::AppHandle) {
-        use tauri::Emitter;
+    pub fn emit_to(&self, events: &dyn EventSink) {
         let payload = self.payload();
 
         let event_name = self.event_name();
@@ -752,9 +753,42 @@ impl AgentEvent {
             None => payload,
         };
         crate::agent::event_snapshot::record(event_name, &flat_payload);
-        if let Err(e) = app.emit(event_name, flat_payload) {
-            tracing::warn!("Failed to emit event '{}' via app handle: {}", event_name, e);
+        events.emit(event_name, &flat_payload);
+    }
+
+    /// Payload shape used by the broadcast-bus bridge.
+    ///
+    /// Every variant flattens its payload directly — this matches what
+    /// `listen<T>` expects in the frontend. A catch-all arm used to
+    /// double-wrap any variant not listed here and silently broke the
+    /// frontend router (most recently `agent:chunk`, whose sub-agent progress
+    /// chunks were dropped); the match is exhaustive so a new variant must
+    /// choose its payload shape explicitly.
+    fn bridge_payload(&self) -> serde_json::Value {
+        match self {
+            AgentEvent::AgentSpawn(p) => serde_json::to_value(p),
+            AgentEvent::AgentComplete(p) => serde_json::to_value(p),
+            AgentEvent::AgentHandoff(p) => serde_json::to_value(p),
+            AgentEvent::AgentChunk(p) => serde_json::to_value(p),
+            AgentEvent::OrchestratorStart(p) => serde_json::to_value(p),
+            AgentEvent::OrchestratorProgress(p) => Ok(p.clone()),
+            AgentEvent::ChatChunk(p) => serde_json::to_value(p),
+            AgentEvent::ChatChunkFirst(p) => serde_json::to_value(p),
+            AgentEvent::ChatMessage(p) => serde_json::to_value(p),
+            AgentEvent::ChatStatus(p) => serde_json::to_value(p),
+            AgentEvent::ChatError(p) => serde_json::to_value(p),
+            AgentEvent::ChatDone(p) => serde_json::to_value(p),
+            AgentEvent::ChatStreamReset(p) => serde_json::to_value(p),
+            AgentEvent::SubagentStep(p) => serde_json::to_value(p),
+            AgentEvent::ToolStart(p) => serde_json::to_value(p),
+            AgentEvent::ToolComplete(p) => serde_json::to_value(p),
+            AgentEvent::ToolAuthorizationRequest(p) => serde_json::to_value(p),
+            AgentEvent::ArtifactStart(p) => serde_json::to_value(p),
+            AgentEvent::ArtifactDelta(p) => serde_json::to_value(p),
+            AgentEvent::ArtifactComplete(p) => serde_json::to_value(p),
+            AgentEvent::ContextBreakdown(p) => serde_json::to_value(p),
         }
+        .unwrap_or(serde_json::Value::Null)
     }
 }
 
@@ -779,52 +813,21 @@ impl EventBus {
         self.tx.subscribe()
     }
 
-    pub fn bridge_to_tauri(&self, app: tauri::AppHandle) {
-        use tauri::Emitter;
+    /// Forward every broadcast event to the UI through the event sink.
+    pub fn bridge_to_ui(&self, events: Arc<dyn EventSink>) {
         let mut rx = self.subscribe();
 
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             loop {
                 match rx.recv().await {
                     Ok(event) => {
                         let event_name = event.event_name();
-                        // Every variant flattens its payload directly — this
-                        // matches what listen<T> expects in the frontend. A
-                        // catch-all arm used to double-wrap any variant listed
-                        // here and silently broke the frontend router (most
-                        // recently `agent:chunk`, whose sub-agent progress
-                        // chunks were dropped); the match is now exhaustive so
-                        // a new variant must choose its payload shape
-                        // explicitly.
-                        let payload = match &event {
-                            AgentEvent::AgentSpawn(p) => serde_json::to_value(p),
-                            AgentEvent::AgentComplete(p) => serde_json::to_value(p),
-                            AgentEvent::AgentHandoff(p) => serde_json::to_value(p),
-                            AgentEvent::AgentChunk(p) => serde_json::to_value(p),
-                            AgentEvent::OrchestratorStart(p) => serde_json::to_value(p),
-                            AgentEvent::OrchestratorProgress(p) => Ok(p.clone()),
-                            AgentEvent::ChatChunk(p) => serde_json::to_value(p),
-                            AgentEvent::ChatChunkFirst(p) => serde_json::to_value(p),
-                            AgentEvent::ChatMessage(p) => serde_json::to_value(p),
-                            AgentEvent::ChatStatus(p) => serde_json::to_value(p),
-                            AgentEvent::ChatError(p) => serde_json::to_value(p),
-                            AgentEvent::ChatDone(p) => serde_json::to_value(p),
-                            AgentEvent::ChatStreamReset(p) => serde_json::to_value(p),
-                            AgentEvent::SubagentStep(p) => serde_json::to_value(p),
-                            AgentEvent::ToolStart(p) => serde_json::to_value(p),
-                            AgentEvent::ToolComplete(p) => serde_json::to_value(p),
-                            AgentEvent::ToolAuthorizationRequest(p) => serde_json::to_value(p),
-                            AgentEvent::ArtifactStart(p) => serde_json::to_value(p),
-                            AgentEvent::ArtifactDelta(p) => serde_json::to_value(p),
-                            AgentEvent::ArtifactComplete(p) => serde_json::to_value(p),
-                            AgentEvent::ContextBreakdown(p) => serde_json::to_value(p),
-                        }
-                        .unwrap_or(serde_json::Value::Null);
+                        let payload = event.bridge_payload();
 
                         crate::agent::event_snapshot::record(event_name, &payload);
-                        if let Err(e) = app.emit(event_name, payload) {
+                        if let Err(e) = events.emit_result(event_name, &payload) {
                             tracing::warn!(
-                                "Failed to bridge event '{}' to Tauri: {}",
+                                "Failed to bridge event '{}' to the UI: {}",
                                 event_name,
                                 e
                             );
@@ -834,7 +837,7 @@ impl EventBus {
                         tracing::warn!("Event bus bridge lagged, missed {} events", n);
                     }
                     Err(broadcast::error::RecvError::Closed) => {
-                        tracing::info!("Event bus closed, stopping Tauri bridge");
+                        tracing::info!("Event bus closed, stopping UI bridge");
                         break;
                     }
                 }

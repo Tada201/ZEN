@@ -5,10 +5,10 @@ use super::helpers::parse_file_changes;
 use crate::agent::types::{ActionMeta, MessageKind, ToolCall, ToolCallMeta, ToolResultMeta};
 use serde_json::Value;
 use sqlx::SqlitePool;
-use tauri::AppHandle;
+use zen_core::ports::EventSink;
 
 pub(super) struct ToolActionParams<'a> {
-    pub app: &'a AppHandle,
+    pub events: &'a dyn EventSink,
     pub db_pool: Option<&'a SqlitePool>,
     pub chat_id: &'a str,
     pub tool_call: &'a ToolCall,
@@ -20,7 +20,7 @@ pub(super) struct ToolActionParams<'a> {
 
 pub(super) async fn emit_tool_call_action(params: ToolActionParams<'_>) {
     let ToolActionParams {
-        app,
+        events,
         db_pool,
         chat_id,
         tool_call,
@@ -51,7 +51,7 @@ pub(super) async fn emit_tool_call_action(params: ToolActionParams<'_>) {
     let content = format!("{} calling {}...", agent_name, tool_call.name);
     if let Some(db) = db_pool {
         let _ = persist_and_emit_action(ActionPersistParams {
-            app,
+            events,
             db_pool: db,
             chat_id,
             id: None,
@@ -64,7 +64,7 @@ pub(super) async fn emit_tool_call_action(params: ToolActionParams<'_>) {
         .await;
     } else {
         let _ = emit_action_only(ActionEmitParams {
-            app,
+            events,
             chat_id,
             id: None,
             kind: MessageKind::ToolCall,
@@ -75,7 +75,7 @@ pub(super) async fn emit_tool_call_action(params: ToolActionParams<'_>) {
 }
 
 pub(super) struct CachedResultParams<'a> {
-    pub app: &'a AppHandle,
+    pub events: &'a dyn EventSink,
     pub db_pool: Option<&'a SqlitePool>,
     pub chat_id: &'a str,
     pub tool_call: &'a ToolCall,
@@ -88,7 +88,7 @@ pub(super) struct CachedResultParams<'a> {
 
 pub(super) async fn emit_cached_tool_result_action(params: CachedResultParams<'_>) {
     let CachedResultParams {
-        app,
+        events,
         db_pool,
         chat_id,
         tool_call,
@@ -131,7 +131,7 @@ pub(super) async fn emit_cached_tool_result_action(params: CachedResultParams<'_
     let content = format!("{}: Success (cached)", tool_call.name);
     if let Some(db) = db_pool {
         let _ = persist_and_emit_action(ActionPersistParams {
-            app,
+            events,
             db_pool: db,
             chat_id,
             id: None,
@@ -144,7 +144,7 @@ pub(super) async fn emit_cached_tool_result_action(params: CachedResultParams<'_
         .await;
     } else {
         let _ = emit_action_only(ActionEmitParams {
-            app,
+            events,
             chat_id,
             id: None,
             kind: MessageKind::ToolResult,

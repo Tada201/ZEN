@@ -214,7 +214,7 @@ impl Orchestrator {
         // timeline row, so keep the emit and drop the binding.
         if let Some(ref pool) = self.db_pool {
             runner::persist_and_emit_action(ActionPersistParams {
-                app: &self.app,
+                events: self.ctx.events.as_ref(),
                 db_pool: pool,
                 chat_id,
                 id: None,
@@ -227,7 +227,7 @@ impl Orchestrator {
             .await?;
         } else {
             runner::emit_action_only(ActionEmitParams {
-                app: &self.app,
+                events: self.ctx.events.as_ref(),
                 chat_id,
                 id: None,
                 kind: MessageKind::AgentSpawn,
@@ -260,7 +260,7 @@ impl Orchestrator {
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 child_tool_call_ids: None,
             })
-            .emit_via(&self.app);
+            .emit_to(self.ctx.events.as_ref());
         };
         emit_subagent_step("running", None, None, 0);
 
@@ -332,7 +332,7 @@ impl Orchestrator {
                 let complete_content = format!("{} completed in {}ms", agent.name, duration_ms);
                 if let Some(ref pool) = self.db_pool {
                     let _ = runner::persist_and_emit_action(ActionPersistParams {
-                        app: &self.app,
+                        events: self.ctx.events.as_ref(),
                         db_pool: pool,
                         chat_id,
                         id: None,
@@ -341,17 +341,17 @@ impl Orchestrator {
                         meta: complete_meta,
                         role: Some("assistant"),
                         tool_call_id: None,
-                            })
+                    })
                     .await;
                 } else {
                     let _ = runner::emit_action_only(ActionEmitParams {
-                        app: &self.app,
+                        events: self.ctx.events.as_ref(),
                         chat_id,
                         id: None,
                         kind: MessageKind::AgentComplete,
                         content: complete_content,
                         meta: complete_meta,
-                            });
+                    });
                 }
 
                 let result_summary = response
@@ -391,7 +391,7 @@ impl Orchestrator {
                     format!("{} failed after {}ms: {}", agent.name, duration_ms, e);
                 if let Some(ref pool) = self.db_pool {
                     let _ = runner::persist_and_emit_action(ActionPersistParams {
-                        app: &self.app,
+                        events: self.ctx.events.as_ref(),
                         db_pool: pool,
                         chat_id,
                         id: None,
@@ -400,17 +400,17 @@ impl Orchestrator {
                         meta: failed_meta,
                         role: Some("assistant"),
                         tool_call_id: None,
-                            })
+                    })
                     .await;
                 } else {
                     let _ = runner::emit_action_only(ActionEmitParams {
-                        app: &self.app,
+                        events: self.ctx.events.as_ref(),
                         chat_id,
                         id: None,
                         kind: MessageKind::AgentComplete,
                         content: failed_content,
                         meta: failed_meta,
-                            });
+                    });
                 }
 
                 let error_text = e.to_string();
@@ -502,7 +502,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         // Create a weak pointer for the orchestrator to use in the callback
         // This is tricky because LlmProvider::chat_stream expects Box<dyn Fn(String) + Send + 'static>
         // and doesn't support async closures easily or closure with non-static lifetimes.
-        let app_clone = self.app.clone();
+        let events_clone = self.ctx.events.clone();
         let chat_id_owned = chat_id.to_string();
         let message_id_for_callback = orchestrator_message_id.map(str::to_owned);
 
@@ -518,15 +518,15 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         )));
         let buffer_clone = buffer.clone();
 
-        let app_clone_2 = app_clone.clone();
+        let events_clone_2 = events_clone.clone();
         let chat_id_owned_2 = chat_id_owned.clone();
 
         // Streaming artifact detector for orchestrator-synthesized output
         let detector = std::sync::Arc::new(std::sync::Mutex::new(
             crate::agent::event_bus::StreamingArtifactDetector::new({
-                let app = app_clone_2.clone();
+                let events = events_clone_2.clone();
                 move |ev| {
-                    ev.emit_via(&app);
+                    ev.emit_to(events.as_ref());
                 }
             }),
         ));
@@ -559,7 +559,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                     message_id: message_id_for_callback.clone(),
                     sequence: None,
                 })
-                .emit_via(&app_clone_2);
+                .emit_to(events_clone_2.as_ref());
             }
 
             if !chunk_text.is_empty() {
@@ -587,7 +587,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                         message_id: message_id_for_callback.clone(),
                         sequence: None,
                     })
-                    .emit_via(&app_clone_2);
+                    .emit_to(events_clone_2.as_ref());
 
                     data.0.push_str(&chunk_text);
                     data.1 = chunk_type;
@@ -611,7 +611,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                             message_id: message_id_for_callback.clone(),
                             sequence: None,
                         })
-                        .emit_via(&app_clone_2);
+                        .emit_to(events_clone_2.as_ref());
                     }
                 }
             }
