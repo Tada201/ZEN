@@ -8,9 +8,13 @@ use tauri::Manager;
 
 static PUBLIC_NO_REDIRECT_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 static DUCKDUCKGO_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-static DEFAULT_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 static GTSM_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-static MODEL_DOWNLOAD_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+// `default_http_client` and `model_download_http_client` moved to the
+// zen-media crate in Phase 10 (its speech/tts services need them and it must
+// stay tauri-free). Re-exported here so existing `crate::utils::*` call sites
+// keep the same path and there is a single client instance (SSOT).
+pub use zen_media::http::{default_http_client, model_download_http_client};
 
 pub fn public_no_redirect_http_client() -> &'static reqwest::Client {
     PUBLIC_NO_REDIRECT_HTTP_CLIENT.get_or_init(|| {
@@ -33,15 +37,6 @@ pub fn duckduckgo_http_client() -> &'static reqwest::Client {
     })
 }
 
-pub fn default_http_client() -> &'static reqwest::Client {
-    DEFAULT_HTTP_CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .expect("default HTTP client configuration is valid")
-    })
-}
-
 pub fn gtsm_http_client() -> &'static reqwest::Client {
     GTSM_HTTP_CLIENT.get_or_init(|| {
         reqwest::Client::builder()
@@ -49,15 +44,6 @@ pub fn gtsm_http_client() -> &'static reqwest::Client {
             .user_agent("ZenGTSM/0.1 (operational-monitor)")
             .build()
             .expect("GTSM HTTP client configuration is valid")
-    })
-}
-
-pub fn model_download_http_client() -> &'static reqwest::Client {
-    MODEL_DOWNLOAD_HTTP_CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(Duration::from_secs(300))
-            .build()
-            .expect("model download HTTP client configuration is valid")
     })
 }
 

@@ -7,8 +7,9 @@ pub use zen_security::policy as permission;
 pub use zen_security::secrets as secret_policy;
 pub use zen_security::url_safety;
 
-#[path = "../../src/services/runtime_resource.rs"]
-pub mod runtime_resource;
+// Phase 10: runtime_resource moved into the zen-media crate; alias its path
+// here so the test bodies keep the `super::runtime_resource` reference.
+pub use zen_media::runtime_resource;
 
 // MRTR parse + elicitation safety logic (Phase 6; sources relocated to the
 // zen-mcp crate in Phase 8). `mrtr.rs` is pure and only depends on

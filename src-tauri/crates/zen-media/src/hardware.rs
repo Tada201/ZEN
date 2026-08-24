@@ -1,6 +1,6 @@
-use crate::models::SystemMetrics;
 use serde::{Deserialize, Serialize};
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
+use zen_core::SystemMetrics;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GpuInfo {

@@ -9,7 +9,6 @@ pub mod document;
 pub mod event_sink;
 pub mod goal;
 pub mod gtsm;
-pub mod hardware;
 pub mod logging;
 pub mod mcp_adapter;
 pub mod mcp_registrar;
@@ -18,17 +17,20 @@ pub mod mcp_registrar;
 
 pub mod media;
 pub mod permissions;
-pub mod process_manager;
-pub mod runtime_resource;
 pub mod secret;
 pub mod secret_policy;
 pub mod security;
 pub mod settings;
-pub mod speech_service;
 pub mod terminal;
 pub mod tool;
-pub mod tts_service;
 pub mod usage;
+
+// Phase 10 shims: speech/tts runtimes plus the hardware probe, subprocess
+// manager and runtime-resource helpers moved to the zen-media crate. Every
+// historical `crate::services::{hardware,process_manager,runtime_resource,
+// speech_service,tts_service}::*` path keeps compiling via these re-exports;
+// Phase 14 deletes the shims after rewriting consumers to `zen_media::*`.
+pub use zen_media::{hardware, process_manager, runtime_resource, speech_service, tts_service};
 
 pub use checkpoint::{CheckpointInfo, CheckpointService, UndoResult};
 pub use document::DocumentService;

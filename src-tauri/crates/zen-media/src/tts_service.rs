@@ -8,7 +8,7 @@ use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info};
 use zen_core::ports::EventSink;
 
-use crate::services::runtime_resource::{configure_std_command_for_binary, RuntimeResources};
+use crate::runtime_resource::{configure_std_command_for_binary, RuntimeResources};
 
 struct AudioHandle(OutputStream, OutputStreamHandle, Sink);
 
@@ -48,7 +48,7 @@ pub struct TtsService {
     model_path: Arc<RwLock<PathBuf>>,
     piper_path: PathBuf,
     /// Optional reference to process manager for cleanup tracking
-    process_manager: Option<Arc<crate::services::process_manager::ProcessManager>>,
+    process_manager: Option<Arc<crate::process_manager::ProcessManager>>,
 }
 
 impl TtsService {
@@ -96,7 +96,7 @@ impl TtsService {
     pub fn with_process_manager(
         _app_data_dir: &std::path::Path,
         resource_dir: &std::path::Path,
-        process_manager: Arc<crate::services::process_manager::ProcessManager>,
+        process_manager: Arc<crate::process_manager::ProcessManager>,
     ) -> Result<Self, String> {
         let (stream, stream_handle) = OutputStream::try_default()
             .map_err(|e| format!("Failed to open default audio stream: {}", e))?;

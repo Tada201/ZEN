@@ -30,6 +30,7 @@ zen-tools = { path = "crates/zen-tools" }
 zen-llm = { path = "crates/zen-llm" }
 zen-mcp = { path = "crates/zen-mcp" }
 zen-rag = { path = "crates/zen-rag" }
+zen-media = { path = "crates/zen-media" }
 
 [package]
 name = "zen"
@@ -77,6 +78,7 @@ zen-tools = { workspace = true }
 zen-llm = { workspace = true }
 zen-mcp = { workspace = true }
 zen-rag = { workspace = true }
+zen-media = { workspace = true }
 sysinfo = "0.38"
 axum = { version = "0.8", features = ["default", "ws"] }
 tower-http = { version = "0.6", features = ["cors"] }
@@ -98,9 +100,11 @@ moka = { version = "0.12", features = ["future"] }
 sgp4 = "0.2"
 jsonschema = "0.42"
 similar = "2.7"
-hound = "3.5"
+# Whisper (hound) and Piper (rodio) audio moved to the zen-media crate in
+# Phase 10; the app reaches the media services via `zen_media::*`. `cpal`
+# stays (commands/audio.rs device enumeration) and `webrtc-vad` stays
+# (commands/voice.rs VAD gate).
 webrtc-vad = "0.4.0"
-rodio = "0.20"
 cpal = "0.15"
 async-recursion = "1.1"
 percent-encoding = "2.3"
