@@ -33,7 +33,6 @@ pub struct ActionPersistParams<'a> {
     pub meta: ActionMeta,
     pub role: Option<&'a str>,
     pub tool_call_id: Option<String>,
-    pub channel: &'a Option<tauri::ipc::Channel<serde_json::Value>>,
 }
 
 /// Persist an action message to DB and emit it to the frontend.
@@ -81,11 +80,10 @@ pub async fn persist_and_emit_action(params: ActionPersistParams<'_>) -> Result<
         content: params.content.clone(),
         metadata: Some(serde_json::to_value(params.meta.clone())?),
     })
-    .emit_via(params.app, params.channel);
+    .emit_via(params.app);
 
     bridge_lifecycle_events(BridgeContext {
         app: params.app,
-        channel: params.channel,
         kind: &params.kind,
         meta: &params.meta,
         msg_id: &msg_id,
@@ -105,7 +103,6 @@ pub struct ActionEmitParams<'a> {
     pub kind: MessageKind,
     pub content: String,
     pub meta: ActionMeta,
-    pub channel: &'a Option<tauri::ipc::Channel<serde_json::Value>>,
 }
 
 /// Emit action event to frontend without persisting to DB (fallback when no db_pool)
@@ -124,11 +121,10 @@ pub fn emit_action_only(params: ActionEmitParams<'_>) -> Result<String> {
         content: params.content.clone(),
         metadata: Some(serde_json::to_value(params.meta.clone())?),
     })
-    .emit_via(params.app, params.channel);
+    .emit_via(params.app);
 
     bridge_lifecycle_events(BridgeContext {
         app: params.app,
-        channel: params.channel,
         kind: &params.kind,
         meta: &params.meta,
         msg_id: &msg_id,
@@ -143,7 +139,6 @@ pub fn emit_action_only(params: ActionEmitParams<'_>) -> Result<String> {
 /// Context for bridging lifecycle events.
 pub struct BridgeContext<'a> {
     pub app: &'a AppHandle,
-    pub channel: &'a Option<tauri::ipc::Channel<serde_json::Value>>,
     pub kind: &'a MessageKind,
     pub meta: &'a ActionMeta,
     pub msg_id: &'a str,
@@ -170,7 +165,7 @@ fn bridge_lifecycle_events(ctx: BridgeContext<'_>) {
                     chat_id: ctx.chat_id.to_string(),
                     timestamp: ctx.msg_ts.to_string(),
                 })
-                .emit_via(ctx.app, ctx.channel);
+                .emit_via(ctx.app);
             }
         }
         MessageKind::AgentComplete => {
@@ -198,7 +193,7 @@ fn bridge_lifecycle_events(ctx: BridgeContext<'_>) {
                     duration_ms: spawn.duration_ms.unwrap_or(0),
                     timestamp: ctx.msg_ts.to_string(),
                 })
-                .emit_via(ctx.app, ctx.channel);
+                .emit_via(ctx.app);
             }
         }
         MessageKind::AgentHandoff => {
@@ -210,7 +205,7 @@ fn bridge_lifecycle_events(ctx: BridgeContext<'_>) {
                     chat_id: ctx.chat_id.to_string(),
                     timestamp: ctx.msg_ts.to_string(),
                 })
-                .emit_via(ctx.app, ctx.channel);
+                .emit_via(ctx.app);
             }
         }
         _ => {}

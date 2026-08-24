@@ -260,7 +260,7 @@ pub(crate) fn build_child_runner(params: ChildRunnerParams<'_>) -> Result<Runner
     let tool_manager = state.tool_manager.clone();
 
     // Build a parent runner first, then call child() to inherit
-    // db_pool and on_event channel from the parent context.
+    // db_pool from the parent context.
     let parent = Runner::new(
         app.clone(),
         app.state::<crate::services::agent_context::AgentContext>().inner().clone(),

@@ -656,7 +656,6 @@ impl Runner {
                         token: token.clone(),
                         app: &app_inner,
                         chat_id: &chat_id_inner,
-                        stream_channel: None,
                         early_tools,
                         agent_stream,
                     },
@@ -1311,7 +1310,6 @@ impl Runner {
                         meta: action_meta,
                         role: Some("tool"),
                         tool_call_id: Some(result.tool_call_id.clone()),
-                        channel: &self.on_event,
                     })
                     .await;
                 } else {
@@ -1322,7 +1320,6 @@ impl Runner {
                         kind: MessageKind::ToolResult,
                         content: result_content,
                         meta: action_meta,
-                        channel: &self.on_event,
                     });
                 }
             }

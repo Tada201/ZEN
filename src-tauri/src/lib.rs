@@ -402,7 +402,6 @@ pub fn run() {
                     state.tool_registry_v1.clone(),
                     state.hook_registry.clone(),
                     state.tools.clone(),
-                    state.tool_manager.clone(),
                 ).with_db_pool(pool);
                 state.orchestrator.set(Arc::new(orchestrator)).await;
                 state.init_progress.set_status(&bg_app_handle, "bg.orchestrator", "done", Some(_p.elapsed().as_millis() as u64)).await;

@@ -738,34 +738,22 @@ impl AgentEvent {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
 
-    /// Emit via direct channel or fallback to app handle (XOR — never both)
-    pub fn emit_via(
-        &self,
-        app: &tauri::AppHandle,
-        channel: &Option<tauri::ipc::Channel<serde_json::Value>>,
-    ) {
+    /// Emit to the frontend via the app handle.
+    ///
+    /// The outer enum tag is dropped and the inner payload hoisted, so the
+    /// wire shape stays exactly what the R5 frontend contract expects.
+    pub fn emit_via(&self, app: &tauri::AppHandle) {
         use tauri::Emitter;
         let payload = self.payload();
 
-        if let Some(ref ch) = channel {
-            crate::agent::event_snapshot::record(self.event_name(), &payload);
-            if let Err(e) = ch.send(payload) {
-                tracing::warn!(
-                    "Failed to emit event '{}' via direct channel: {}",
-                    self.event_name(),
-                    e
-                );
-            }
-        } else {
-            let event_name = self.event_name();
-            let flat_payload = match payload.get("payload") {
-                Some(p) => p.clone(),
-                None => payload,
-            };
-            crate::agent::event_snapshot::record(event_name, &flat_payload);
-            if let Err(e) = app.emit(event_name, flat_payload) {
-                tracing::warn!("Failed to emit event '{}' via app handle: {}", event_name, e);
-            }
+        let event_name = self.event_name();
+        let flat_payload = match payload.get("payload") {
+            Some(p) => p.clone(),
+            None => payload,
+        };
+        crate::agent::event_snapshot::record(event_name, &flat_payload);
+        if let Err(e) = app.emit(event_name, flat_payload) {
+            tracing::warn!("Failed to emit event '{}' via app handle: {}", event_name, e);
         }
     }
 }

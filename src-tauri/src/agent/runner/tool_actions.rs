@@ -10,7 +10,6 @@ use tauri::AppHandle;
 pub(super) struct ToolActionParams<'a> {
     pub app: &'a AppHandle,
     pub db_pool: Option<&'a SqlitePool>,
-    pub channel: &'a Option<tauri::ipc::Channel<Value>>,
     pub chat_id: &'a str,
     pub tool_call: &'a ToolCall,
     pub agent_id: &'a str,
@@ -23,7 +22,6 @@ pub(super) async fn emit_tool_call_action(params: ToolActionParams<'_>) {
     let ToolActionParams {
         app,
         db_pool,
-        channel,
         chat_id,
         tool_call,
         agent_id,
@@ -62,7 +60,6 @@ pub(super) async fn emit_tool_call_action(params: ToolActionParams<'_>) {
             meta: action_meta,
             role: None,
             tool_call_id: None,
-            channel,
         })
         .await;
     } else {
@@ -73,7 +70,6 @@ pub(super) async fn emit_tool_call_action(params: ToolActionParams<'_>) {
             kind: MessageKind::ToolCall,
             content,
             meta: action_meta,
-            channel,
         });
     }
 }
@@ -81,7 +77,6 @@ pub(super) async fn emit_tool_call_action(params: ToolActionParams<'_>) {
 pub(super) struct CachedResultParams<'a> {
     pub app: &'a AppHandle,
     pub db_pool: Option<&'a SqlitePool>,
-    pub channel: &'a Option<tauri::ipc::Channel<Value>>,
     pub chat_id: &'a str,
     pub tool_call: &'a ToolCall,
     pub cached_result: &'a Value,
@@ -95,7 +90,6 @@ pub(super) async fn emit_cached_tool_result_action(params: CachedResultParams<'_
     let CachedResultParams {
         app,
         db_pool,
-        channel,
         chat_id,
         tool_call,
         cached_result,
@@ -146,7 +140,6 @@ pub(super) async fn emit_cached_tool_result_action(params: CachedResultParams<'_
             meta: action_meta,
             role: Some("tool"),
             tool_call_id: Some(tool_call.id.clone()),
-            channel,
         })
         .await;
     } else {
@@ -157,7 +150,6 @@ pub(super) async fn emit_cached_tool_result_action(params: CachedResultParams<'_
             kind: MessageKind::ToolResult,
             content,
             meta: action_meta,
-            channel,
         });
     }
 }

@@ -330,5 +330,5 @@ fn emit_chat_done(app: &AppHandle, chat_id: &str, reason: &str, message_id: Opti
         done: reason == "complete",
         message_id,
     });
-    event.emit_via(app, &None);
+    event.emit_via(app);
 }

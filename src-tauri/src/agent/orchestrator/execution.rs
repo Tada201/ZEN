@@ -141,10 +141,6 @@ impl Orchestrator {
         )?;
         runner = runner.with_delegation_allowed(false);
 
-        // Pass direct channel for high-performance streaming if available
-        if let Some(ref channel) = self.on_event {
-            runner = runner.with_channel(channel.clone());
-        }
         // Correlate every child event (tool start/complete, progress chunk,
         // commentary) with this task's canonical sub-agent card.
         runner = runner.with_trace_id(task_spawn_id.clone());
@@ -227,7 +223,6 @@ impl Orchestrator {
                 meta: spawn_meta,
                 role: Some("assistant"),
                 tool_call_id: None,
-                channel: &self.on_event,
             })
             .await?;
         } else {
@@ -238,7 +233,6 @@ impl Orchestrator {
                 kind: MessageKind::AgentSpawn,
                 content: spawn_content,
                 meta: spawn_meta,
-                channel: &self.on_event,
             })?;
         };
 
@@ -266,7 +260,7 @@ impl Orchestrator {
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 child_tool_call_ids: None,
             })
-            .emit_via(&self.app, &self.on_event);
+            .emit_via(&self.app);
         };
         emit_subagent_step("running", None, None, 0);
 
@@ -347,8 +341,7 @@ impl Orchestrator {
                         meta: complete_meta,
                         role: Some("assistant"),
                         tool_call_id: None,
-                        channel: &self.on_event,
-                    })
+                            })
                     .await;
                 } else {
                     let _ = runner::emit_action_only(ActionEmitParams {
@@ -358,8 +351,7 @@ impl Orchestrator {
                         kind: MessageKind::AgentComplete,
                         content: complete_content,
                         meta: complete_meta,
-                        channel: &self.on_event,
-                    });
+                            });
                 }
 
                 let result_summary = response
@@ -408,8 +400,7 @@ impl Orchestrator {
                         meta: failed_meta,
                         role: Some("assistant"),
                         tool_call_id: None,
-                        channel: &self.on_event,
-                    })
+                            })
                     .await;
                 } else {
                     let _ = runner::emit_action_only(ActionEmitParams {
@@ -419,8 +410,7 @@ impl Orchestrator {
                         kind: MessageKind::AgentComplete,
                         content: failed_content,
                         meta: failed_meta,
-                        channel: &self.on_event,
-                    });
+                            });
                 }
 
                 let error_text = e.to_string();
@@ -512,8 +502,6 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         // Create a weak pointer for the orchestrator to use in the callback
         // This is tricky because LlmProvider::chat_stream expects Box<dyn Fn(String) + Send + 'static>
         // and doesn't support async closures easily or closure with non-static lifetimes.
-        // We use the direct channel if available, otherwise app_clone.
-        let maybe_channel = self.on_event.clone();
         let app_clone = self.app.clone();
         let chat_id_owned = chat_id.to_string();
         let message_id_for_callback = orchestrator_message_id.map(str::to_owned);
@@ -530,7 +518,6 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         )));
         let buffer_clone = buffer.clone();
 
-        let maybe_channel_clone = maybe_channel.clone();
         let app_clone_2 = app_clone.clone();
         let chat_id_owned_2 = chat_id_owned.clone();
 
@@ -538,9 +525,8 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
         let detector = std::sync::Arc::new(std::sync::Mutex::new(
             crate::agent::event_bus::StreamingArtifactDetector::new({
                 let app = app_clone_2.clone();
-                let on_event = maybe_channel_clone.clone();
                 move |ev| {
-                    ev.emit_via(&app, &on_event);
+                    ev.emit_via(&app);
                 }
             }),
         ));
@@ -573,7 +559,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                     message_id: message_id_for_callback.clone(),
                     sequence: None,
                 })
-                .emit_via(&app_clone_2, &maybe_channel_clone);
+                .emit_via(&app_clone_2);
             }
 
             if !chunk_text.is_empty() {
@@ -601,7 +587,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                         message_id: message_id_for_callback.clone(),
                         sequence: None,
                     })
-                    .emit_via(&app_clone_2, &maybe_channel_clone);
+                    .emit_via(&app_clone_2);
 
                     data.0.push_str(&chunk_text);
                     data.1 = chunk_type;
@@ -625,7 +611,7 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
                             message_id: message_id_for_callback.clone(),
                             sequence: None,
                         })
-                        .emit_via(&app_clone_2, &maybe_channel_clone);
+                        .emit_via(&app_clone_2);
                     }
                 }
             }

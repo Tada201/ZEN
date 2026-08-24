@@ -31,7 +31,6 @@ pub struct Runner {
     pub(super) allowed_tools: Arc<tokio::sync::Mutex<HashSet<String>>>,
     /// Only the root runner may delegate work to another agent.
     pub(super) delegation_allowed: bool,
-    pub(super) on_event: Option<tauri::ipc::Channel<serde_json::Value>>,
     /// Isolated memory scope for sub-agents. When set, the runner must not
     /// persist intermediate or final assistant messages into the parent chat.
     pub(super) memory_scope: Option<String>,
@@ -78,7 +77,6 @@ impl Clone for Runner {
             cache: self.cache.clone(),
             allowed_tools: self.allowed_tools.clone(),
             delegation_allowed: self.delegation_allowed,
-            on_event: self.on_event.clone(),
             memory_scope: self.memory_scope.clone(),
             // Share the trace slot with the clone: clones are the same logical
             // run (see `send.rs`, which clones for the spawned task), so they
@@ -120,7 +118,6 @@ impl Runner {
             cache: Arc::new(tokio::sync::Mutex::new(ToolCache::new(60))),
             allowed_tools: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
             delegation_allowed: true,
-            on_event: None,
             memory_scope: None,
             trace_id: Arc::new(std::sync::RwLock::new(None)),
             parent_tool_call_id: Arc::new(std::sync::RwLock::new(None)),
@@ -129,12 +126,6 @@ impl Runner {
             intermediate_commentary: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             message_inbox: None,
         }
-    }
-
-    /// Set a direct IPC channel for high-performance event streaming.
-    pub fn with_channel(mut self, channel: tauri::ipc::Channel<serde_json::Value>) -> Self {
-        self.on_event = Some(channel);
-        self
     }
 
     pub fn with_db_pool(mut self, db_pool: SqlitePool) -> Self {
@@ -317,7 +308,7 @@ impl Runner {
             timestamp: chrono::Utc::now().to_rfc3339(),
             child_tool_call_ids: None,
         })
-        .emit_via(&self.app, &self.on_event);
+        .emit_via(&self.app);
     }
 
     pub(super) fn parent_tool_call_id(&self) -> Option<String> {
@@ -345,7 +336,7 @@ impl Runner {
     }
 
     pub(super) fn emit(&self, event: AgentEvent) {
-        event.emit_via(&self.app, &self.on_event);
+        event.emit_via(&self.app);
     }
 
     /// Emit a terminal chat error only when this runner owns the chat. A
@@ -413,7 +404,6 @@ impl Runner {
             cache: self.cache.clone(),
             allowed_tools: self.allowed_tools.clone(),
             delegation_allowed: false,
-            on_event: None,
             memory_scope: self.memory_scope.clone(),
             // Fresh slot: a child sub-agent run gets its own trace_id when its
             // `run()` fires, so its events don't inherit the parent's trace.

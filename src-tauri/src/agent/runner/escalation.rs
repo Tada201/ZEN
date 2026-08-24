@@ -234,8 +234,6 @@ pub(super) struct EscalationParams<'a> {
     pub token: CancellationToken,
     pub app: &'a AppHandle,
     pub chat_id: &'a str,
-    #[allow(dead_code)]
-    pub stream_channel: Option<tauri::ipc::Channel<ChatChunkPayload>>,
     pub early_tools: Option<EarlyToolExecutionContext>,
     pub agent_stream: Option<(String, String)>,
 }
@@ -271,7 +269,6 @@ impl Runner {
             token,
             app,
             chat_id,
-            stream_channel: _,
             early_tools,
             agent_stream,
         } = params;
@@ -593,7 +590,6 @@ impl Runner {
             agent_stream,
         } = params;
         let app_clone = app.clone();
-        let on_event_clone = self.on_event.clone();
         let chat_id_clone = chat_id.to_string();
         let agent_stream_clone = agent_stream.clone();
         let spawn_id_clone = self.trace_id();
@@ -628,7 +624,7 @@ impl Runner {
                         "isComplete": false,
                     })),
                 })
-                .emit_via(&app_clone, &on_event_clone);
+                .emit_via(&app_clone);
                 if let Some(db) = self.db_pool.clone() {
                     let chat_id = chat_id.to_string();
                     let model = model.to_string();
@@ -687,9 +683,8 @@ impl Runner {
         let detector = std::sync::Arc::new(std::sync::Mutex::new(
             crate::agent::event_bus::StreamingArtifactDetector::new({
                 let app = app_clone.clone();
-                let on_event = on_event_clone.clone();
                 move |ev| {
-                    ev.emit_via(&app, &on_event);
+                    ev.emit_via(&app);
                 }
             }),
         ));
@@ -793,7 +788,7 @@ impl Runner {
                                         }
                                     })),
                                 })
-                                .emit_via(&app_clone, &on_event_clone);
+                                .emit_via(&app_clone);
                             }
                             return;
                         }
@@ -830,7 +825,7 @@ impl Runner {
                                         }
                                     })),
                                 })
-                                .emit_via(&app_clone, &on_event_clone);
+                                .emit_via(&app_clone);
                             }
                             if let Some(ctx) = early_tools_clone.clone() {
                                 let key = EarlyToolExecutionState::key_for(
@@ -894,7 +889,7 @@ impl Runner {
                                 delta: chunk_text.clone(),
                                 r#type: chunk_type.to_string(),
                             })
-                            .emit_via(&app_clone, &on_event_clone);
+                            .emit_via(&app_clone);
                         }
                     }
                     if chunk_type == "text" && !chunk_text.is_empty() {
@@ -917,7 +912,7 @@ impl Runner {
                             message_id: Some(msg_id_for_chunks.clone()),
                             sequence: Some(early_runner.peek_event_sequence()),
                         })
-                        .emit_via(&app_clone, &on_event_clone);
+                        .emit_via(&app_clone);
                     }
 
                     let mut data = match buffer_clone.lock() {
@@ -948,7 +943,7 @@ impl Runner {
                                 message_id: Some(msg_id_for_chunks.clone()),
                                 sequence: Some(early_runner.peek_event_sequence()),
                             })
-                            .emit_via(&app_clone, &on_event_clone);
+                            .emit_via(&app_clone);
                         }
 
                         data.0.push_str(&chunk_text);
@@ -977,7 +972,7 @@ impl Runner {
                                     message_id: Some(msg_id_for_chunks.clone()),
                                     sequence: Some(early_runner.peek_event_sequence()),
                                 })
-                                .emit_via(&app_clone, &on_event_clone);
+                                .emit_via(&app_clone);
                             }
                         }
                     }
@@ -999,7 +994,7 @@ impl Runner {
                     message_id: Some(msg_id.clone()),
                     sequence: Some(self.peek_event_sequence()),
                 })
-                .emit_via(app, &self.on_event);
+                .emit_via(app);
             }
         }
 

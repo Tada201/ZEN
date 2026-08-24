@@ -21,7 +21,6 @@ use crate::agent::task::Task;
 use crate::agent::tools::ToolRegistry;
 use crate::agent::types::AgentRegistry;
 use crate::services::agent_context::AgentContext;
-use crate::tools::manager::ToolManager;
 use crate::tools::GlobalToolRegistry;
 use sqlx::SqlitePool;
 
@@ -34,9 +33,7 @@ pub struct Orchestrator {
     tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
     hook_registry: Arc<HookRegistry>,
     permissions: GlobalToolRegistry,
-    tool_manager: Arc<ToolManager>,
     pub(crate) db_pool: Option<SqlitePool>,
-    pub(crate) on_event: Option<tauri::ipc::Channel<serde_json::Value>>,
 }
 
 /// Result of breaking down a goal into tasks
@@ -92,7 +89,6 @@ impl Orchestrator {
         tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
         hook_registry: Arc<HookRegistry>,
         permissions: GlobalToolRegistry,
-        tool_manager: Arc<ToolManager>,
     ) -> Self {
         Self {
             app,
@@ -101,21 +97,13 @@ impl Orchestrator {
             tool_registry,
             hook_registry,
             permissions,
-            tool_manager,
             db_pool: None,
-            on_event: None,
         }
     }
 
-    /// Set a direct IPC channel for high-performance event streaming
-    pub fn with_channel(mut self, channel: tauri::ipc::Channel<serde_json::Value>) -> Self {
-        self.on_event = Some(channel);
-        self
-    }
-
-    /// Internal helper to emit events via direct channel (if available) or global bus
+    /// Internal helper to emit events to the frontend
     pub(crate) fn emit(&self, event: crate::agent::event_bus::AgentEvent) -> Result<()> {
-        event.emit_via(&self.app, &self.on_event);
+        event.emit_via(&self.app);
         Ok(())
     }
 
@@ -123,23 +111,5 @@ impl Orchestrator {
     pub fn with_db_pool(mut self, db_pool: SqlitePool) -> Self {
         self.db_pool = Some(db_pool);
         self
-    }
-
-    /// Create a clone of the orchestrator with a custom direct IPC channel
-    pub fn clone_with_channel(
-        &self,
-        channel: Option<tauri::ipc::Channel<serde_json::Value>>,
-    ) -> Self {
-        Self {
-            app: self.app.clone(),
-            ctx: self.ctx.clone(),
-            agent_registry: self.agent_registry.clone(),
-            tool_registry: self.tool_registry.clone(),
-            hook_registry: self.hook_registry.clone(),
-            permissions: self.permissions.clone(),
-            tool_manager: self.tool_manager.clone(),
-            db_pool: self.db_pool.clone(),
-            on_event: channel,
-        }
     }
 }
