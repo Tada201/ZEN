@@ -1,10 +1,8 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
-const dispatchSource = readFileSync(
-  new URL("../src-tauri/src/agent/runner/tool_dispatch.rs", import.meta.url),
-  "utf8",
-);
+const dispatchSource = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
+  .map((f) => readFileSync(new URL(`../src-tauri/src/agent/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
 
 const confirmIndex = dispatchSource.indexOf("PermissionDecision::Confirm");
 const approvalIndex = dispatchSource.indexOf(".request_interactive_approval", confirmIndex);

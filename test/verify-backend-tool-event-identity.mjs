@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const eventBus = readFileSync(new URL("../src-tauri/src/agent/event_bus.rs", import.meta.url), "utf8");
-const toolDispatch = readFileSync(new URL("../src-tauri/src/agent/runner/tool_dispatch.rs", import.meta.url), "utf8");
+const toolDispatch = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
+  .map((f) => readFileSync(new URL(`../src-tauri/src/agent/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
 const toolService = readFileSync(new URL("../src-tauri/src/services/tool.rs", import.meta.url), "utf8");
 
 function structBlock(source, name) {

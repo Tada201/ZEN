@@ -7,6 +7,7 @@
 //! | `turn_loop`   | `Runner` struct + main `run()` agent loop                |
 //! | `step_exec`   | Step handlers extracted from the turn loop               |
 //! | `actions`     | Action timeline: persist_and_emit_action, emit_action_only |
+//! | `dispatch`    | Tool exposure routing, parallel execution, completion    |
 //! | `escalation`  | LLM auto-escalation policy                               |
 //! | `streaming`   | LLM streaming callback wrapper                           |
 //! | `background`  | Background compaction, embedding, recall-cache refresh   |
@@ -22,7 +23,7 @@ mod lifecycle;
 mod memory_bootstrap;
 mod step_exec;
 mod tool_actions;
-mod tool_dispatch;
+mod dispatch;
 mod tool_pipeline;
 mod turn_loop;
 mod turn_persistence;

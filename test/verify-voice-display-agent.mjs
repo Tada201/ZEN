@@ -18,7 +18,8 @@ const spawnToolSource = [
   "model_select.rs", "outcome.rs", "params.rs", "tool.rs",
 ].map((f) => readFileSync(new URL(`../src-tauri/src/agent/tools/spawn_tools/${f}`, import.meta.url), "utf8")).join("");
 const toolPipelineSource = readFileSync(new URL("../src-tauri/src/agent/runner/tool_pipeline.rs", import.meta.url), "utf8");
-const toolDispatchSource = readFileSync(new URL("../src-tauri/src/agent/runner/tool_dispatch.rs", import.meta.url), "utf8");
+const toolDispatchSource = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
+  .map((f) => readFileSync(new URL(`../src-tauri/src/agent/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
 const displayContextSource = readFileSync(new URL("../src/atlas/components/voice/voiceDisplayContext.ts", import.meta.url), "utf8");
 const boardEventSource = readFileSync(new URL("../src/atlas/components/voice/useBoardEventListener.ts", import.meta.url), "utf8");
 

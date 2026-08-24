@@ -40,7 +40,8 @@ const fragment = read("src-tauri/src/agent/skills/fragment.rs");
 const middleware = [
   "mod.rs", "core.rs", "system_prompt.rs", "compaction.rs", "summary.rs", "recall.rs", "skills.rs",
 ].map((f) => read(`src-tauri/src/agent/middleware/${f}`)).join("");
-const toolDispatch = read("src-tauri/src/agent/runner/tool_dispatch.rs");
+const toolDispatch = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
+  .map((f) => read(`src-tauri/src/agent/runner/dispatch/${f}`)).join("");
 const agentMod = read("src-tauri/src/agent/mod.rs");
 
 let failed = 0;
