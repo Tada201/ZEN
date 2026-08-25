@@ -91,7 +91,6 @@ portable-pty = "0.9"
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
 futures-util = "0.3"
 base64 = "0.22"
-image = "0.25"
 dashmap = "6.1"
 lazy_static = "1.5"
 tempfile = "3"

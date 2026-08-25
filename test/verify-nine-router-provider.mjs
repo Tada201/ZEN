@@ -8,11 +8,18 @@ const useChat = readFileSync(new URL("../src/atlas/hooks/useChat.ts", import.met
 const workspaceSection = readFileSync(new URL("../src/atlas/sections/WorkspaceSection.tsx", import.meta.url), "utf8");
 const voiceSettings = readFileSync(new URL("../src/components/settings/Tabs/VoiceSettings.tsx", import.meta.url), "utf8");
 const voiceDisplay = readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/voice_display.rs", import.meta.url), "utf8");
-const chatCommand = readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8");
+// `commands/chat/send.rs` was split into `send/{history,persist,prompt,research,
+// resolve,route,validate}.rs`. Read the parent plus every submodule as one blob
+// so shape assertions that predate the split keep anchoring on the same content.
+const chatCommand = ["history", "persist", "prompt", "research", "resolve", "route", "validate"]
+  .map((m) => readFileSync(new URL(`../src-tauri/src/commands/chat/send/${m}.rs`, import.meta.url), "utf8"))
+  .concat(readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8"))
+  .join("\n");
 const backendSettings = readFileSync(new URL("../src-tauri/src/commands/settings.rs", import.meta.url), "utf8");
-const backendMeta = readFileSync(new URL("../src-tauri/src/llm/provider_meta.rs", import.meta.url), "utf8");
-const models = readFileSync(new URL("../src-tauri/src/llm/openai_compat/models.rs", import.meta.url), "utf8");
-const stream = readFileSync(new URL("../src-tauri/src/llm/openai_compat/stream.rs", import.meta.url), "utf8");
+// The LLM layer moved into the `zen-llm` crate during the workspace migration.
+const backendMeta = readFileSync(new URL("../src-tauri/crates/zen-llm/src/provider_meta.rs", import.meta.url), "utf8");
+const models = readFileSync(new URL("../src-tauri/crates/zen-llm/src/openai_compat/models.rs", import.meta.url), "utf8");
+const stream = readFileSync(new URL("../src-tauri/crates/zen-llm/src/openai_compat/stream.rs", import.meta.url), "utf8");
 
 const nineRouterBlock = providerTypes.slice(
   providerTypes.indexOf("key: 'nine_router'"),

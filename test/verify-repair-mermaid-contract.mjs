@@ -5,7 +5,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const repair = read("src-tauri/src/commands/chat/repair.rs");
 const chatMod = read("src-tauri/src/commands/chat/mod.rs");
 const lib = read("src-tauri/src/lib.rs");
-const messageQueries = read("src-tauri/src/db/queries/message.rs");
+const messageQueries = read("src-tauri/crates/zen-db/src/queries/message.rs");
 const crud = read("src-tauri/src/commands/chat/crud.rs");
 const chatApi = read("src/api/chatApi.ts");
 const diagram = read("src/atlas/components/chat/MermaidDiagram.tsx");

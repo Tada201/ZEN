@@ -5,10 +5,10 @@ const providerTypes = readFileSync(new URL("../src/lib/types/provider.ts", impor
 const providerSlice = readFileSync(new URL("../src/lib/stores/settings/createProviderSlice.ts", import.meta.url), "utf8");
 const settingsTypes = readFileSync(new URL("../src/lib/stores/settings/types.ts", import.meta.url), "utf8");
 const settingsSchema = readFileSync(new URL("../src/lib/stores/settings/schema.ts", import.meta.url), "utf8");
-const backendProviderMeta = readFileSync(new URL("../src-tauri/src/llm/provider_meta.rs", import.meta.url), "utf8");
+const backendProviderMeta = readFileSync(new URL("../src-tauri/crates/zen-llm/src/provider_meta.rs", import.meta.url), "utf8");
 const backendSettings = readFileSync(new URL("../src-tauri/src/commands/settings.rs", import.meta.url), "utf8");
-const openAiModels = readFileSync(new URL("../src-tauri/src/llm/openai_compat/models.rs", import.meta.url), "utf8");
-const openAiStream = readFileSync(new URL("../src-tauri/src/llm/openai_compat/stream.rs", import.meta.url), "utf8");
+const openAiModels = readFileSync(new URL("../src-tauri/crates/zen-llm/src/openai_compat/models.rs", import.meta.url), "utf8");
+const openAiStream = readFileSync(new URL("../src-tauri/crates/zen-llm/src/openai_compat/stream.rs", import.meta.url), "utf8");
 
 assert(
   providerTypes.includes("key: 'opencode'") &&

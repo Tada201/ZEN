@@ -5,9 +5,9 @@
  * Asserts the wire contract between:
  *   - src/api/mcpApi.ts             (typed TS API + status listener)
  *   - src-tauri/src/commands/mcp.rs (scope-aware upsert/set_enabled/remove/reconnect)
- *   - src-tauri/src/services/mcp_config.rs (typed scope + CRUD helpers)
+ *   - src-tauri/crates/zen-mcp/src/config.rs (typed scope + CRUD helpers)
  *   - src-tauri/src/tools/mod.rs    (ToolRegistry::remove_by_prefix helper)
- *   - src-tauri/src/mcp/client/*.rs (sync_lock + clear-adapters + status events)
+ *   - src-tauri/crates/zen-mcp/src/client/*.rs (sync_lock + clear-adapters + status events)
  *   - src-tauri/src/lib.rs          (commands registered + boot caller)
  *   - src/components/settings/Tabs/plugins/McpServerRow.tsx  (typed row)
  *   - src/components/settings/Tabs/plugins/McpServerForm.tsx (add/edit form)
@@ -157,7 +157,7 @@ console.log('\nB. src-tauri/src/commands/mcp.rs — scope-aware commands');
       /name:\s*String/.test(m[0]) &&
       /config:\s*Value/.test(m[0]) &&
       /\.upsert_server\(\s*scope,\s*&name,\s*config\s*\)/.test(m[0]) &&
-      /tokio::spawn[\s\S]*?sync_external_servers\(\s*Some\(&app\)/.test(m[0])
+      /tokio::spawn[\s\S]*?sync_external_servers\(\s*Some\(&ui\)/.test(m[0])
     );
   });
   section('mcp_set_enabled returns bool and re-syncs only when the row existed', () => {
@@ -166,7 +166,7 @@ console.log('\nB. src-tauri/src/commands/mcp.rs — scope-aware commands');
     return (
       /->\s*ZenResult<bool>/.test(m[0]) &&
       /\.set_enabled\(\s*scope,\s*&name,\s*enabled\s*\)/.test(m[0]) &&
-      /if\s+existed\s*\{[\s\S]*?sync_external_servers\(\s*Some\(&app\)/.test(m[0])
+      /if\s+existed\s*\{[\s\S]*?sync_external_servers\(\s*Some\(&ui\)/.test(m[0])
     );
   });
   section('mcp_remove_server returns bool and skips sync when not removed', () => {
@@ -175,14 +175,14 @@ console.log('\nB. src-tauri/src/commands/mcp.rs — scope-aware commands');
     return (
       /->\s*ZenResult<bool>/.test(m[0]) &&
       /\.remove_server\(\s*scope,\s*&name\s*\)/.test(m[0]) &&
-      /if\s+removed\s*\{[\s\S]*?sync_external_servers\(\s*Some\(&app\)/.test(m[0])
+      /if\s+removed\s*\{[\s\S]*?sync_external_servers\(\s*Some\(&ui\)/.test(m[0])
     );
   });
   section('mcp_reconnect spawns sync without mutating config', () => {
     const m = fnBody('mcp_reconnect');
     if (!m) return false;
     return (
-      /client\.sync_external_servers\(\s*Some\(&app\)/.test(m[0]) &&
+      /client\.sync_external_servers\(\s*Some\(&ui\)/.test(m[0]) &&
       !/\.upsert_server\(|\.remove_server\(|\.set_enabled\(/.test(m[0])
     );
   });
@@ -194,10 +194,10 @@ console.log('\nB. src-tauri/src/commands/mcp.rs — scope-aware commands');
   });
 })();
 
-// ─── Section C: src-tauri/src/services/mcp_config.rs ────────────
-console.log('\nC. src-tauri/src/services/mcp_config.rs — scope + typed CRUD');
+// ─── Section C: src-tauri/crates/zen-mcp/src/config.rs ────────────
+console.log('\nC. src-tauri/crates/zen-mcp/src/config.rs — scope + typed CRUD');
 (() => {
-  const src = read('src-tauri/src/services/mcp_config.rs');
+  const src = read('src-tauri/crates/zen-mcp/src/config.rs');
   section('McpScope enum exists with User and Workspace variants', () => {
     const m = src.match(/pub\s+enum\s+McpScope\s*\{[^}]*\}/);
     if (!m) return false;
@@ -271,10 +271,12 @@ console.log('\nC. src-tauri/src/services/mcp_config.rs — scope + typed CRUD');
   });
 })();
 
-// ─── Section D: src-tauri/src/tools/mod.rs ────────────────────────
-console.log('\nD. src-tauri/src/tools/mod.rs — remove_by_prefix helper');
+// ─── Section D: src-tauri/crates/zen-tools/src/registry.rs ────────
+console.log('\nD. src-tauri/crates/zen-tools/src/registry.rs — remove_by_prefix helper');
 (() => {
-  const src = read('src-tauri/src/tools/mod.rs');
+  // The canonical registry moved into the zen-tools crate; `src/tools/mod.rs` is
+  // now the app-side wiring shim.
+  const src = read('src-tauri/crates/zen-tools/src/registry.rs');
   section('ToolRegistry::remove_by_prefix exists', () => {
     return /pub\s+fn\s+remove_by_prefix\s*\(\s*&mut\s*self,\s*prefix:\s*&str\s*\)\s*->\s*usize/.test(
       src,
@@ -289,33 +291,40 @@ console.log('\nD. src-tauri/src/tools/mod.rs — remove_by_prefix helper');
   });
 })();
 
-// ─── Section E: src-tauri/src/mcp/client/*.rs ─────────────────────
-console.log('\nE. src-tauri/src/mcp/client/ — sync lock + status events');
+// ─── Section E: src-tauri/crates/zen-mcp/src/client/*.rs ─────────────────────
+console.log('\nE. src-tauri/crates/zen-mcp/src/client/ — sync lock + status events');
 (() => {
   // client.rs was split into a module dir; concatenate every *.rs so these
-  // structural asserts survive where each symbol physically lives.
-  const src = readDirConcat('src-tauri/src/mcp/client', (f) => f.endsWith('.rs'));
+  // structural asserts survive where each symbol physically lives. The `ext:*`
+  // wipe itself now runs through the app-side registrar port, so read that too.
+  const src =
+    readDirConcat('src-tauri/crates/zen-mcp/src/client', (f) => f.endsWith('.rs')) +
+    '\n' +
+    read('src-tauri/src/services/mcp_registrar.rs');
   section('McpClient struct owns Arc<Mutex<()>> sync_lock', () => {
     return /sync_lock:\s*Arc<Mutex<\(\)>>/.test(src);
   });
   section('sync_lock initialized in McpClient::new', () => {
     return /sync_lock:\s*Arc::new\(\s*Mutex::new\(\(\)\s*\)\s*\)/.test(src);
   });
-  section('sync_external_servers takes Option<&AppHandle>', () => {
-    return /pub\s+async\s+fn\s+sync_external_servers\(\s*self:\s*&Arc<Self>,\s*app:\s*Option<&AppHandle>\s*\)/.test(
+  section('sync_external_servers takes an optional UI bridge', () => {
+    // The crate cannot depend on tauri, so the AppHandle was replaced by the
+    // `UiBridge` port (event sink + browser opener) during the extraction.
+    return /pub\s+async\s+fn\s+sync_external_servers\(\s*self:\s*&Arc<Self>,\s*ui:\s*Option<&crate::ui::UiBridge>\s*\)/.test(
       src,
     );
   });
   section('sync acquires sync_lock and wipes ext:* adapters first', () => {
     return (
       /let\s+_guard\s*=\s*self\.sync_lock\.lock\(\)\.await/.test(src) &&
+      /self\.registrar\.clear_external\(\)/.test(src) &&
       /\.remove_by_prefix\("ext:"\)/.test(src)
     );
   });
-  section('emit_server_status helper exists with app: Option<&AppHandle>', () => {
+  section('emit_server_status helper exists and emits through the UI sink', () => {
     return (
-      /fn\s+emit_server_status\(\s*[\s\S]*?app:\s*Option<&AppHandle>/.test(src) &&
-      /app\.emit\("mcp:server:status"/.test(src)
+      /fn\s+emit_server_status\(\s*[\s\S]*?ui:\s*Option<&crate::ui::UiBridge>/.test(src) &&
+      /sink\.emit_result\("mcp:server:status"/.test(src)
     );
   });
   section('status payload includes name + status + optional error', () => {
@@ -428,7 +437,7 @@ console.log('\nH. MCPSettings.tsx — wires typed UI + mcp:server:status events'
 console.log('\nI. Runtime wire contract');
 (() => {
   const ts = read('src/api/mcpApi.ts');
-  const rs = readDirConcat('src-tauri/src/mcp/client', (f) => f.endsWith('.rs'));
+  const rs = readDirConcat('src-tauri/crates/zen-mcp/src/client', (f) => f.endsWith('.rs'));
   section('Event payload { name, status, error? } agrees between TS and Rust', () => {
     const tsShape =
       /name:\s*string/.test(ts) &&

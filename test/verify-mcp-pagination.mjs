@@ -1,6 +1,6 @@
 /**
  * Verifier for MCP `tools/list` cursor pagination in
- * `src-tauri/src/mcp/client.rs`.
+ * `src-tauri/crates/zen-mcp/src/client/mod.rs`.
  *
  * Locks three things at once:
  *   1. SOURCE SHAPE — `client.rs` must contain the pagination hook +
@@ -24,7 +24,7 @@ import { strict as assert } from "node:assert";
 // `client.rs` was split into a `client/` module directory; the pagination
 // logic now lives in `client/stdio_helpers.rs` + `client/http_handshake.rs`.
 // Read the whole module so the source-shape assertions survive the split.
-const CLIENT_DIR = new URL("../src-tauri/src/mcp/client/", import.meta.url);
+const CLIENT_DIR = new URL("../src-tauri/crates/zen-mcp/src/client/", import.meta.url);
 
 const PROTOCOL_VERSION = "2025-06-18";
 const ACCEPT_JSON_OR_SSE = "application/json, text/event-stream";

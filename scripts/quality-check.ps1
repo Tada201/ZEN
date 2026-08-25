@@ -180,6 +180,17 @@ Get-ChildItem src-tauri/src -Recurse -File -Include *.rs | ForEach-Object {
     }
 }
 
+# The Cargo-workspace migration moved most backend code into library crates
+# under src-tauri/crates; hold them to the same Rust hard limit as the app crate.
+if (Test-Path "src-tauri/crates") {
+    Get-ChildItem src-tauri/crates -Recurse -File -Include *.rs | ForEach-Object {
+        $lineCount = (Get-Content $_.FullName | Measure-Object -Line).Lines
+        if ($lineCount -gt $rustLimit -and -not (Is-Exempt $_.FullName)) {
+            $violations += "$($_.FullName): $lineCount lines exceeds Rust hard limit $rustLimit"
+        }
+    }
+}
+
 Get-ChildItem src -Recurse -File -Include *.ts,*.tsx | ForEach-Object {
     $lineCount = (Get-Content $_.FullName | Measure-Object -Line).Lines
     if ($lineCount -gt $tsLimit -and -not (Is-Exempt $_.FullName)) {

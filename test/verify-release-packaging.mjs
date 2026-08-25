@@ -44,7 +44,7 @@ const ci = await read(".github/workflows/ci.yml");
 expect(ci.includes("workflow_dispatch:") && !ci.includes("pull_request:") && !ci.includes("\n  push:"),
   "CI must remain manual-only to conserve hosted-runner resources.");
 
-const runtimeResources = await read("src-tauri/src/services/runtime_resource.rs");
+const runtimeResources = await read("src-tauri/crates/zen-media/src/runtime_resource.rs");
 expect(runtimeResources.includes('join("runtimes")') && runtimeResources.includes("RuntimeBinarySource::AppData"),
   "Runtime resolution must prefer AppData managed runtimes.");
 expect(!runtimeResources.includes("bundled_model_path"),

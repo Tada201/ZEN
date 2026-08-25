@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
-const serviceSource = readFileSync(
-  new URL("../src-tauri/src/services/tool.rs", import.meta.url),
-  "utf8",
-);
+const serviceSource = ["mod.rs", "agent_exec.rs", "approval.rs", "audit.rs", "authorized.rs", "entry.rs", "mutations.rs"]
+  .map((f) => readFileSync(new URL(f === "mod.rs"
+    ? "../src-tauri/src/services/tool.rs"
+    : `../src-tauri/src/services/tool/${f}`, import.meta.url), "utf8")).join("\n");
 const commandSource = readFileSync(
   new URL("../src-tauri/src/commands/agent.rs", import.meta.url),
   "utf8",

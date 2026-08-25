@@ -1,6 +1,6 @@
 /**
  * Verifier for the MCP `initialize` handshake implementation in
- * `src-tauri/src/mcp/client.rs` and `src-tauri/src/mcp/types.rs`.
+ * `src-tauri/crates/zen-mcp/src/client/mod.rs` and `src-tauri/crates/zen-mcp/src/types.rs`.
  *
  * Locks three things at once:
  *   1. SOURCE SHAPE — the Rust source must contain every spec-required
@@ -29,8 +29,8 @@ import { strict as assert } from "node:assert";
 
 // `client.rs` was split into a `client/` module dir; concatenate every file so
 // source-shape assertions survive wherever a symbol landed post-split.
-const CLIENT_DIR = new URL("../src-tauri/src/mcp/client/", import.meta.url);
-const TYPES_RS = new URL("../src-tauri/src/mcp/types.rs", import.meta.url);
+const CLIENT_DIR = new URL("../src-tauri/crates/zen-mcp/src/client/", import.meta.url);
+const TYPES_RS = new URL("../src-tauri/crates/zen-mcp/src/types.rs", import.meta.url);
 
 const PROTOCOL_VERSION = "2025-06-18";
 const ACCEPT_JSON_OR_SSE = "application/json, text/event-stream";

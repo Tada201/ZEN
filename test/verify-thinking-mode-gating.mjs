@@ -6,15 +6,29 @@ const reasoningCapsSource = readFileSync(new URL("../src/atlas/components/useRea
 const chatInputModesSource = readFileSync(new URL("../src/atlas/components/useChatInputModes.ts", import.meta.url), "utf8");
 const providerTypesSource = readFileSync(new URL("../src/lib/types/provider.ts", import.meta.url), "utf8");
 const querySource = readFileSync(new URL("../src/atlas/hooks/chat/useChatQueries.ts", import.meta.url), "utf8");
-const dbModelsSource = readFileSync(new URL("../src-tauri/src/db/models.rs", import.meta.url), "utf8");
+// `ModelInfo` moved out of `src/db/models.rs` into the `zen-core` crate during
+// the workspace migration, so the capability type is now crate-local.
+const dbModelsSource = readFileSync(new URL("../src-tauri/crates/zen-core/src/chat_types.rs", import.meta.url), "utf8");
 const pinnedSource = readFileSync(new URL("../src/atlas/components/chat/input/PinnedActionBar.tsx", import.meta.url), "utf8");
 const plusSource = readFileSync(new URL("../src/atlas/components/chat/input/PlusActionMenu.tsx", import.meta.url), "utf8");
 const thinkingConfigSource = readFileSync(new URL("../src/atlas/components/chat/input/ThinkingConfig.tsx", import.meta.url), "utf8");
-const chatCommandSource = readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8");
-const anthropicSource = readFileSync(new URL("../src-tauri/src/llm/anthropic.rs", import.meta.url), "utf8");
-const resolverSource = readFileSync(new URL("../src-tauri/src/llm/reasoning/resolver.rs", import.meta.url), "utf8");
-const reasoningModSource = readFileSync(new URL("../src-tauri/src/llm/reasoning/mod.rs", import.meta.url), "utf8");
-const registrySource = readFileSync(new URL("../src-tauri/src/llm/reasoning/registry.rs", import.meta.url), "utf8");
+// `commands/chat/send.rs` was split into `send/{history,persist,prompt,research,
+// resolve,route,validate}.rs`. Read the parent plus every submodule as one blob
+// so shape assertions that predate the split keep anchoring on the same content.
+const chatCommandSource = ["history", "persist", "prompt", "research", "resolve", "route", "validate"]
+  .map((m) => readFileSync(new URL(`../src-tauri/src/commands/chat/send/${m}.rs`, import.meta.url), "utf8"))
+  .concat(readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8"))
+  .join("\n");
+// The LLM layer moved into the `zen-llm` crate, and `anthropic.rs` was split
+// into `anthropic/{chat,mapping,mod,wire}.rs`; read the module as one blob.
+const anthropicSource = ["chat", "mapping", "mod", "wire"]
+  .map((m) => readFileSync(new URL(`../src-tauri/crates/zen-llm/src/anthropic/${m}.rs`, import.meta.url), "utf8"))
+  .join("\n");
+const resolverSource = readFileSync(new URL("../src-tauri/crates/zen-llm/src/reasoning/resolver.rs", import.meta.url), "utf8");
+// The capability type itself (with `normalize_request`) moved to `zen-core`;
+// `zen-llm/reasoning/` keeps the provider-facing detection layer.
+const reasoningModSource = readFileSync(new URL("../src-tauri/crates/zen-core/src/reasoning.rs", import.meta.url), "utf8");
+const registrySource = readFileSync(new URL("../src-tauri/crates/zen-llm/src/reasoning/registry.rs", import.meta.url), "utf8");
 
 // The frontend model type carries a single backend-resolved capability object,
 // NOT the retired supportsReasoning/reasoningConfigType pair.
@@ -35,7 +49,7 @@ assert(
 );
 
 assert(
-  dbModelsSource.includes("pub reasoning: Option<crate::llm::ReasoningCapability>") &&
+  dbModelsSource.includes("pub reasoning: Option<ReasoningCapability>") &&
     !dbModelsSource.includes("pub supports_reasoning") &&
     !dbModelsSource.includes("pub reasoning_config_type"),
   "backend ModelInfo should expose one resolved reasoning capability",
@@ -84,9 +98,11 @@ assert(
 
 // send.rs stays a thin adapter: it forwards generic intent through the
 // resolver's normalize_request and never re-derives protocol or budget.
+// `active_model` is passed by reference or as a `&str` depending on which
+// `send/` submodule holds the call, so accept either borrow form.
 assert(
   chatCommandSource.includes("ReasoningIntent") &&
-    chatCommandSource.includes("llm_provider.reasoning_capability(&active_model)") &&
+    /llm_provider\.reasoning_capability\(&?active_model\)/.test(chatCommandSource) &&
     chatCommandSource.includes("capability.normalize_request(&intent)") &&
     !chatCommandSource.includes("config.reasoning_effort = t.effort"),
   "send.rs should normalize generic intent via the resolver, not inline policy",

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const discovery = read("src-tauri/src/services/mcp_discovery.rs");
+const discovery = read("src-tauri/crates/zen-mcp/src/discovery.rs");
 const command = read("src-tauri/src/commands/mcp.rs");
 const appState = read("src-tauri/src/commands/mod.rs");
 const lib = read("src-tauri/src/lib.rs");

@@ -1,31 +1,58 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
-const toolsMod = readFileSync(new URL("../src-tauri/src/tools/mod.rs", import.meta.url), "utf8");
+// The canonical registry moved into the `zen-tools` crate while `src/tools/mod.rs`
+// kept the app-side module declarations and built-in registrations; read both as
+// one blob so the registry and wiring assertions keep anchoring on the same content.
+const toolsMod = [
+  "../src-tauri/crates/zen-tools/src/registry.rs",
+  "../src-tauri/src/tools/mod.rs",
+].map((p) => readFileSync(new URL(p, import.meta.url), "utf8")).join("\n");
 const fsToolsMod = readFileSync(new URL("../src-tauri/src/tools/fs_tools/mod.rs", import.meta.url), "utf8");
 const fsToolsWrite = readFileSync(new URL("../src-tauri/src/tools/fs_tools/write.rs", import.meta.url), "utf8");
-const toolManager = readFileSync(new URL("../src-tauri/src/tools/manager.rs", import.meta.url), "utf8");
+const toolManager = readFileSync(new URL("../src-tauri/crates/zen-tools/src/manager.rs", import.meta.url), "utf8");
 const agentMiddleware = readFileSync(new URL("../src-tauri/crates/zen-agent/src/middleware/system_prompt.rs", import.meta.url), "utf8");
-const toolService = readFileSync(new URL("../src-tauri/src/services/tool.rs", import.meta.url), "utf8");
+const toolService = ["mod.rs", "agent_exec.rs", "approval.rs", "audit.rs", "authorized.rs", "entry.rs", "mutations.rs"]
+  .map((f) => readFileSync(new URL(f === "mod.rs"
+    ? "../src-tauri/src/services/tool.rs"
+    : `../src-tauri/src/services/tool/${f}`, import.meta.url), "utf8")).join("\n");
 const terminalService = readFileSync(new URL("../src-tauri/src/services/terminal.rs", import.meta.url), "utf8");
 const terminalTool = readFileSync(new URL("../src-tauri/src/tools/terminal_tools.rs", import.meta.url), "utf8");
 const workspaceMod = readFileSync(new URL("../src-tauri/src/workspace.rs", import.meta.url), "utf8");
 const toolDispatch = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
   .map((f) => readFileSync(new URL(`../src-tauri/crates/zen-agent/src/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
 const toolPipeline = readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/tool_pipeline.rs", import.meta.url), "utf8");
-const dbQueries = readFileSync(new URL("../src-tauri/src/db/queries/mod.rs", import.meta.url), "utf8");
-const dbMod = readFileSync(new URL("../src-tauri/src/db/mod.rs", import.meta.url), "utf8");
+// The query layer moved into the `zen-db` crate during the workspace migration.
+const dbQueries = readFileSync(new URL("../src-tauri/crates/zen-db/src/queries/mod.rs", import.meta.url), "utf8");
+// `src/db/mod.rs` is now a 5-line re-export shim; schema bootstrap moved into
+// the `zen-db` crate's migrations module.
+const dbMod = readFileSync(new URL("../src-tauri/crates/zen-db/src/migrations/mod.rs", import.meta.url), "utf8");
 const mcpCommands = readFileSync(new URL("../src-tauri/src/commands/mcp.rs", import.meta.url), "utf8");
 const tauriLib = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
 const commandsMod = readFileSync(new URL("../src-tauri/src/commands/mod.rs", import.meta.url), "utf8");
 const settingsCommands = readFileSync(new URL("../src-tauri/src/commands/settings.rs", import.meta.url), "utf8");
+// `commands/chat/send.rs` was split into `send/{history,persist,prompt,research,
+// resolve,route,validate}.rs`; read every submodule too so shape assertions that
+// predate the split keep anchoring on the same content.
 const chatCommands = [
   "../src-tauri/src/commands/chat/mod.rs",
   "../src-tauri/src/commands/chat/helpers.rs",
   "../src-tauri/src/commands/chat/send.rs",
+  "../src-tauri/src/commands/chat/send/history.rs",
+  "../src-tauri/src/commands/chat/send/persist.rs",
+  "../src-tauri/src/commands/chat/send/prompt.rs",
+  "../src-tauri/src/commands/chat/send/research.rs",
+  "../src-tauri/src/commands/chat/send/resolve.rs",
+  "../src-tauri/src/commands/chat/send/route.rs",
+  "../src-tauri/src/commands/chat/send/validate.rs",
 ].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
 const agentCommands = readFileSync(new URL("../src-tauri/src/commands/agent.rs", import.meta.url), "utf8");
-const escalation = readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/escalation.rs", import.meta.url), "utf8");
+// `runner/escalation.rs` was split by concern; the early-tool dedupe and preview
+// redaction logic now lives in `runner/streaming.rs`. Read both as one blob so the
+// dedupe/redaction assertions keep anchoring on the same content.
+const escalation = ["escalation", "streaming"]
+  .map((m) => readFileSync(new URL(`../src-tauri/crates/zen-agent/src/runner/${m}.rs`, import.meta.url), "utf8"))
+  .join("\n");
 const mcpApi = readFileSync(new URL("../src/api/mcpApi.ts", import.meta.url), "utf8");
 const mcpSettings = readFileSync(new URL("../src/components/settings/Tabs/plugins/MCPSettings.tsx", import.meta.url), "utf8");
 const mockClient = readFileSync(new URL("../src/api/mockClient.ts", import.meta.url), "utf8");
@@ -74,10 +101,18 @@ assert(toolService.includes("registry.get_legacy(&tool_call.name)") && !toolDisp
 assert(toolManager.includes("sync_legacy_tool_definitions") && commandsMod.includes("register_legacy_tool"), "startup/tool manager should sync legacy executors into the canonical registry");
 assert(toolPipeline.includes("enforce_tool_allowlist(&allowlist, &real_id, \"agent\")") && toolPipeline.includes("enforce_tool_allowlist(&allowlist, tool_id, \"agent\")"), "tool_exec and tool_info should use the shared allowlist helper");
 assert(toolManager.includes("sanitize_tool_info_schema") && toolManager.includes("TOOL_INFO_MAX_SCHEMA_BYTES"), "tool_info schemas should be capped before model exposure");
+// Phase 5 rewrote every `impl Tool for X` header to the host-generic
+// `impl zen_tools::Tool<tauri::AppHandle> for X` form (a type alias cannot appear
+// in impl position), so match either spelling.
+const implementsTool = (source, type) =>
+  new RegExp(`impl (?:Tool|zen_tools::Tool<tauri::AppHandle>) for ${type}\\b`).test(source);
+
 assert(
   toolsMod.includes("pub mod terminal_tools") &&
-    toolsMod.includes("registry.register(Arc::new(RunCommandTool))") &&
-    terminalTool.includes("impl Tool for RunCommandTool") &&
+    // The registration is path-qualified (`self::terminal_tools::RunCommandTool`)
+    // now that the registry itself lives in the zen-tools crate.
+    /registry\.register\(Arc::new\((?:self::terminal_tools::)?RunCommandTool\)\)/.test(toolsMod) &&
+    implementsTool(terminalTool, "RunCommandTool") &&
     terminalTool.includes('RiskLevel::Critical') &&
     terminalTool.includes("execute_command("),
   "run_command should be a direct v2 tool while preserving critical risk and terminal-manager execution"
@@ -85,8 +120,8 @@ assert(
 assert(
   toolsMod.includes("registry.register(Arc::new(fs_tools::WriteFileTool))") &&
     toolsMod.includes("registry.register(Arc::new(fs_tools::EditFileTool))") &&
-    fsToolsWrite.includes("impl Tool for WriteFileTool") &&
-    fsToolsWrite.includes("impl Tool for EditFileTool") &&
+    implementsTool(fsToolsWrite, "WriteFileTool") &&
+    implementsTool(fsToolsWrite, "EditFileTool") &&
     fsToolsWrite.includes("crate::workspace::resolve_workspace_path") &&
     fsToolsWrite.includes("RiskLevel::High"),
   "write_file and edit_file should be direct high-risk v2 tools with workspace-contained paths"
@@ -211,6 +246,11 @@ assert(!JSON.parse(generalistAgent).tool_ids.includes("tools_search") && !JSON.p
 console.log("tool system final hardening ok");
 
 function toolPermissionRedactionIsPresent() {
-  const permission = readFileSync(new URL("../src-tauri/src/tools/permission.rs", import.meta.url), "utf8");
+  // `src/tools/permission.rs` is a re-export shim now; the redaction helper itself
+  // lives in the `zen-security` crate's approval module.
+  const permission = readFileSync(
+    new URL("../src-tauri/crates/zen-security/src/approval.rs", import.meta.url),
+    "utf8",
+  );
   return permission.includes("pub fn redacted_arguments_for_display") && permission.includes("[redacted]");
 }

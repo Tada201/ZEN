@@ -3,11 +3,14 @@
 Exemptions are temporary. They exist so the rebuild can be incremental without
 pretending current debt is acceptable.
 
-> **Backend exemptions below were refreshed 2026-08-22 (Phase 0 of the
+> **Backend exemptions below were refreshed 2026-08-25 (Phase 12 of the
 > BIG_MIGRATION.md workspace migration) against measured line counts.**
-> Every Rust file >700 lines carries an entry whose `Expires` field is the
-> migration phase that splits or relocates it; app-crate stragglers expire at
-> Phase 12 (file-size debt sweep). Entries are closed when the split lands.
+> The hard-fail band is empty: no `.rs` file under `src-tauri/src/**` or
+> `src-tauri/crates/**` exceeds 900 lines. `scripts/quality-check.ps1` now scans
+> `src-tauri/crates/**` alongside the app crate, so extracted-crate files are held
+> to the same hard limit for the first time. Warning-band entries (700–900) are
+> renewed with owners and split plans rather than expiring at a migration phase —
+> see the band note under "Warning band" below.
 
 ## Required Format
 
@@ -57,19 +60,22 @@ Reason: (historical) All multi-phase deep research execution steps lived in one 
 Split or Fix Plan: Done in Phase 11 (split into deep_research/phases/{dispatch,plan,report,search,analyze}).
 Expires: resolved migration/phase-11-done
 
-File: src-tauri/crates/zen-security/src/policy.rs (1,393)
+File: src-tauri/crates/zen-security/src/policy.rs (1,393) — RESOLVED Phase 12:
+the two inline security-regression suites were extracted to
+policy_mode_risk_tests.rs (307) and policy_tests.rs (417), declared from
+policy.rs via #[path] (openai_compat/stream_tests.rs precedent) so they keep
+module-relative access to the private helpers they pin. policy.rs is now 683
+lines — below the 700 warn threshold, so no successor exemption is needed.
 Owner: backend/security
 Rule Exempted: Rust hard file-size limit
-Reason: Successor of the old src/tools/permission.rs (1,551) after the
-  Phase 4 split into risk/approval/policy. The remaining size is the rules
-  engine plus its inline security-regression suites (mode×risk matrix +
-  layer precedence + plan-mode path-attack tests, ~720 lines of tests);
-  the executable code portion is ~670 lines. Kept together deliberately:
-  the matrix tests pin the same 6-layer chain they test and reference its
-  private helpers.
-Split or Fix Plan: Extract the test modules into zen-security/tests/ during
-  the Phase 12 file-size sweep if crate files are brought under the gate.
-Expires: migration/phase-12-done
+Reason: (historical) Successor of the old src/tools/permission.rs (1,551) after
+  the Phase 4 split into risk/approval/policy. The remaining size was the rules
+  engine plus ~720 lines of inline security-regression tests (mode×risk matrix +
+  layer precedence + plan-mode path-attack tests).
+Split or Fix Plan: Done in Phase 12 (test modules moved to #[path] siblings;
+  `cargo test -p zen-security` still runs all 53 tests including the 17
+  mode_risk_matrix cases).
+Expires: resolved migration/phase-12-done
 
 File: src-tauri/src/agent/runner/loop.rs (1,434) — RESOLVED Phase 11: moved to
 crates/zen-agent/src/runner/ and split into turn_loop.rs (797) + step_exec.rs
@@ -81,12 +87,16 @@ Reason: (historical) Core agent execution loop owned turn iteration and step han
 Split or Fix Plan: Done in Phase 11 (split into runner/{turn_loop,step_exec}); warn-band successors carried below.
 Expires: resolved migration/phase-11-done
 
-File: src-tauri/src/services/tool.rs (1,408)
+File: src-tauri/src/services/tool.rs (1,408) — RESOLVED Phase 12: split into
+src/services/tool.rs (144, module wiring + re-exports) plus tool/agent_exec.rs
+(393), tool/entry.rs (204), tool/approval.rs (202), tool/mutations.rs (150),
+tool/authorized.rs (121), tool/audit.rs (118), tool/tests.rs (97) — all
+sub-threshold; no successor exemption.
 Owner: backend/services
 Rule Exempted: Rust hard file-size limit
-Reason: ToolService registry facade, approval execution, and lookup still compose in the app crate (composition shell by design after migration).
-Split or Fix Plan: Thin facade over zen-tools/zen-security in Phase 12; split approval execution vs lookup.
-Expires: migration/phase-12-done
+Reason: (historical) ToolService registry facade, approval execution, and lookup composed in one app-crate file.
+Split or Fix Plan: Done in Phase 12 (split by concern: entry/approval/authorized/agent_exec/mutations/audit).
+Expires: resolved migration/phase-12-done
 
 File: src-tauri/src/agent/runner/helpers.rs (1,297) — RESOLVED Phase 11: moved
 to crates/zen-agent/src/runner/ and split into runner/helpers/budget.rs (554)
@@ -136,14 +146,39 @@ Reason: (historical) V1 tool manager wrapped the agent tool registry and metadat
 Split or Fix Plan: Done in Phase 5 (Pre-task A unified the dual registries; manager split into zen-tools registry.rs + manager.rs).
 Expires: resolved migration/phase-05-done
 
-File: src-tauri/src/commands/chat/send.rs (940)
+File: src-tauri/src/commands/chat/send.rs (940) — RESOLVED Phase 12: split into
+src/commands/chat/send.rs (321, command entry + orchestration) plus
+send/prompt.rs (233), send/route.rs (233), send/research.rs (176),
+send/resolve.rs (164), send/persist.rs (117), send/history.rs (85),
+send/validate.rs (88) — all sub-threshold; no successor exemption.
 Owner: backend/commands
 Rule Exempted: Rust hard file-size limit
-Reason: Chat send command still mixes validation, orchestration calls, and response mapping (stays in app crate).
-Split or Fix Plan: Phase 12 split into validation vs orchestration vs response mapping.
-Expires: migration/phase-12-done
+Reason: (historical) Chat send command mixed validation, orchestration calls, and response mapping.
+Split or Fix Plan: Done in Phase 12 (split into validate/resolve/history/prompt/route/research/persist).
+Expires: resolved migration/phase-12-done
 
 ### Warning band (700–900 lines)
+
+> **Phase 12 disposition (2026-08-25).** The hard-fail band is now empty: no file
+> under `src-tauri/src/**` or `src-tauri/crates/**` exceeds 900 lines, and
+> `scripts/quality-check.ps1` was extended in this phase to enforce the 900-line
+> Rust hard limit over `src-tauri/crates/**` as well as the app crate (previously
+> `crates/**` was entirely unscanned). Every entry below is a *warning*-band file
+> that the gate does not fail on. Rather than force sixteen speculative splits at
+> the end of the migration, these are renewed with owners and concrete plans and
+> handed to the teams that own the surfaces; splitting them is ordinary
+> refactoring debt, not migration debt.
+
+File: src-tauri/crates/zen-tools/src/manager.rs (818)
+Owner: backend/tools
+Rule Exempted: Rust warning file-size limit
+Reason: Successor of the Phase 5 extraction from src-tauri/src/tools/manager.rs
+  (1,010). Owns the discovery manager, the meta-tool definitions, and the
+  permission-mode settings parsing plus its inline test module.
+Split or Fix Plan: Move the inline test module to a #[path] sibling
+  (openai_compat/stream_tests.rs precedent) — that alone drops the file well
+  under the warn band.
+Expires: next backend refactor touching tool discovery
 
 File: src-tauri/crates/zen-llm/src/ollama/mod.rs (739)
 Owner: backend/llm
@@ -154,7 +189,7 @@ Reason: Successor of the old src-tauri/src/llm/ollama.rs after the Phase 7
   are the bulk.
 Split or Fix Plan: Phase 12 file-size sweep — move the test module to a
   #[path] sibling (stream_tests precedent) if the gate is tightened to warn.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/crates/zen-llm/src/openai_compat/stream_tests.rs (719)
 Owner: backend/llm
@@ -164,21 +199,21 @@ Reason: Wiremock suite for the openai_compat streaming/list-models surface,
   (P5 manager-tests precedent). Test-only file.
 Split or Fix Plan: Phase 12 sweep — split by subject (list_models vs
   streaming vs reasoning) if the warn band is enforced for test files.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/src/canvas/session.rs (897)
 Owner: backend/canvas
 Rule Exempted: Rust warning file-size limit
 Reason: Canvas session state and command application share one module (canvas stays in app crate).
 Split or Fix Plan: Phase 12 split into session state vs command application.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/src/agent/tools/fs_tools.rs (875)
 Owner: backend/agent-tools
 Rule Exempted: Rust warning file-size limit
 Reason: Agent filesystem tool suite grew range-windowed document reads (offset/limit continuation markers) on top of read/write/edit/list. Phase 11 re-scope: like all leaf executors it stays in the app crate (it receives `AppHandle` through the frozen `AgentTool` trait), so the planned zen-agent move does not apply and the split was deferred rather than forced mid-phase.
 Split or Fix Plan: Phase 12 file-size sweep — split into fs/{read_tools.rs, write_tools.rs}.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/crates/zen-agent/src/event_bus.rs (856) — successor of the
 Phase 11 relocation from src-tauri/src/agent/event_bus.rs. Owns the R5
@@ -188,7 +223,7 @@ Owner: backend/agent
 Rule Exempted: Rust warning file-size limit
 Reason: AgentEvent contract, artifact tag detection, and the broadcast bus share one file; splitting would scatter the byte-identical event-name contract across modules.
 Split or Fix Plan: Phase 12 file-size sweep — split payload structs from bus impl if the gate extends to crates/** with warn enforcement.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/src/llm/ollama.rs (852) — RESOLVED Phase 7: moved to
 crates/zen-llm/src/ollama/ and split into mod.rs (739, successor entry below)
@@ -217,14 +252,17 @@ Reason: Speech service owns capture, VAD pipeline wiring, and transcription orch
 Split or Fix Plan: Move to zen-media during Phase 10 and split during the move.
 Expires: resolved migration/phase-10-done (moved to crates/zen-media/src/speech_service/; split into mod.rs 565 + server.rs 230, both under the 700 warn band; the app path is now a §4.6 re-export shim).
 
-File: src-tauri/crates/zen-agent/src/runner/dispatch/router.rs (779) — successor
-of the Phase 11 relocation from src-tauri/src/agent/runner/router.rs (the old
-app-path entry is closed; this file was also carved out of tool_dispatch.rs).
+File: src-tauri/crates/zen-agent/src/router.rs (779) — successor of the Phase 11
+relocation from src-tauri/src/agent/router.rs. Note: the Phase 11 ledger listed
+this entry under the `runner/dispatch/` path; the 779-line file is the crate-root
+router.rs, while runner/dispatch/router.rs measures 266 and needs no exemption.
 Owner: backend/agent
 Rule Exempted: Rust warning file-size limit
 Reason: Agent router combines model routing decisions and fallback logic.
-Split or Fix Plan: Phase 12 file-size sweep — split tier schema inlining from routing if the gate extends to crates/**.
-Expires: migration/phase-12-done
+Split or Fix Plan: Renewed — split tier schema inlining from routing. Warn band
+  only; the gate extended to crates/** in Phase 12 enforces the 900 hard limit,
+  which this file is well under.
+Expires: next backend refactor touching agent routing
 
 File: src-tauri/crates/zen-agent/src/runner/dispatch/executors.rs (849) — new
 split product of Phase 11 (carved out of the former 1,253-line
@@ -233,7 +271,7 @@ Owner: backend/agent
 Rule Exempted: Rust warning file-size limit
 Reason: Per-tool-class executors (approval-gated, interactive, direct) share one dispatch module by design so approval ordering stays in one place.
 Split or Fix Plan: Phase 12 file-size sweep — group executors by class into submodules.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/crates/zen-agent/src/runner/turn_loop.rs (797) — new split
 product of Phase 11 (carved out of the former 1,434-line runner loop.rs).
@@ -241,7 +279,7 @@ Owner: backend/agent
 Rule Exempted: Rust warning file-size limit
 Reason: Turn iteration owns the escalation ladder and per-turn bookkeeping in one control-flow file.
 Split or Fix Plan: Phase 12 file-size sweep — extract turn bookkeeping helpers.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/crates/zen-agent/src/runner/step_exec.rs (858) — new split
 product of Phase 11 (carved out of the former 1,434-line runner loop.rs).
@@ -249,7 +287,7 @@ Owner: backend/agent
 Rule Exempted: Rust warning file-size limit
 Reason: Single-step execution spans assistant-message handling, tool-call planning, and finish-reason branches.
 Split or Fix Plan: Phase 12 file-size sweep — split message vs tool-planning vs finish handling.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/crates/zen-agent/src/runner/voice_display.rs (736) — successor
 of the Phase 11 relocation from src-tauri/src/agent/runner/voice_display.rs
@@ -259,14 +297,14 @@ Owner: backend/agent
 Rule Exempted: Rust warning file-size limit
 Reason: Voice display agent bridge owns transcription surface rendering and lifecycle.
 Split or Fix Plan: Phase 12 file-size sweep — split normalization helpers from the runner glue.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/src/commands/settings.rs (756)
 Owner: backend/commands
 Rule Exempted: Rust warning file-size limit
 Reason: Settings command surface aggregates many small typed IPC handlers (stays in app crate).
 Split or Fix Plan: Phase 12 sweep — split by settings domain if still over 700.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/crates/zen-agent/src/plugins.rs (755) — successor of the
 Phase 11 relocation from src-tauri/src/agent/plugins.rs.
@@ -274,7 +312,7 @@ Owner: backend/agent
 Rule Exempted: Rust warning file-size limit
 Reason: Plugin registration and lifecycle in one file.
 Split or Fix Plan: Phase 12 file-size sweep — split registration from lifecycle.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/crates/zen-agent/src/runner/context_breakdown.rs (748) —
 successor of the Phase 11 relocation from
@@ -283,7 +321,7 @@ Owner: backend/agent
 Rule Exempted: Rust warning file-size limit
 Reason: Context budget breakdown rendering and computation share one module.
 Split or Fix Plan: Phase 12 file-size sweep — split rendering from computation.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/crates/zen-agent/src/orchestrator/execution.rs (710) —
 successor of the Phase 11 relocation from
@@ -292,21 +330,23 @@ Owner: backend/agent
 Rule Exempted: Rust warning file-size limit
 Reason: Orchestrator execution coordination in one file.
 Split or Fix Plan: Phase 12 file-size sweep — split coordination from per-agent execution if still over 700.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
 File: src-tauri/src/commands/spatial.rs (724)
 Owner: backend/commands
 Rule Exempted: Rust warning file-size limit
 Reason: Spatial/geospatial command surface aggregates typed IPC handlers (stays in app crate).
 Split or Fix Plan: Phase 12 sweep — split by domain if still over 700.
-Expires: migration/phase-12-done
+Expires: renewed at migration/phase-12-done — warn band only (see the band note above)
 
-File: src-tauri/src/commands/mod.rs (709)
+File: src-tauri/src/commands/mod.rs (709) — RESOLVED: re-measured at 621 lines in
+the Phase 12 sweep (the ledger figure predated the per-domain command splits), so
+it is below the 700 warn threshold and needs no exemption.
 Owner: backend/commands
 Rule Exempted: Rust warning file-size limit
-Reason: Command module registry and shared helpers (stays in app crate).
-Split or Fix Plan: Phase 12 — extract per-domain command registration groups alongside the lib.rs boot split.
-Expires: migration/phase-12-done
+Reason: (historical) Command module registry and shared helpers.
+Split or Fix Plan: No action needed — sub-threshold.
+Expires: resolved migration/phase-12-done
 
 ### Closed backend entries (kept as record)
 
@@ -320,6 +360,41 @@ File: src-tauri/src/mcp/types.rs
 Result: Resolved — now 251 lines; no exemption required.
 
 ## Frontend Exemptions
+
+> **Phase 12 note (2026-08-25).** Extending `scripts/quality-check.ps1` to scan
+> `src-tauri/crates/**` surfaced four *frontend* files that were already over the
+> 500-line TS/TSX hard limit at HEAD with no exemption entry — the gate has been
+> failing on them independently of the backend migration. They are recorded below
+> so the gate reflects reality; owners are the frontend surfaces, not the
+> migration.
+
+File: src/api/mockClient.ts
+Owner: frontend/api
+Rule Exempted: TS/TSX hard file-size limit
+Reason: 659 lines. Development-only mock of the entire Tauri command surface; its size tracks the command count, not internal complexity.
+Split or Fix Plan: Split per command domain (chat, settings, mcp, workspace) mirroring src/api/tauriClient.ts.
+Expires: Next frontend refactor
+
+File: src/atlas/components/chat/PremiumChatInputFixture.tsx
+Owner: frontend/chat
+Rule Exempted: TS/TSX hard file-size limit
+Reason: 686 lines. Development fixture harness that exercises every composer state in one file.
+Split or Fix Plan: Split per fixture scenario, or move under a dev-only directory excluded from the product gate.
+Expires: Next frontend refactor
+
+File: src/atlas/components/chat/assistantMessageParts.ts
+Owner: frontend/chat
+Rule Exempted: TS/TSX hard file-size limit
+Reason: 593 lines. Canonical projection from message records to rendered assistant parts; owns the part-kind taxonomy in one place deliberately.
+Split or Fix Plan: Extract per-part-kind projectors, keeping the taxonomy union in a single small module.
+Expires: Next frontend refactor
+
+File: src/atlas/hooks/stream/agentActionLedger.ts
+Owner: frontend/chat-stream
+Rule Exempted: TS/TSX hard file-size limit
+Reason: 537 lines. Streaming action ledger reconciles tool, subagent, and artifact events into one ordered timeline.
+Split or Fix Plan: Split ledger reduction from the event-normalization helpers.
+Expires: Next frontend refactor
 
 File: src/atlas/components/chat/AssistantMessage.tsx
 Owner: frontend/chat

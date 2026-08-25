@@ -10,7 +10,13 @@ const markdown = read("src/atlas/components/chat/MarkdownContent.tsx");
 const assistant = read("src/atlas/components/chat/AssistantMessage.tsx");
 const reloadMapper = read("src/atlas/hooks/chat/useChatQueries.ts");
 const messageTypes = read("src/atlas/components/chat/types.ts");
-const backend = read("src-tauri/src/commands/chat/send.rs");
+// `commands/chat/send.rs` was split into `send/{history,persist,prompt,research,
+// resolve,route,validate}.rs`. Read the parent plus every submodule as one blob
+// so shape assertions that predate the split keep anchoring on the same content.
+const backend = ["history", "persist", "prompt", "research", "resolve", "route", "validate"]
+  .map((m) => read(`src-tauri/src/commands/chat/send/${m}.rs`))
+  .concat(read("src-tauri/src/commands/chat/send.rs"))
+  .join("\n");
 
 assert(
   !sendHandler.includes('promptText.includes("genui")'),

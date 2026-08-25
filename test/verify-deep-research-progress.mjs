@@ -23,9 +23,17 @@ const settingsSchema = await read("src/lib/stores/settings/schema.ts");
 const chatQueries = await read("src/atlas/hooks/chat/useChatQueries.ts");
 const chunkHandler = await read("src/atlas/hooks/stream/useChatChunkEvent.ts");
 const settingsFeatures = await read("src/lib/features/frontendFeatures.ts");
+// `commands/chat/send.rs` was split into `send/{history,persist,prompt,research,
+// resolve,route,validate}.rs`. Read the parent plus every submodule as one blob
+// so shape assertions that predate the split keep anchoring on the same content.
 const chatCommand = [
   await read("src-tauri/src/commands/chat/mod.rs"),
   await read("src-tauri/src/commands/chat/send.rs"),
+  ...(await Promise.all(
+    ["history", "persist", "prompt", "research", "resolve", "route", "validate"].map((m) =>
+      read(`src-tauri/src/commands/chat/send/${m}.rs`),
+    ),
+  )),
 ].join("\n");
 const phases = (await Promise.all([
   "analyze.rs", "dispatch.rs", "plan.rs", "report.rs", "search.rs",

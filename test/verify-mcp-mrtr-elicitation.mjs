@@ -19,16 +19,16 @@ import { readFileSync, readdirSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
-const clientDir = new URL("../src-tauri/src/mcp/client/", import.meta.url);
+const clientDir = new URL("../src-tauri/crates/zen-mcp/src/client/", import.meta.url);
 const client = readdirSync(clientDir)
   .filter((f) => f.endsWith(".rs"))
   .map((f) => readFileSync(new URL(f, clientDir), "utf8"))
   .join("\n");
 
-const mrtr = src("../src-tauri/src/mcp/mrtr.rs");
-const elicit = src("../src-tauri/src/mcp/client/elicit.rs");
+const mrtr = src("../src-tauri/crates/zen-mcp/src/mrtr.rs");
+const elicit = src("../src-tauri/crates/zen-mcp/src/client/elicit.rs");
 const commands = src("../src-tauri/src/commands/mcp.rs");
-const types = src("../src-tauri/src/mcp/types.rs");
+const types = src("../src-tauri/crates/zen-mcp/src/types.rs");
 const modal = src("../src/components/Zen/modals/McpElicitationModal.tsx");
 const system = src("../src-tauri/src/commands/system.rs");
 const plan = src("../docs/architecture/mcp-phase-plan.md");

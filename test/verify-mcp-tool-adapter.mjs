@@ -64,11 +64,20 @@ const SRC = (p) => {
     return ["mod", "sync", "stdio_helpers", "http_handshake", "http_body", "rpc"]
       .map((f) => {
         try {
-          return readFileSync(path.join(PROJECT_ROOT, "src-tauri/src/mcp/client", `${f}.rs`), "utf8");
+          return readFileSync(path.join(PROJECT_ROOT, "src-tauri/crates/zen-mcp/src/client", `${f}.rs`), "utf8");
         } catch {
           return "";
         }
       })
+      .join("\n");
+  }
+  // `services/tool.rs` was split into `services/tool/{agent_exec,approval,audit,
+  // authorized,entry,mutations}.rs`. Read the parent plus every submodule as one
+  // blob for the same reason.
+  if (p === "src-tauri/src/services/tool.rs") {
+    return ["agent_exec", "approval", "audit", "authorized", "entry", "mutations"]
+      .map((f) => readFileSync(path.join(PROJECT_ROOT, "src-tauri/src/services/tool", `${f}.rs`), "utf8"))
+      .concat(readFileSync(path.join(PROJECT_ROOT, "src-tauri/src/services/tool.rs"), "utf8"))
       .join("\n");
   }
   return readFileSync(path.join(PROJECT_ROOT, p), "utf8");

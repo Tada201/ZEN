@@ -7,9 +7,11 @@ assert.match(llmTypes, /ToolCallReady\s*\{/);
 assert.match(llmTypes, /arguments_snapshot:\s*String/);
 
 for (const path of [
-  "../src-tauri/src/llm/openai_compat/stream.rs",
-  "../src-tauri/src/llm/lmstudio/chat.rs",
-  "../src-tauri/src/llm/anthropic.rs",
+  "../src-tauri/crates/zen-llm/src/openai_compat/stream.rs",
+  "../src-tauri/crates/zen-llm/src/lmstudio/chat.rs",
+  // `anthropic.rs` was split into `anthropic/{chat,mapping,mod,wire}.rs`; the
+  // streaming half lives in `chat.rs`.
+  "../src-tauri/crates/zen-llm/src/anthropic/chat.rs",
 ]) {
   const source = readFileSync(new URL(path, import.meta.url), "utf8");
   assert.match(source, /LlmChunk::ToolCallDelta/);
@@ -18,7 +20,9 @@ for (const path of [
   assert.match(source, /arguments_snapshot/);
 }
 
-const runner = readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/escalation.rs", import.meta.url), "utf8");
+// `runner/escalation.rs` was split by concern; the tool-call preview streaming
+// path now lives in `runner/streaming.rs`.
+const runner = readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/streaming.rs", import.meta.url), "utf8");
 // The runner emits phases via the ChatStatusPhase named constants (not inline
 // string literals), so we match the constant form and separately pin the
 // constant→value mapping in chat_status.rs below.

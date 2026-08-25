@@ -21,10 +21,13 @@ const promptSource = readFileSync(
   new URL("../src/atlas/components/genui/prompt.ts", import.meta.url),
   "utf8",
 );
-const chatCommandSource = readFileSync(
-  new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url),
-  "utf8",
-);
+// `commands/chat/send.rs` was split into `send/{history,persist,prompt,research,
+// resolve,route,validate}.rs`. Read the parent plus every submodule as one blob
+// so shape assertions that predate the split keep anchoring on the same content.
+const chatCommandSource = ["history", "persist", "prompt", "research", "resolve", "route", "validate"]
+  .map((m) => readFileSync(new URL(`../src-tauri/src/commands/chat/send/${m}.rs`, import.meta.url), "utf8"))
+  .concat(readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8"))
+  .join("\n");
 const settingsMapperSource = readFileSync(
   new URL("../src/lib/stores/settingsMapper.ts", import.meta.url),
   "utf8",

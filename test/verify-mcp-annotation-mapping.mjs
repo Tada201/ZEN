@@ -53,7 +53,7 @@ const SRC = (p) => {
     return ["mod", "sync", "stdio_helpers", "http_handshake", "http_body"]
       .map((f) => {
         try {
-          return readFileSync(path.join(PROJECT_ROOT, "src-tauri/src/mcp/client", `${f}.rs`), "utf8");
+          return readFileSync(path.join(PROJECT_ROOT, "src-tauri/crates/zen-mcp/src/client", `${f}.rs`), "utf8");
         } catch {
           return "";
         }
@@ -114,7 +114,10 @@ function riskLevelFromAnnotations(ann) {
       section,
       src,
       [
-        /pub\s+fn\s+risk_level_from_annotations\s*\(\s*ann\s*:\s*Option\s*<\s*&\s*crate::tools::ToolAnnotations\s*>\s*,?\s*\)\s*->\s*crate::tools::permission::RiskLevel/,
+        // The helper moved into the `zen-mcp` crate, so `crate::tools::` /
+        // `crate::tools::permission::` became the `zen_tools` / `zen_security`
+        // crate paths. Accept either spelling.
+        /pub\s+fn\s+risk_level_from_annotations\s*\(\s*ann\s*:\s*Option\s*<\s*&\s*(?:crate::tools|zen_tools)::ToolAnnotations\s*>\s*,?\s*\)\s*->\s*(?:crate::tools::permission|zen_security::risk)::RiskLevel/,
       ],
     )
   )
@@ -158,9 +161,14 @@ function riskLevelFromAnnotations(ann) {
     // shape that surfaces malformed server replies instead of swallowing them. We tolerate up
     // to 400 chars of intervening shape (whitespace + `match` keyword + arm headers) so the
     // regex still anchors on the actual function call, not on whatever arms surround it.
-    /let\s+annotations\s*:\s*Option\s*<\s*crate::tools::ToolAnnotations\s*>\s*=[\s\S]{0,400}?serde_json::from_value\(\s*tool_json\["annotations"\]\.clone\(\)\s*\)/,
+    /let\s+annotations\s*:\s*Option\s*<\s*(?:crate::tools|zen_tools)::ToolAnnotations\s*>\s*=[\s\S]{0,400}?serde_json::from_value\(\s*tool_json\["annotations"\]\.clone\(\)\s*\)/,
         /let\s+risk_level\s*=\s*risk_level_from_annotations\(\s*annotations\.as_ref\(\)\s*\)/,
-        /McpToolAdapter::new\(\s*server_name\.clone\(\)\s*,\s*name\.clone\(\)\s*,\s*description\s*,\s*parameters\s*,\s*output_schema\s*,\s*annotations\s*,\s*risk_level\s*,\s*mcp_weak\.clone\(\)\s*,?\s*\)/,
+        // Phase 8 inverted adapter construction: the client no longer builds
+        // `McpToolAdapter` itself (that type implements `Tool<AppHandle>` and
+        // stayed in the app crate). It hands a validated `ExternalToolSpec`
+        // carrying the same annotations + risk_level to the registrar port,
+        // which wraps it app-side. Accept either wiring.
+        /(?:McpToolAdapter::new\(\s*server_name\.clone\(\)\s*,\s*name\.clone\(\)\s*,\s*description\s*,\s*parameters\s*,\s*output_schema\s*,\s*annotations\s*,\s*risk_level\s*,\s*mcp_weak\.clone\(\)\s*,?\s*\)|register_external\(\s*(?:crate::)?registrar::ExternalToolSpec\s*\{[\s\S]{0,400}?annotations,[\s\S]{0,80}?risk_level,)/,
       ],
     )
   ) {
@@ -179,8 +187,10 @@ function riskLevelFromAnnotations(ann) {
 // Section B — src-tauri/src/tools/permission.rs (build_context visibility)
 // ─────────────────────────────────────────────────────────────────────────
 {
-  const section = "tools/permission.rs";
-  const src = SRC("src-tauri/src/tools/permission.rs");
+  const section = "zen-security/approval.rs";
+  // `src/tools/permission.rs` is a re-export shim now; `build_context` itself
+  // lives in the `zen-security` crate's approval module.
+  const src = SRC("src-tauri/crates/zen-security/src/approval.rs");
 
   // The post-process gate in tools/mod.rs calls `permission::build_context`,
   // so `build_context` must not be a `fn` without a `pub` qualifier.
@@ -207,8 +217,10 @@ function riskLevelFromAnnotations(ann) {
 //                                  destructive-annotation override)
 // ─────────────────────────────────────────────────────────────────────────
 {
-  const section = "tools/mod.rs";
-  const src = SRC("src-tauri/src/tools/mod.rs");
+  const section = "zen-tools/registry.rs";
+  // The canonical registry (and its `check_permission` gate) moved into the
+  // `zen-tools` crate; `src/tools/mod.rs` is now app-side wiring.
+  const src = SRC("src-tauri/crates/zen-tools/src/registry.rs");
   let allOk = true;
 
   // Locate check_permission.
@@ -238,12 +250,12 @@ function riskLevelFromAnnotations(ann) {
     // upgrade Allow path: matches! + Confirm { context: ...
     /matches!\(\s*decision\s*,\s*PermissionDecision::Allow\s*\)/,
     /PermissionDecision::Confirm\s*\{[^}]*context\s*:/,
-    // call into permission::build_context. From inside `crate::tools::mod.rs` the
-    // sibling path is just `permission::build_context` (we don't qualify with
-    // `super::` — `permission` is a sibling `pub mod`, so the direct path resolves).
+    // call into `build_context`. Inside the zen-tools crate the helper is
+    // imported from `zen_security::approval`, so the call site is unqualified;
+    // the old app-side spelling was the sibling `permission::build_context`.
     // Anchor on the call site's first argument so we don't accidentally match
-    // any other `permission::build_context` reference in the file.
-    /permission::build_context\(\s*&tool_call\.name/,
+    // any other `build_context` reference in the file.
+    /(?:permission::)?build_context\(\s*&tool_call\.name/,
   ];
     for (const re of checks) {
       if (!re.test(body)) {

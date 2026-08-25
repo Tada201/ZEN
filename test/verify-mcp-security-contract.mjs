@@ -3,13 +3,13 @@ import fs from 'node:fs';
 
 // `client.rs` was split into a `client/` module directory; concatenate every
 // file so the security-shape assertions survive the split.
-const clientDir = new URL('../src-tauri/src/mcp/client/', import.meta.url);
+const clientDir = new URL('../src-tauri/crates/zen-mcp/src/client/', import.meta.url);
 const client = fs
   .readdirSync(clientDir)
   .filter((f) => f.endsWith('.rs'))
   .map((f) => fs.readFileSync(new URL(f, clientDir), 'utf8'))
   .join('\n');
-const config = fs.readFileSync('src-tauri/src/services/mcp_config.rs', 'utf8');
+const config = fs.readFileSync('src-tauri/crates/zen-mcp/src/config.rs', 'utf8');
 const safety = fs.readFileSync('src-tauri/src/tools/url_safety.rs', 'utf8');
 const plan = fs.readFileSync('docs/architecture/mcp-phase-plan.md', 'utf8');
 

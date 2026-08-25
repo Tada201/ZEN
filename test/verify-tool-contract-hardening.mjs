@@ -9,10 +9,10 @@ const pipelineSource = readFileSync(
   new URL("../src-tauri/crates/zen-agent/src/runner/tool_pipeline.rs", import.meta.url),
   "utf8",
 );
-const serviceSource = readFileSync(
-  new URL("../src-tauri/src/services/tool.rs", import.meta.url),
-  "utf8",
-);
+const serviceSource = ["mod.rs", "agent_exec.rs", "approval.rs", "audit.rs", "authorized.rs", "entry.rs", "mutations.rs"]
+  .map((f) => readFileSync(new URL(f === "mod.rs"
+    ? "../src-tauri/src/services/tool.rs"
+    : `../src-tauri/src/services/tool/${f}`, import.meta.url), "utf8")).join("\n");
 const toolsSource = readFileSync(
   new URL("../src-tauri/src/tools/mod.rs", import.meta.url),
   "utf8",

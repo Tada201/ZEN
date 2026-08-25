@@ -64,7 +64,10 @@ const spawn = [
   "child.rs", "completion.rs", "deps.rs", "failure.rs", "messaging.rs",
   "model_select.rs", "outcome.rs", "params.rs", "tool.rs",
 ].map((f) => readFileSync(new URL(`../src-tauri/src/agent/tools/spawn_tools/${f}`, import.meta.url), "utf8")).join("");
-const service = readFileSync(new URL("../src-tauri/src/services/tool.rs", import.meta.url), "utf8");
+const service = ["mod.rs", "agent_exec.rs", "approval.rs", "audit.rs", "authorized.rs", "entry.rs", "mutations.rs"]
+  .map((f) => readFileSync(new URL(f === "mod.rs"
+    ? "../src-tauri/src/services/tool.rs"
+    : `../src-tauri/src/services/tool/${f}`, import.meta.url), "utf8")).join("\n");
 
 for (const field of ["parent_tool_call_id", "sequence", "timestamp", "phase"]) {
   assert(eventBus.includes(`pub ${field}:`), `backend event contract should include ${field}`);

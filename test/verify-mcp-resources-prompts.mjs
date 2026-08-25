@@ -20,10 +20,10 @@ import { strict as assert } from "node:assert";
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
-const resources = src("../src-tauri/src/mcp/resources.rs");
-const rpc = src("../src-tauri/src/mcp/client/rpc.rs");
-const features = src("../src-tauri/src/mcp/client/features.rs");
-const subs = src("../src-tauri/src/mcp/client/subscriptions.rs");
+const resources = src("../src-tauri/crates/zen-mcp/src/resources.rs");
+const rpc = src("../src-tauri/crates/zen-mcp/src/client/rpc.rs");
+const features = src("../src-tauri/crates/zen-mcp/src/client/features.rs");
+const subs = src("../src-tauri/crates/zen-mcp/src/client/subscriptions.rs");
 const commands = src("../src-tauri/src/commands/mcp.rs");
 const plan = src("../docs/architecture/mcp-phase-plan.md");
 

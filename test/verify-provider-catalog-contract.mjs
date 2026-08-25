@@ -2,7 +2,7 @@ import fs from 'node:fs';
 
 const read = (path) => fs.readFileSync(path, 'utf8');
 
-const meta = read('src-tauri/src/llm/provider_meta.rs');
+const meta = read('src-tauri/crates/zen-llm/src/provider_meta.rs');
 const settings = read('src-tauri/src/commands/settings.rs');
 const types = read('src/lib/types/provider.ts');
 const page = read('src/components/settings/Tabs/ProvidersSettings.tsx');

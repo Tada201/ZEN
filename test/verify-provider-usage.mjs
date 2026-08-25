@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-const query = readFileSync('src-tauri/src/db/queries/usage.rs', 'utf8');
+const query = readFileSync('src-tauri/crates/zen-db/src/queries/usage.rs', 'utf8');
 const command = readFileSync('src-tauri/src/commands/settings.rs', 'utf8');
 const api = readFileSync('src/api/providersApi.ts', 'utf8');
 const panel = readFileSync('src/components/settings/Tabs/providers/ProviderUsagePanel.tsx', 'utf8');

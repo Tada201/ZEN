@@ -4,7 +4,7 @@ import { loadSourceModule, closeSourceModuleLoader } from "./test-loader.mjs";
 
 const hydrationSource = readFileSync(new URL("../src/atlas/hooks/chat/useChatQueries.ts", import.meta.url), "utf8");
 const inspectorSource = readFileSync(new URL("../src/atlas/components/right-panel/RunInspector.tsx", import.meta.url), "utf8");
-const rustSource = readFileSync(new URL("../src-tauri/src/db/queries/execution_trace.rs", import.meta.url), "utf8");
+const rustSource = readFileSync(new URL("../src-tauri/crates/zen-db/src/queries/execution_trace.rs", import.meta.url), "utf8");
 assert(hydrationSource.includes("projectNormalizedTraceToMessage"), "reload must use the normalized node adapter");
 assert(hydrationSource.includes("trace.traceVersion < 2"), "legacy trace versions must retain the compatibility path");
 assert(inspectorSource.includes("chatApi.listExecutionTraces"), "Run Inspector must read normalized traces directly");

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 
 const source = readFileSync(
-  new URL('../src-tauri/src/db/queries/artifacts.rs', import.meta.url),
+  new URL('../src-tauri/crates/zen-db/src/queries/artifacts.rs', import.meta.url),
   'utf8',
 );
 

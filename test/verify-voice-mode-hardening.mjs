@@ -12,11 +12,13 @@ const files = {
   voiceDefaults: "src/lib/stores/settings/voiceDefaults.ts",
   events: "src/api/events.ts",
   voiceCommand: "src-tauri/src/commands/voice.rs",
-  runtimeResource: "src-tauri/src/services/runtime_resource.rs",
+  // The speech/TTS/runtime-resource services moved into the `zen-media` crate
+  // during the workspace migration (`tts_service` was flattened to one file).
+  runtimeResource: "src-tauri/crates/zen-media/src/runtime_resource.rs",
   chatCommand: "src-tauri/src/commands/chat/send.rs",
-  ttsService: "src-tauri/src/services/tts_service/mod.rs",
+  ttsService: "src-tauri/crates/zen-media/src/tts_service.rs",
   dependencyCommand: "src-tauri/src/commands/dependency.rs",
-  speechService: "src-tauri/src/services/speech_service/mod.rs",
+  speechService: "src-tauri/crates/zen-media/src/speech_service/mod.rs",
   settingsSchema: "src/lib/stores/settings/schema.ts",
   audioSlice: "src/lib/stores/settings/createAudioSlice.ts",
   ttft: "src/lib/ttft.ts",
@@ -43,6 +45,20 @@ const files = {
 const src = Object.fromEntries(
   Object.entries(files).map(([key, path]) => [key, readFileSync(path, "utf8")]),
 );
+
+// `speech_service` is split into `mod.rs` + `server.rs`; read both as one blob so
+// backend-detection assertions keep anchoring on the same content.
+src.speechService = ["mod", "server"]
+  .map((m) => readFileSync(`src-tauri/crates/zen-media/src/speech_service/${m}.rs`, "utf8"))
+  .join("\n");
+
+// `commands/chat/send.rs` was split into `send/{history,persist,prompt,research,
+// resolve,route,validate}.rs`. Read the parent plus every submodule as one blob
+// so shape assertions that predate the split keep anchoring on the same content.
+src.chatCommand = ["history", "persist", "prompt", "research", "resolve", "route", "validate"]
+  .map((m) => readFileSync(`src-tauri/src/commands/chat/send/${m}.rs`, "utf8"))
+  .concat(src.chatCommand)
+  .join("\n");
 
 const checks = [
   [

@@ -5,16 +5,16 @@ import { readFileSync, readdirSync } from "node:fs";
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 // `client.rs` was split into a `client/` module dir; concatenate every file so
 // symbol-shape assertions survive wherever a symbol landed post-split.
-const clientDir = new URL("../src-tauri/src/mcp/client/", import.meta.url);
+const clientDir = new URL("../src-tauri/crates/zen-mcp/src/client/", import.meta.url);
 const readClientModule = () =>
   readdirSync(clientDir)
     .filter((f) => f.endsWith(".rs"))
     .map((f) => readFileSync(new URL(f, clientDir), "utf8"))
     .join("\n");
-const types = read("src-tauri/src/mcp/types.rs");
+const types = read("src-tauri/crates/zen-mcp/src/types.rs");
 const client = readClientModule();
-const stdio = read("src-tauri/src/mcp/client/stdio_helpers.rs");
-const discovery = read("src-tauri/src/services/mcp_discovery.rs");
+const stdio = read("src-tauri/crates/zen-mcp/src/client/stdio_helpers.rs");
+const discovery = read("src-tauri/crates/zen-mcp/src/discovery.rs");
 
 assert.match(types, /MODERN_PROTOCOL_VERSION\s*:\s*&str\s*=\s*"2026-07-28"/);
 assert.match(types, /DISCOVER\s*:\s*&str\s*=\s*"server\/discover"/);

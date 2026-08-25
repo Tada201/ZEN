@@ -10,9 +10,16 @@ const assistantMessage = read("src/atlas/components/chat/AssistantMessage.tsx");
 const persistProjection = read("src/atlas/hooks/stream/projectStepsForPersistence.ts");
 const assistantLogic = read("src/atlas/components/chat/AssistantMessage.logic.ts");
 const chunkBuffer = read("src/atlas/hooks/stream/chatChunkBuffer.ts");
-const traceQueries = read("src-tauri/src/db/queries/execution_trace.rs");
+// The DB layer moved into the `zen-db` crate during the workspace migration.
+const traceQueries = read("src-tauri/crates/zen-db/src/queries/execution_trace.rs");
 const traceCrud = read("src-tauri/src/commands/chat/crud.rs");
-const sendCommand = read("src-tauri/src/commands/chat/send.rs");
+// `commands/chat/send.rs` was split into `send/{history,persist,prompt,research,
+// resolve,route,validate}.rs`. Read the parent plus every submodule as one blob
+// so shape assertions that predate the split keep anchoring on the same content.
+const sendCommand = ["history", "persist", "prompt", "research", "resolve", "route", "validate"]
+  .map((m) => read(`src-tauri/src/commands/chat/send/${m}.rs`))
+  .concat(read("src-tauri/src/commands/chat/send.rs"))
+  .join("\n");
 const reloadParity = read("test/verify-execution-trace-reload-parity.mjs");
 
 assert(

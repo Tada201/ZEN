@@ -4,7 +4,10 @@ import { strict as assert } from "node:assert";
 const eventBus = readFileSync(new URL("../src-tauri/crates/zen-agent/src/event_bus.rs", import.meta.url), "utf8");
 const toolDispatch = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
   .map((f) => readFileSync(new URL(`../src-tauri/crates/zen-agent/src/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
-const toolService = readFileSync(new URL("../src-tauri/src/services/tool.rs", import.meta.url), "utf8");
+const toolService = ["mod.rs", "agent_exec.rs", "approval.rs", "audit.rs", "authorized.rs", "entry.rs", "mutations.rs"]
+  .map((f) => readFileSync(new URL(f === "mod.rs"
+    ? "../src-tauri/src/services/tool.rs"
+    : `../src-tauri/src/services/tool/${f}`, import.meta.url), "utf8")).join("\n");
 // Phase 11: the approval identity context type moved to the zen-agent port
 // layer; the emit that stamps those keys onto the event stays in the app.
 const approvalPorts = readFileSync(new URL("../src-tauri/crates/zen-agent/src/ports.rs", import.meta.url), "utf8");

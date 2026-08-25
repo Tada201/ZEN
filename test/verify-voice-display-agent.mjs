@@ -9,7 +9,13 @@ const runnerSource = readFileSync(new URL("../src-tauri/crates/zen-agent/src/run
 // Phase 11: the raw `app.listen("board:update")` wiring moved to the app-side
 // BoardPort adapter; the runner now watches the board through the port seam.
 const boardAdapterSource = readFileSync(new URL("../src-tauri/src/services/agent_context.rs", import.meta.url), "utf8");
-const chatSource = readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8");
+// `commands/chat/send.rs` was split into `send/{history,persist,prompt,research,
+// resolve,route,validate}.rs`. Read the parent plus every submodule as one blob
+// so shape assertions that predate the split keep anchoring on the same content.
+const chatSource = ["history", "persist", "prompt", "research", "resolve", "route", "validate"]
+  .map((m) => readFileSync(new URL(`../src-tauri/src/commands/chat/send/${m}.rs`, import.meta.url), "utf8"))
+  .concat(readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8"))
+  .join("\n");
 const boardToolSource = readFileSync(new URL("../src-tauri/src/agent/tools/manage_board.rs", import.meta.url), "utf8");
 const boardListenerSource = readFileSync(new URL("../src/atlas/components/voice/useBoardEventListener.ts", import.meta.url), "utf8");
 const sendMessageSource = readFileSync(new URL("../src/atlas/hooks/chat/useSendMessage.ts", import.meta.url), "utf8");

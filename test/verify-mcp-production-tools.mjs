@@ -5,7 +5,7 @@
 // registration wiring exist and behave, covering the plan's exit-gate
 // states for the tool_list -> tool_info -> tool_exec path:
 //
-//   A) src-tauri/src/mcp/tool_schema.rs exists and exposes:
+//   A) src-tauri/crates/zen-mcp/src/tool_schema.rs exists and exposes:
 //        * validate_tool_schema  (bounded, Draft 2020-12 meta-validation)
 //        * tool_header_extension_is_safe  (x-mcp-header rejection)
 //        * fold_title  (top-level title -> annotations.title)
@@ -57,7 +57,7 @@ function assertAll(section, source, patterns) {
 // ── Section A — mcp/tool_schema.rs ──────────────────────────────────────────
 {
   const section = "mcp/tool_schema.rs";
-  const src = SRC("src-tauri/src/mcp/tool_schema.rs");
+  const src = SRC("src-tauri/crates/zen-mcp/src/tool_schema.rs");
   if (
     assertAll(section, src, [
       /pub\s+fn\s+validate_tool_schema\s*\(/,
@@ -77,7 +77,7 @@ function assertAll(section, source, patterns) {
 // ── Section B — client/sync.rs wiring ───────────────────────────────────────
 {
   const section = "mcp/client/sync.rs";
-  const src = SRC("src-tauri/src/mcp/client/sync.rs");
+  const src = SRC("src-tauri/crates/zen-mcp/src/client/sync.rs");
   if (
     assertAll(section, src, [
       // duplicate dedupe within a server

@@ -1,6 +1,18 @@
 import { readFileSync } from "node:fs";
 
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const read = (path) => {
+  // `services/tool.rs` was split into `services/tool/{agent_exec,approval,audit,
+  // authorized,entry,mutations}.rs`. Read the parent plus every submodule as one
+  // blob so shape assertions that predate the split keep anchoring on the same
+  // content.
+  if (path === "src-tauri/src/services/tool.rs") {
+    return ["agent_exec", "approval", "audit", "authorized", "entry", "mutations"]
+      .map((f) => readFileSync(new URL(`../src-tauri/src/services/tool/${f}.rs`, import.meta.url), "utf8"))
+      .concat(readFileSync(new URL("../src-tauri/src/services/tool.rs", import.meta.url), "utf8"))
+      .join("\n");
+  }
+  return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+};
 const checks = [];
 const check = (label, condition) => checks.push([label, condition]);
 

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 const stream = readFileSync(
-  new URL("../src-tauri/src/llm/openai_compat/stream.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-llm/src/openai_compat/stream.rs", import.meta.url),
   "utf8",
 );
 const packageJson = readFileSync(new URL("../package.json", import.meta.url), "utf8");
