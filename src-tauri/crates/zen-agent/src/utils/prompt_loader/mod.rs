@@ -27,16 +27,39 @@ pub fn load_prompt(name: &str) -> Result<String> {
 
 fn prompt_search_roots() -> Vec<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // The crate now lives two levels below `src-tauri` (Phase 11), so the
-    // historical src-tauri root is grandparent, not parent. Both roots are
-    // kept so dev runs from either cwd still resolve.
-    let crate_root = manifest_dir.parent().unwrap_or(&manifest_dir).to_path_buf();
-    let src_tauri_root = crate_root.parent().unwrap_or(&crate_root).to_path_buf();
-    let current_dir = std::env::current_dir().unwrap_or_else(|_| src_tauri_root.clone());
+    // Prompt files live in `<repo-root>/resources/prompts`. This crate sits at
+    // `<repo-root>/src-tauri/crates/zen-agent`, so the repo root is three
+    // levels up; `src-tauri` itself has no `resources/prompts` directory.
+    let repo_root = manifest_dir
+        .ancestors()
+        .nth(3)
+        .unwrap_or(&manifest_dir)
+        .to_path_buf();
+    let current_dir = std::env::current_dir().unwrap_or_else(|_| repo_root.clone());
 
     vec![
         current_dir.join("resources/prompts"),
-        src_tauri_root.join("resources/prompts"),
+        repo_root.join("resources/prompts"),
         manifest_dir.join("resources/prompts"),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn manifest_relative_root_resolves_repo_prompts() {
+        let roots = prompt_search_roots();
+        assert!(
+            roots.iter().any(|root| root.join("orchestrator_planning.txt").is_file()),
+            "no search root resolves the shipped prompts dir: {:?}",
+            roots
+        );
+    }
+
+    #[test]
+    fn rejects_path_traversal_names() {
+        assert!(load_prompt("../secrets").is_err());
+    }
 }

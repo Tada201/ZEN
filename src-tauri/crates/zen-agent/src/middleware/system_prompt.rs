@@ -192,16 +192,12 @@ impl ContextMiddleware for SystemPromptMiddleware {
             if let Some(session) = self.ctx.graph_sessions.snapshot(&session_id) {
                 let variables_view: Vec<(String, f64)> = session.variables.clone();
                 let header = format!(
-                    "
-
-### Current Graph State (Session: {})
-                     Expressions: {}
-                     Variables: {:?}
-                     Viewport: [{},{}] x [{},{}]
-                     Issues: {}
-                     Version: {}
-
-",
+                    "\n\n### Current Graph State (Session: {})\n\
+                     Expressions: {}\n\
+                     Variables: {:?}\n\
+                     Viewport: [{},{}] x [{},{}]\n\
+                     Issues: {}\n\
+                     Version: {}\n\n",
                     session_id,
                     session.expressions.len(),
                     variables_view,
