@@ -63,7 +63,7 @@ pub async fn fetch_satellites(tx: &Sender<String>) -> Result<Vec<Satellite>> {
             // Record failed attempt to trigger backoff
             let mut cache = cache_lock.write().await;
             cache.last_fetch = Utc::now();
-            return Err(anyhow::anyhow!("Satellite API error: {}", status));
+            return Err(anyhow::anyhow!("Satellite API error: {status}"));
         }
 
         let response = response_res.text().await?;

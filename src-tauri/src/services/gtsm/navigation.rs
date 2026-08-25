@@ -272,7 +272,7 @@ async fn here_route(
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!("HERE API error {}: {}", status, body));
+        return Err(anyhow!("HERE API error {status}: {body}"));
     }
 
     let res: HereResponse = response.json().await?;

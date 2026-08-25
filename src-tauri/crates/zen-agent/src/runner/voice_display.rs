@@ -113,11 +113,7 @@ impl Runner {
                 .filter(|context| !context.trim().is_empty())
                 .unwrap_or("{\"version\":1,\"board\":null,\"widgets\":[]}");
             let task = format!(
-                "The ORIGINAL USER REQUEST is authoritative and must be handled completely. You MUST execute manage_board at least once. A prose-only response is a failure. Render any requested visual, drawing, board clear, replacement, or edit with manage_board, then stop. The main-agent response is supporting context only and may be a short spoken wait message. Recent tool evidence contains data found by the main pipeline and may include URLs. Do not output prose.\n\nBOARD EDITING RULES:\n- CURRENT BOARD MANIFEST lists stable widget IDs, coordinates, occupied cells, and pixel cost.\n- The board is a zero-based 4x4 grid: cells 0..15, row=floor(cell/4), column=cell%4.\n- Widget IDs identify objects. Always update, remove, or focus using the exact existing widget ID, never a cell number.\n- For a new object, call add and choose free cells from occupiedCells.\n- Use set when the user says delete/clear/replace the old board and requests new content in the same turn.\n- For YouTube or video requests, use a video block with the exact safe URL from RECENT TOOL EVIDENCE. Never invent a URL.\n- When the user asks to show, open, or enable their camera, add or update a block with kind camera. The widget asks the user for permission; never claim the camera is already active.\n- Use cell or row+column with col_span and row_span from 1..4. Never cross row or column 3.\n\nCURRENT BOARD MANIFEST:\n{}\n\nORIGINAL USER REQUEST:\n{}\n\nMAIN AGENT RESPONSE:\n{}\n\nRECENT TOOL EVIDENCE:\n{}",
-                board_context,
-                user_request,
-                response,
-                tool_evidence,
+                "The ORIGINAL USER REQUEST is authoritative and must be handled completely. You MUST execute manage_board at least once. A prose-only response is a failure. Render any requested visual, drawing, board clear, replacement, or edit with manage_board, then stop. The main-agent response is supporting context only and may be a short spoken wait message. Recent tool evidence contains data found by the main pipeline and may include URLs. Do not output prose.\n\nBOARD EDITING RULES:\n- CURRENT BOARD MANIFEST lists stable widget IDs, coordinates, occupied cells, and pixel cost.\n- The board is a zero-based 4x4 grid: cells 0..15, row=floor(cell/4), column=cell%4.\n- Widget IDs identify objects. Always update, remove, or focus using the exact existing widget ID, never a cell number.\n- For a new object, call add and choose free cells from occupiedCells.\n- Use set when the user says delete/clear/replace the old board and requests new content in the same turn.\n- For YouTube or video requests, use a video block with the exact safe URL from RECENT TOOL EVIDENCE. Never invent a URL.\n- When the user asks to show, open, or enable their camera, add or update a block with kind camera. The widget asks the user for permission; never claim the camera is already active.\n- Use cell or row+column with col_span and row_span from 1..4. Never cross row or column 3.\n\nCURRENT BOARD MANIFEST:\n{board_context}\n\nORIGINAL USER REQUEST:\n{user_request}\n\nMAIN AGENT RESPONSE:\n{response}\n\nRECENT TOOL EVIDENCE:\n{tool_evidence}",
             );
             let messages = vec![ChatMessage {
                 role: "user".to_string(),
@@ -127,7 +123,7 @@ impl Runner {
                 tool_calls: None,
                 tool_call_id: None,
             }];
-            let synthetic_chat_id = format!("voice-display:{}", source_chat_id);
+            let synthetic_chat_id = format!("voice-display:{source_chat_id}");
             let provider_name = configured_provider
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| "ollama".to_string());
@@ -186,10 +182,7 @@ impl Runner {
                 let retry_messages = vec![ChatMessage {
                     role: "user".to_string(),
                     content: format!(
-                        "Convert the request below into exactly one raw JSON object matching the manage_board input schema. Output JSON only: no markdown fence, prose, tool call, or explanation. Use update with an existing ID for edits, add for a new object, and set only for board replacement. If the request says delete, clear, replace, fresh, or new board while requesting new content, use set with blocks. Preserve unrelated widgets otherwise. For YouTube, use kind video with the exact URL from TOOL EVIDENCE; never use html or gen_ui for video playback. For a drawing, use an svg block with safe SVG markup. Exact new-drawing example: {{\"action\":\"add\",\"block\":{{\"id\":\"drawing\",\"kind\":\"svg\",\"title\":\"Drawing\",\"markup\":\"<svg viewBox='0 0 400 300' xmlns='http://www.w3.org/2000/svg'>...</svg>\",\"layout\":{{\"width\":\"wide\",\"order\":0}}}}}}.\nCURRENT BOARD MANIFEST:\n{}\nREQUEST:\n{}\nTOOL EVIDENCE:\n{}",
-                        board_context,
-                        user_request,
-                        tool_evidence,
+                        "Convert the request below into exactly one raw JSON object matching the manage_board input schema. Output JSON only: no markdown fence, prose, tool call, or explanation. Use update with an existing ID for edits, add for a new object, and set only for board replacement. If the request says delete, clear, replace, fresh, or new board while requesting new content, use set with blocks. Preserve unrelated widgets otherwise. For YouTube, use kind video with the exact URL from TOOL EVIDENCE; never use html or gen_ui for video playback. For a drawing, use an svg block with safe SVG markup. Exact new-drawing example: {{\"action\":\"add\",\"block\":{{\"id\":\"drawing\",\"kind\":\"svg\",\"title\":\"Drawing\",\"markup\":\"<svg viewBox='0 0 400 300' xmlns='http://www.w3.org/2000/svg'>...</svg>\",\"layout\":{{\"width\":\"wide\",\"order\":0}}}}}}.\nCURRENT BOARD MANIFEST:\n{board_context}\nREQUEST:\n{user_request}\nTOOL EVIDENCE:\n{tool_evidence}",
                     ),
                     reasoning_details: None,
                     images: None,
@@ -688,8 +681,7 @@ fn normalize_block_aliases(block: &mut serde_json::Value) {
             let quoted = serde_json::to_string(label)
                 .unwrap_or_else(|_| "\"Generated content preview\"".to_string());
             format!(
-                "title = Text({}, variant=\"heading\")\nbody = Text(\"Example content generated for the requested board.\", variant=\"body\")\nroot = Stack(children=[title, body], gap=4)",
-                quoted
+                "title = Text({quoted}, variant=\"heading\")\nbody = Text(\"Example content generated for the requested board.\", variant=\"body\")\nroot = Stack(children=[title, body], gap=4)"
             )
         };
         object.insert("content".to_string(), serde_json::json!(content));
@@ -725,8 +717,7 @@ fn simple_shape_svg(shape: &str) -> Option<String> {
         _ => return None,
     };
     Some(format!(
-        "<svg viewBox='0 0 400 300' xmlns='http://www.w3.org/2000/svg'>{}</svg>",
-        element
+        "<svg viewBox='0 0 400 300' xmlns='http://www.w3.org/2000/svg'>{element}</svg>"
     ))
 }
 

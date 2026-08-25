@@ -324,7 +324,7 @@ fn summarize_prompt_content(content: Option<&Value>) -> String {
                 if !out.is_empty() {
                     out.push('\n');
                 }
-                out.push_str(&format!("[{}: {}]", kind, uri));
+                out.push_str(&format!("[{kind}: {uri}]"));
             }
         }
     }

@@ -80,7 +80,7 @@ impl zen_tools::Tool<tauri::AppHandle> for RunCommandTool {
     ) -> Result<ToolOutput, ToolError> {
         let args: RunCommandArgs =
             serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
-                details: format!("Invalid run_command arguments: {}", e),
+                details: format!("Invalid run_command arguments: {e}"),
             })?;
 
         if args.command.trim().is_empty() {
@@ -95,13 +95,13 @@ impl zen_tools::Tool<tauri::AppHandle> for RunCommandTool {
             .workspace_for_chat(&chat_id)
             .await
             .map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Unable to resolve session workspace: {}", e),
+                message: format!("Unable to resolve session workspace: {e}"),
             })?;
 
         let resolved_cwd = if let Some(cwd) = args.cwd.as_deref() {
             crate::workspace::resolve_workspace_path(&workspace, cwd).map_err(|e| {
                 ToolError::PermissionDenied {
-                    reason: format!("Workspace violation: {}", e),
+                    reason: format!("Workspace violation: {e}"),
                 }
             })?
         } else {

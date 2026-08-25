@@ -155,8 +155,7 @@
         );
         assert!(
             matches!(decision, PermissionDecision::Allow),
-            "expected Allow for path inside plans_root, got {:?}",
-            decision
+            "expected Allow for path inside plans_root, got {decision:?}"
         );
 
         std::fs::remove_dir_all(&dir).ok();
@@ -174,7 +173,7 @@
 
         let settings = ToolPermissions {
             permission_mode: "plan_mode".to_string(),
-            plans_root: Some(plans.clone()),
+            plans_root: Some(plans),
             ..ToolPermissions::default()
         };
 
@@ -193,8 +192,7 @@
         );
         assert!(
             matches!(decision, PermissionDecision::Deny { .. }),
-            "expected Deny for {:?}, got {:?}",
-            evil, decision
+            "expected Deny for {evil:?}, got {decision:?}"
         );
 
         std::fs::remove_dir_all(&dir).ok();
@@ -229,8 +227,7 @@
         );
         assert!(
             matches!(decision, PermissionDecision::Deny { .. }),
-            "expected Deny for {:#?}, got {:?}",
-            traversal, decision
+            "expected Deny for {traversal:#?}, got {decision:?}"
         );
 
         std::fs::remove_dir_all(&dir).ok();
@@ -324,8 +321,7 @@
         );
         assert!(
             matches!(decision, PermissionDecision::Deny { .. }),
-            "expected Deny for relative path with absolute plans_root, got {:?}",
-            decision
+            "expected Deny for relative path with absolute plans_root, got {decision:?}"
         );
     }
 

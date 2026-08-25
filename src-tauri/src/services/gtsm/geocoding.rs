@@ -61,8 +61,7 @@ pub async fn search(query: &str, limit: u8) -> Result<Vec<GeocodingResult>> {
 /// Reverse geocode: coordinates → place name
 pub async fn reverse(lat: f64, lon: f64) -> Result<GeocodingResult> {
     let url = format!(
-        "https://nominatim.openstreetmap.org/reverse?lat={}&lon={}&format=json",
-        lat, lon
+        "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
     );
 
     let client = crate::utils::gtsm_http_client();

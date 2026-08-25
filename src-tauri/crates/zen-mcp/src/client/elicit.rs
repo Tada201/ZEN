@@ -85,8 +85,7 @@ impl McpClient {
             params = build_retry_params(params, responses, parsed.request_state.as_ref());
         }
         Err(format!(
-            "MCP {} did not complete after {} input rounds",
-            method, MAX_MRTR_ROUNDS
+            "MCP {method} did not complete after {MAX_MRTR_ROUNDS} input rounds"
         ))
     }
 
@@ -105,13 +104,13 @@ impl McpClient {
             // A caller cancellation mid-round aborts the whole logical request
             // rather than prompting for input nobody is waiting on anymore.
             if cancel.is_some_and(CancellationToken::is_cancelled) {
-                return Err(format!("MCP {} cancelled during input", server_name));
+                return Err(format!("MCP {server_name} cancelled during input"));
             }
             // A request whose *method* we never declared support for is a
             // protocol violation; refuse the whole call rather than guess.
             if let Some(reason) = &req.blocked {
                 if req.fatal {
-                    return Err(format!("MCP server '{}': {}", server_name, reason));
+                    return Err(format!("MCP server '{server_name}': {reason}"));
                 }
                 // Credential form / invalid url: decline without prompting.
                 warn!(server = %server_name, key = %req.key, "MCP elicitation auto-declined: {}", reason);
@@ -162,7 +161,7 @@ impl McpClient {
             "timeoutSecs": ELICIT_TIMEOUT_SECS,
         });
         {
-            let mut pending = self.elicitations.lock().unwrap();
+            let mut pending = self.lock_elicitations();
             pending.insert(
                 request_id.clone(),
                 PendingElicit {
@@ -172,8 +171,8 @@ impl McpClient {
             );
         }
         if let Err(e) = ui.sink.emit_result("mcp:elicitation:request", &payload) {
-            self.elicitations.lock().unwrap().remove(&request_id);
-            return Err(format!("failed to surface MCP elicitation: {}", e));
+            self.lock_elicitations().remove(&request_id);
+            return Err(format!("failed to surface MCP elicitation: {e}"));
         }
 
         let timeout = tokio::time::sleep(std::time::Duration::from_secs(ELICIT_TIMEOUT_SECS));
@@ -219,7 +218,7 @@ impl McpClient {
     /// the UI to dismiss its modal so a stale prompt can't be submitted into a
     /// call that already moved on. Returns the `cancel` result for the server.
     fn abandon_elicitation(&self, ui: &crate::ui::UiBridge, request_id: &str) -> Value {
-        self.elicitations.lock().unwrap().remove(request_id);
+        self.lock_elicitations().remove(request_id);
         let _ = ui.sink.emit_result(
             "mcp:elicitation:close",
             &serde_json::json!({ "requestId": request_id }),
@@ -232,7 +231,7 @@ impl McpClient {
     /// command layer when the frontend (re)subscribes.
     pub fn replay_elicitations(&self, ui: &crate::ui::UiBridge) {
         let payloads: Vec<Value> = {
-            let pending = self.elicitations.lock().unwrap();
+            let pending = self.lock_elicitations();
             pending.values().map(|p| p.payload.clone()).collect()
         };
         for payload in payloads {
@@ -245,7 +244,7 @@ impl McpClient {
     /// elicitation is awaiting this id (already resolved, timed out, or stale).
     pub fn resolve_elicitation(&self, request_id: &str, value: Value) -> Result<(), String> {
         let sender = {
-            let mut pending = self.elicitations.lock().unwrap();
+            let mut pending = self.lock_elicitations();
             pending.remove(request_id)
         };
         match sender {

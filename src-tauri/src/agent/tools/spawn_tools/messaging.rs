@@ -26,8 +26,7 @@ pub async fn send_message_to_subagent(
         Ok(())
     } else {
         Err(anyhow::anyhow!(
-            "No running sub-agent with spawn_id {}",
-            spawn_id
+            "No running sub-agent with spawn_id {spawn_id}"
         ))
     }
 }

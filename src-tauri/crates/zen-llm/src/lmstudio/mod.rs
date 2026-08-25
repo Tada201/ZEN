@@ -48,7 +48,7 @@ impl LmStudioProvider {
                 .timeout(std::time::Duration::from_secs(60))
                 .connect_timeout(std::time::Duration::from_secs(10))
                 .build()
-                .expect("Failed to build LM Studio HTTP client"),
+                .unwrap_or_else(|e| panic!("Failed to build LM Studio HTTP client: {e}")),
             base_url: base_url.trim_end_matches('/').to_string(),
             model_archs: std::sync::RwLock::new(std::collections::HashMap::new()),
         }

@@ -287,7 +287,7 @@ impl McpClient {
 
                 // Step 3: persist endpoint for later dispatch
                 {
-                    let mut endpoints = self.external_endpoints.lock().unwrap();
+                    let mut endpoints = self.lock_external_endpoints();
                     endpoints.insert(
                         server_name.clone(),
                         ServerEndpoint::Http(http_endpoint.clone()),
@@ -346,7 +346,7 @@ impl McpClient {
 
                 // Step 3: persist endpoint for later dispatch
                 {
-                    let mut endpoints = self.external_endpoints.lock().unwrap();
+                    let mut endpoints = self.lock_external_endpoints();
                     endpoints.insert(
                         server_name.clone(),
                         ServerEndpoint::Stdio(stdio_endpoint.clone()),

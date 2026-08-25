@@ -144,8 +144,7 @@ impl super::LmStudioProvider {
             let body = resp.text().await.unwrap_or_default();
             error!(status = %status, body = %body, "LM Studio chat request failed");
             return Err(ZenError::Custom(format!(
-                "LM Studio returned {}: {}",
-                status, body
+                "LM Studio returned {status}: {body}"
             )));
         }
 
@@ -340,8 +339,7 @@ impl super::LmStudioProvider {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             return Err(ZenError::Custom(format!(
-                "LM Studio embedding failed ({}): {}",
-                status, body
+                "LM Studio embedding failed ({status}): {body}"
             )));
         }
 

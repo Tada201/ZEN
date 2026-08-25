@@ -55,10 +55,10 @@ pub enum ToolError {
 impl std::fmt::Display for ToolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ToolError::PermissionDenied { reason } => write!(f, "Permission denied: {}", reason),
-            ToolError::InvalidArguments { details } => write!(f, "Invalid arguments: {}", details),
-            ToolError::ExecutionFailed { message } => write!(f, "Execution failed: {}", message),
-            ToolError::NotFound { name } => write!(f, "Tool not found: {}", name),
+            ToolError::PermissionDenied { reason } => write!(f, "Permission denied: {reason}"),
+            ToolError::InvalidArguments { details } => write!(f, "Invalid arguments: {details}"),
+            ToolError::ExecutionFailed { message } => write!(f, "Execution failed: {message}"),
+            ToolError::NotFound { name } => write!(f, "Tool not found: {name}"),
             ToolError::AwaitingConfirmation { .. } => write!(f, "Awaiting user confirmation"),
         }
     }
@@ -245,7 +245,7 @@ impl<A: Send + Sync + 'static> ToolRegistry<A> {
         let def = tool.definition();
         self.tools.insert(name.clone(), tool);
         self.known_tool_risks.insert(name.clone(), risk_level);
-        self.known_tool_definitions.insert(name.clone(), def);
+        self.known_tool_definitions.insert(name, def);
     }
 
     /// Register a tool from an external MCP server. Uses a `{server}:{name}`
@@ -256,7 +256,7 @@ impl<A: Send + Sync + 'static> ToolRegistry<A> {
             prefixed.clone(),
             def.risk_level.unwrap_or(RiskLevel::Medium),
         );
-        self.known_tool_definitions.insert(prefixed.clone(), def);
+        self.known_tool_definitions.insert(prefixed, def);
     }
 
     pub fn register_legacy_tool(&mut self, tool: Arc<dyn AgentTool<A>>) {

@@ -43,7 +43,7 @@ impl std::fmt::Display for FetchError {
         match self {
             FetchError::Safety(s)
             | FetchError::Transport(s)
-            | FetchError::Content(s) => write!(f, "{}", s),
+            | FetchError::Content(s) => write!(f, "{s}"),
         }
     }
 }
@@ -52,8 +52,7 @@ async fn read_capped_text(response: reqwest::Response) -> Result<String, String>
     if let Some(content_length) = response.content_length() {
         if content_length > MAX_DIRECT_RESPONSE_BYTES as u64 {
             return Err(format!(
-                "Response too large: {} bytes exceeds {} byte limit",
-                content_length, MAX_DIRECT_RESPONSE_BYTES
+                "Response too large: {content_length} bytes exceeds {MAX_DIRECT_RESPONSE_BYTES} byte limit"
             ));
         }
     }
@@ -62,17 +61,16 @@ async fn read_capped_text(response: reqwest::Response) -> Result<String, String>
     let mut bytes = Vec::new();
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("Failed to read response body: {}", e))?;
+        let chunk = chunk.map_err(|e| format!("Failed to read response body: {e}"))?;
         if bytes.len() + chunk.len() > MAX_DIRECT_RESPONSE_BYTES {
             return Err(format!(
-                "Response too large: exceeded {} byte limit",
-                MAX_DIRECT_RESPONSE_BYTES
+                "Response too large: exceeded {MAX_DIRECT_RESPONSE_BYTES} byte limit"
             ));
         }
         bytes.extend_from_slice(&chunk);
     }
 
-    String::from_utf8(bytes).map_err(|e| format!("Response body is not valid UTF-8: {}", e))
+    String::from_utf8(bytes).map_err(|e| format!("Response body is not valid UTF-8: {e}"))
 }
 
 async fn fetch_public_url(client: &reqwest::Client, start_url: Url) -> Result<String, FetchError> {
@@ -92,13 +90,12 @@ async fn fetch_public_url(client: &reqwest::Client, start_url: Url) -> Result<St
         let response = request
             .send()
             .await
-            .map_err(|e| FetchError::Transport(format!("Fetch failed: {}", e)))?;
+            .map_err(|e| FetchError::Transport(format!("Fetch failed: {e}")))?;
 
         if response.status().is_redirection() {
             if redirect_count == MAX_REDIRECTS {
                 return Err(FetchError::Safety(format!(
-                    "Too many redirects, max is {}",
-                    MAX_REDIRECTS
+                    "Too many redirects, max is {MAX_REDIRECTS}"
                 )));
             }
 
@@ -127,8 +124,7 @@ async fn fetch_public_url(client: &reqwest::Client, start_url: Url) -> Result<St
     }
 
     Err(FetchError::Safety(format!(
-        "Too many redirects, max is {}",
-        MAX_REDIRECTS
+        "Too many redirects, max is {MAX_REDIRECTS}"
     )))
 }
 
@@ -152,10 +148,10 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
     //    uses. A safety failure here means the URL is forbidden — never
     //    fall back to a different transport.
     let validated = validate_public_http_url(url)
-        .map_err(|e| format!("Fallback URL safety check failed: {}", e))?;
+        .map_err(|e| format!("Fallback URL safety check failed: {e}"))?;
     validate_url_dns_safety(&validated)
         .await
-        .map_err(|e| format!("Fallback DNS safety check failed: {}", e))?;
+        .map_err(|e| format!("Fallback DNS safety check failed: {e}"))?;
 
     // 2. Fetch the content ourselves using the pinned-address client.
     //    This is the same SSRF-safe fetch the direct path uses — Zen
@@ -164,7 +160,7 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
     let pinned_client = crate::utils::public_no_redirect_http_client();
     let raw_html = fetch_public_url(pinned_client, validated)
         .await
-        .map_err(|e| format!("Fallback pinned fetch failed: {}", e))?;
+        .map_err(|e| format!("Fallback pinned fetch failed: {e}"))?;
 
     // 3. Send the *already-fetched content* to 9Router for text
     //    extraction only. The URL is included only as metadata so the
@@ -176,7 +172,7 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
     let db_pool = state
         .db()
         .await
-        .map_err(|e| format!("Failed to get database pool: {}", e))?;
+        .map_err(|e| format!("Failed to get database pool: {e}"))?;
 
     let nine_router_base_url = state
         .settings_manager
@@ -199,7 +195,7 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
         &nine_router_base_url,
         !nine_router_api_key.is_empty(),
     )
-    .map_err(|e| format!("9Router endpoint auth safety check failed: {}", e))?;
+    .map_err(|e| format!("9Router endpoint auth safety check failed: {e}"))?;
 
     let client = crate::utils::default_http_client();
     let models_url = format!("{}/models", nine_router_base_url.trim_end_matches('/'));
@@ -288,7 +284,7 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
     let resp = post_req
         .send()
         .await
-        .map_err(|e| format!("Failed to reach 9Router chat completion: {}", e))?;
+        .map_err(|e| format!("Failed to reach 9Router chat completion: {e}"))?;
 
     if !resp.status().is_success() {
         return Err(format!(
@@ -300,7 +296,7 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
     let text_content = resp
         .text()
         .await
-        .map_err(|e| format!("Failed to read 9Router response text: {}", e))?;
+        .map_err(|e| format!("Failed to read 9Router response text: {e}"))?;
 
     // Parse the chat completions JSON
     #[derive(serde::Deserialize)]
@@ -317,7 +313,7 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
     }
 
     let completion: ChatCompletion = serde_json::from_str(&text_content)
-        .map_err(|e| format!("Failed to parse chat completion structure: {}", e))?;
+        .map_err(|e| format!("Failed to parse chat completion structure: {e}"))?;
 
     let raw_content = completion
         .choices
@@ -368,7 +364,7 @@ impl zen_tools::Tool<tauri::AppHandle> for WebFetchTool {
     ) -> Result<ToolOutput, ToolError> {
         let parsed_args: WebFetchArgs =
             serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
-                details: format!("Invalid arguments: {}", e),
+                details: format!("Invalid arguments: {e}"),
             })?;
 
         let url = parsed_args.url.trim();
@@ -386,16 +382,14 @@ impl zen_tools::Tool<tauri::AppHandle> for WebFetchTool {
                 // transport would defeat the safety boundary.
                 return Err(ToolError::InvalidArguments {
                     details: format!(
-                        "URL safety check failed (no fallback used): {}",
-                        reason
+                        "URL safety check failed (no fallback used): {reason}"
                     ),
                 });
             }
             Err(err) => nine_router_fetch_fallback(&app, url).await.map_err(|e| {
                 ToolError::ExecutionFailed {
                     message: format!(
-                        "Direct fetch failed: {}. Fallback fetch failed: {}",
-                        err, e
+                        "Direct fetch failed: {err}. Fallback fetch failed: {e}"
                     ),
                 }
             })?,
@@ -447,7 +441,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for WebFetchTool {
         zen_tools::Tool::<tauri::AppHandle>::execute(self, app, chat_id, input)
             .await
             .map(|output| output.content)
-            .map_err(|e| anyhow::anyhow!("{}", e))
+            .map_err(|e| anyhow::anyhow!("{e}"))
     }
 }
 

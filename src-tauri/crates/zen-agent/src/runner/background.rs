@@ -206,7 +206,7 @@ impl Runner {
             let name_part = m
                 .tool_call_id
                 .as_ref()
-                .map(|id| format!(" (tool: {})", id))
+                .map(|id| format!(" (tool: {id})"))
                 .unwrap_or_default();
             text.push_str(&format!("{}{} : {}\n", m.role, name_part, m.content));
         }
@@ -215,13 +215,11 @@ impl Runner {
             "Please provide a concise, high-level summary of the following conversation history. \
              Focus on the user's intent, the key questions asked, decisions made, and important details. \
              Do not include details about specific file tools used unless crucial. \
-             Keep the summary brief and under 3-4 sentences.\n\nConversation:\n{}",
-            text
+             Keep the summary brief and under 3-4 sentences.\n\nConversation:\n{text}"
         );
         if let Some(focus) = instructions.map(str::trim).filter(|s| !s.is_empty()) {
             prompt.push_str(&format!(
-                "\n\nThe user requested this compaction with the following focus instructions — prioritize preserving these aspects:\n{}",
-                focus
+                "\n\nThe user requested this compaction with the following focus instructions — prioritize preserving these aspects:\n{focus}"
             ));
         }
 

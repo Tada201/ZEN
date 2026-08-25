@@ -110,6 +110,7 @@ pub enum CompactionKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CompactionEvent {
     pub kind: CompactionKind,
     pub pre_tokens: usize,

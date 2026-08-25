@@ -84,13 +84,13 @@ impl zen_tools::AgentTool<tauri::AppHandle> for RunCommandTool {
         let workspace = state
             .workspace_for_chat(&chat_id)
             .await
-            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {e}"))?;
 
         // Resolve and validate cwd is within workspace (if provided)
         let resolved_cwd = if let Some(ref dir) = cwd {
             Some(
                 resolve_workspace_path(&workspace, dir)
-                    .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?,
+                    .map_err(|e| anyhow::anyhow!("Workspace violation: {e}"))?,
             )
         } else {
             // Default to workspace root
@@ -116,8 +116,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for RunCommandTool {
                 caller: "run_command_tool".to_string(),
                 target: Some(command.clone()),
                 reason: Some(format!(
-                    "agent command execution requested with timeout {}ms",
-                    timeout_ms
+                    "agent command execution requested with timeout {timeout_ms}ms"
                 )),
             })
             .await;

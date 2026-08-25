@@ -100,6 +100,19 @@ pub fn split_frontmatter(content: &str) -> Option<(&str, &str)> {
 /// - `# comments` (skipped)
 ///
 /// Anything more complex fails closed: returns Ok with what was parsed.
+/// Strip one pair of matching surrounding YAML quotes from a scalar value,
+/// so `key: "/rcf"` and `key: /rcf` parse identically.
+fn unquote(s: &str) -> &str {
+    if s.len() >= 2
+        && ((s.starts_with('"') && s.ends_with('"'))
+            || (s.starts_with('\'') && s.ends_with('\'')))
+    {
+        &s[1..s.len() - 1]
+    } else {
+        s
+    }
+}
+
 pub fn parse_frontmatter(fm: &str) -> SkillFrontmatter {
     let mut out = SkillFrontmatter::default();
     for raw_line in fm.lines() {
@@ -111,7 +124,7 @@ pub fn parse_frontmatter(fm: &str) -> SkillFrontmatter {
             continue;
         };
         let key = k.trim();
-        let value = v.trim();
+        let value = unquote(v.trim());
         match key {
             "name" => out.name = Some(value.to_string()),
             "description" => out.description = Some(value.to_string()),

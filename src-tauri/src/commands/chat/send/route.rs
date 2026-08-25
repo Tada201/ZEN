@@ -77,7 +77,7 @@ pub(super) async fn try_orchestrator(
     );
     let cancel_tokens_clone = cancel_tokens;
     let pause_controls_clone = pause_controls;
-    let app_error = app.clone();
+    let app_error = app;
     let token_for_error = token_clone.clone();
     tokio::spawn(async move {
         let result = orchestrator

@@ -49,7 +49,7 @@ pub fn build_context(
     // Generate suggested always-allow patterns
     let mut suggested = Vec::new();
     // Suggest: always allow this exact tool
-    suggested.push(format!("tool:{}", tool_name));
+    suggested.push(format!("tool:{tool_name}"));
     // If args contain a file target, suggest the parent directory pattern.
     // Read both `file_path` (used by `write_file`/`edit_file`) and `path`
     // (older tools / config-style callers) so the suggested pattern matches

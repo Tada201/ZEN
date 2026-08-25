@@ -7,14 +7,14 @@ pub fn load_prompt(name: &str) -> Result<String> {
         .chars()
         .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
     {
-        anyhow::bail!("Invalid prompt name: {}", name);
+        anyhow::bail!("Invalid prompt name: {name}");
     }
 
     for base in prompt_search_roots() {
-        let path = base.join(format!("{}.txt", name));
+        let path = base.join(format!("{name}.txt"));
         if path.is_file() {
             return fs::read_to_string(&path)
-                .with_context(|| format!("Failed to read prompt file: {:?}", path));
+                .with_context(|| format!("Failed to read prompt file: {path:?}"));
         }
     }
 
@@ -53,8 +53,7 @@ mod tests {
         let roots = prompt_search_roots();
         assert!(
             roots.iter().any(|root| root.join("orchestrator_planning.txt").is_file()),
-            "no search root resolves the shipped prompts dir: {:?}",
-            roots
+            "no search root resolves the shipped prompts dir: {roots:?}"
         );
     }
 

@@ -49,8 +49,6 @@ Return ONLY JSON:
 }}
 
 When clarification is required, include 1-3 concise questions and set needs_clarification to true."#,
-            current_date = current_date,
-            question = question,
         );
         let Ok(response) = self.call_llm(&prompt, 0.0, 700, 30).await else {
             return ResearchScopeAssessment { brief: fallback, clarification_questions: Vec::new() };
@@ -106,8 +104,6 @@ Example:
   "key_topics": ["economy", "healthcare", "safety", "culture"],
   "success_criteria": "A balanced comparison covering cost, quality of life, and practical considerations."
 }}"#,
-            question = question,
-            scope_context = scope_context,
         );
 
         let response = self.call_llm(&prompt, 0.3, 1024, 30).await;
@@ -142,8 +138,7 @@ Categories: product, comparison, howto, factcheck, landscape
 
 Question: {question}
 
-Respond with ONLY the category name, nothing else."#,
-            question = question
+Respond with ONLY the category name, nothing else."#
         );
 
         let result = self.call_llm(&prompt, 0.0, 20, 15).await;
@@ -272,11 +267,6 @@ If the plan is still on track and needs no changes, output: {{"status": "unchang
 Do NOT make gratuitous changes — only revise the plan if there's a clear reason based on the findings. If the findings align with the existing plan, return unchanged.
 
 Respond with ONLY the JSON object, nothing else."#,
-            question = question,
-            scope_context = scope_context,
-            plan_str = plan_str,
-            round_num = round_num,
-            report_str = report_str,
         );
 
         let response = match self.call_llm(&prompt, 0.3, 1024, 30).await {
@@ -314,8 +304,7 @@ Respond with ONLY the JSON object, nothing else."#,
                     self.emit_phase(
                         "planning",
                         &format!(
-                            "Round {}: Research plan revised based on new findings",
-                            round_num
+                            "Round {round_num}: Research plan revised based on new findings"
                         ),
                         "completed",
                     );

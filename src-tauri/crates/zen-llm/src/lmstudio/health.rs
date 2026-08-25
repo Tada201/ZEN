@@ -32,7 +32,7 @@ impl super::LmStudioProvider {
                 // If it's localhost, try 127.0.0.1 as a last resort to bypass IPv6 issues
                 if self.base_url.contains("localhost") {
                     let alt_base = self.base_url.replace("localhost", "127.0.0.1");
-                    let alt_url = format!("{}/v1/models", alt_base);
+                    let alt_url = format!("{alt_base}/v1/models");
                     debug!(url = %alt_url, "Trying 127.0.0.1 fallback for LM Studio");
                     match self.client.get(&alt_url).send().await {
                         Ok(resp) => resp.status().is_success(),

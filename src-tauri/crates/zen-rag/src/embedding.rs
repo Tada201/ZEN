@@ -116,7 +116,7 @@ impl EmbeddingModel for OllamaEmbedding {
         if !response.status().is_success() {
             let status = response.status();
             let error = response.text().await.unwrap_or_default();
-            anyhow::bail!("Ollama embedding API error ({}): {}", status, error);
+            anyhow::bail!("Ollama embedding API error ({status}): {error}");
         }
 
         let result: OllamaEmbeddingResponse = response.json().await?;
@@ -201,7 +201,7 @@ impl CandleEmbedding {
 
         // Load tokenizer
         let tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path)
-            .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {e}"))?;
 
         // Determine device (CUDA if available, else CPU)
         let device = candle_core::Device::cuda_if_available(0)?;
@@ -259,7 +259,7 @@ impl CandleEmbedding {
         let encoding = self
             .tokenizer
             .encode(text, true)
-            .map_err(|e| anyhow::anyhow!("Failed to tokenize input: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to tokenize input: {e}"))?;
 
         let ids: Vec<u32> = encoding.get_ids().to_vec();
         let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
@@ -449,7 +449,7 @@ pub async fn download_default_model(cache_dir: Option<PathBuf>) -> Result<PathBu
             .get(*url)
             .send()
             .await
-            .context(format!("Failed to download {}", filename))?;
+            .context(format!("Failed to download {filename}"))?;
 
         if !response.status().is_success() {
             anyhow::bail!(
@@ -462,11 +462,11 @@ pub async fn download_default_model(cache_dir: Option<PathBuf>) -> Result<PathBu
         let bytes = response
             .bytes()
             .await
-            .context(format!("Failed to read response for {}", filename))?;
+            .context(format!("Failed to read response for {filename}"))?;
 
         tokio::fs::write(&path, &bytes)
             .await
-            .context(format!("Failed to write {}", filename))?;
+            .context(format!("Failed to write {filename}"))?;
 
         tracing::info!("Downloaded {} ({} bytes)", filename, bytes.len());
     }

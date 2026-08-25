@@ -54,7 +54,7 @@ pub fn validate_layout(
             issues.push(LayoutIssue {
                 severity: "error".to_string(),
                 code: "out_of_bounds".to_string(),
-                message: format!("Object '{}' extends beyond canvas boundaries", id),
+                message: format!("Object '{id}' extends beyond canvas boundaries"),
                 affected_objects: vec![id.clone()],
                 suggestion: "Move object closer to canvas center or reduce size".to_string(),
             });
@@ -72,7 +72,7 @@ pub fn validate_layout(
                     issues.push(LayoutIssue {
                         severity: "warning".to_string(),
                         code: "overlap".to_string(),
-                        message: format!("Objects '{}' and '{}' overlap", id1, id2),
+                        message: format!("Objects '{id1}' and '{id2}' overlap"),
                         affected_objects: vec![id1.clone(), id2.clone()],
                         suggestion: format!(
                             "Move '{}' {} pixels to the right",
@@ -153,22 +153,22 @@ pub fn auto_fix_layout(objects: &mut [(String, [f64; 4])], canvas: [u32; 2]) -> 
         if x_min < 0.0 {
             x_min = 10.0;
             x_max = x_min + width;
-            fixes.push(format!("Moved '{}' right to fit bounds", id));
+            fixes.push(format!("Moved '{id}' right to fit bounds"));
         }
         if x_max > cw {
             x_max = cw - 10.0;
             x_min = x_max - width;
-            fixes.push(format!("Moved '{}' left to fit bounds", id));
+            fixes.push(format!("Moved '{id}' left to fit bounds"));
         }
         if y_min < 0.0 {
             y_min = 10.0;
             y_max = y_min + height;
-            fixes.push(format!("Moved '{}' down to fit bounds", id));
+            fixes.push(format!("Moved '{id}' down to fit bounds"));
         }
         if y_max > ch {
             y_max = ch - 10.0;
             y_min = y_max - height;
-            fixes.push(format!("Moved '{}' up to fit bounds", id));
+            fixes.push(format!("Moved '{id}' up to fit bounds"));
         }
 
         *bbox = [x_min, y_min, x_max, y_max];

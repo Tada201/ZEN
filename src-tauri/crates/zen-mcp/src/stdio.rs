@@ -150,7 +150,7 @@ impl StdioTransport {
 
         let mut child = cmd
             .spawn()
-            .map_err(|e| format!("stdio transport: failed to spawn '{}': {}", command, e))?;
+            .map_err(|e| format!("stdio transport: failed to spawn '{command}': {e}"))?;
 
         // Confine the child in an OS sandbox (Windows Job Object; no-op on other
         // platforms) before touching its pipes. Fail closed: if the OS refuses
@@ -161,8 +161,7 @@ impl StdioTransport {
             Err(error) => {
                 let _ = child.kill().await;
                 return Err(format!(
-                    "stdio transport: failed to sandbox '{}': {}",
-                    command, error
+                    "stdio transport: failed to sandbox '{command}': {error}"
                 ));
             }
         };
@@ -359,11 +358,10 @@ impl StdioTransport {
             "params": params.unwrap_or(Value::Object(serde_json::Map::new())),
         });
         let line = serde_json::to_string(&envelope)
-            .map_err(|e| format!("stdio send_request: serialize failed: {}", e))?;
+            .map_err(|e| format!("stdio send_request: serialize failed: {e}"))?;
         if line.len() > MAX_STDIO_MESSAGE_BYTES {
             return Err(format!(
-                "stdio send_request: message exceeds {} byte limit",
-                MAX_STDIO_MESSAGE_BYTES
+                "stdio send_request: message exceeds {MAX_STDIO_MESSAGE_BYTES} byte limit"
             ));
         }
 
@@ -378,22 +376,22 @@ impl StdioTransport {
             stdin
                 .write_all(line.as_bytes())
                 .await
-                .map_err(|e| format!("stdio send_request: write failed: {}", e))?;
+                .map_err(|e| format!("stdio send_request: write failed: {e}"))?;
             stdin
                 .write_all(b"\n")
                 .await
-                .map_err(|e| format!("stdio send_request: write newline failed: {}", e))?;
+                .map_err(|e| format!("stdio send_request: write newline failed: {e}"))?;
             stdin
                 .flush()
                 .await
-                .map_err(|e| format!("stdio send_request: flush failed: {}", e))?;
+                .map_err(|e| format!("stdio send_request: flush failed: {e}"))?;
         }
 
         let response = async {
             tokio::time::timeout(self.request_timeout, rx)
                 .await
                 .map_err(|_| {
-                    format!("stdio send_request: timeout waiting for response to '{}'", method)
+                    format!("stdio send_request: timeout waiting for response to '{method}'")
                 })?
                 .map_err(|_| "stdio send_request: response channel closed".to_string())
         };
@@ -409,7 +407,7 @@ impl StdioTransport {
                         .await;
                     let mut pending = self.pending.lock().await;
                     pending.remove(&id);
-                    return Err(format!("stdio request '{}' cancelled", method));
+                    return Err(format!("stdio request '{method}' cancelled"));
                 }
             }
         } else {
@@ -430,7 +428,7 @@ impl StdioTransport {
                 .get("message")
                 .and_then(|m| m.as_str())
                 .unwrap_or("unknown");
-            return Err(format!("stdio request '{}' failed: {}", method, msg));
+            return Err(format!("stdio request '{method}' failed: {msg}"));
         }
 
         Ok(resp)
@@ -452,11 +450,10 @@ impl StdioTransport {
             envelope["params"] = p;
         }
         let line = serde_json::to_string(&envelope)
-            .map_err(|e| format!("stdio send_notification: serialize failed: {}", e))?;
+            .map_err(|e| format!("stdio send_notification: serialize failed: {e}"))?;
         if line.len() > MAX_STDIO_MESSAGE_BYTES {
             return Err(format!(
-                "stdio send_notification: message exceeds {} byte limit",
-                MAX_STDIO_MESSAGE_BYTES
+                "stdio send_notification: message exceeds {MAX_STDIO_MESSAGE_BYTES} byte limit"
             ));
         }
 
@@ -464,15 +461,15 @@ impl StdioTransport {
         stdin
             .write_all(line.as_bytes())
             .await
-            .map_err(|e| format!("stdio send_notification: write failed: {}", e))?;
+            .map_err(|e| format!("stdio send_notification: write failed: {e}"))?;
         stdin
             .write_all(b"\n")
             .await
-            .map_err(|e| format!("stdio send_notification: write newline failed: {}", e))?;
+            .map_err(|e| format!("stdio send_notification: write newline failed: {e}"))?;
         stdin
             .flush()
             .await
-            .map_err(|e| format!("stdio send_notification: flush failed: {}", e))?;
+            .map_err(|e| format!("stdio send_notification: flush failed: {e}"))?;
         Ok(())
     }
 

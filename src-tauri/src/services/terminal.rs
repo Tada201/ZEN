@@ -155,7 +155,7 @@ impl TerminalService {
         });
 
         // Spawn read thread
-        let id_clone = id.clone();
+        let id_clone = id;
         std::thread::spawn(move || {
             let mut reader = reader;
             let mut buffer = [0u8; 1024];
@@ -164,7 +164,7 @@ impl TerminalService {
                     break;
                 }
                 let data = String::from_utf8_lossy(&buffer[..n]).to_string();
-                let _ = app_handle.emit(&format!("terminal-stdout-{}", id_clone), data);
+                let _ = app_handle.emit(&format!("terminal-stdout-{id_clone}"), data);
             }
         });
 
@@ -379,7 +379,7 @@ impl TerminalService {
 fn resolve_terminal_cwd(workspace: &std::path::Path, cwd: Option<String>) -> ZenResult<PathBuf> {
     let resolved = match cwd {
         Some(path) => crate::workspace::resolve_workspace_path(workspace, &path)
-            .map_err(|e| ZenError::Custom(format!("Workspace violation: {}", e)))?,
+            .map_err(|e| ZenError::Custom(format!("Workspace violation: {e}")))?,
         None => workspace.to_path_buf(),
     };
 

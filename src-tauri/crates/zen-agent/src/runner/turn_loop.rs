@@ -227,7 +227,7 @@ impl Runner {
                         spawn_id: self.trace_id(),
                         agent_id: current_agent.id.clone(),
                         agent_name: current_agent.name.clone(),
-                        delta: format!("step {}", iteration),
+                        delta: format!("step {iteration}"),
                         r#type: "progress".to_string(),
                     },
                 ));
@@ -457,7 +457,7 @@ impl Runner {
                     // hard stream failure is a model the provider does not
                     // accept, and the generic wording sent past debugging
                     // sessions looking for transient network faults.
-                    return Err(e).context(format!("LLM stream failed for model '{}'", model));
+                    return Err(e).context(format!("LLM stream failed for model '{model}'"));
                 }
             };
 

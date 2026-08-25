@@ -269,7 +269,7 @@ impl ConversationStore {
         let conn = self.get_connection().await?;
         let table = conn.open_table(&self.collection_name).execute().await?;
         let escaped = escape_sql_string(chat_id);
-        table.delete(&format!("chat_id = '{}'", escaped)).await?;
+        table.delete(&format!("chat_id = '{escaped}'")).await?;
         Ok(())
     }
 
@@ -277,7 +277,7 @@ impl ConversationStore {
         let conn = self.get_connection().await?;
         let table = conn.open_table(&self.collection_name).execute().await?;
         let escaped = escape_sql_string(message_id);
-        table.delete(&format!("message_id = '{}'", escaped)).await?;
+        table.delete(&format!("message_id = '{escaped}'")).await?;
         Ok(())
     }
 
@@ -285,7 +285,7 @@ impl ConversationStore {
         let conn = self.get_connection().await?;
         let table = conn.open_table(&self.collection_name).execute().await?;
         let escaped = escape_sql_string(&entry.message_id);
-        table.delete(&format!("message_id = '{}'", escaped)).await?;
+        table.delete(&format!("message_id = '{escaped}'")).await?;
         self.add(vec![entry]).await
     }
 

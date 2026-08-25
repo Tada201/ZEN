@@ -13,7 +13,7 @@ pub async fn fetch_flights() -> Result<Vec<Flight>> {
             .await
             .unwrap_or_else(|_| "Unavailable".to_string());
         tracing::error!("OpenSky API Error [{}]: {}", status, body);
-        return Err(anyhow::anyhow!("OpenSky error: {}", status));
+        return Err(anyhow::anyhow!("OpenSky error: {status}"));
     }
 
     let response: serde_json::Value = response_res.json().await?;

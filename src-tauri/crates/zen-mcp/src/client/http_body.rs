@@ -18,8 +18,7 @@ pub(super) async fn read_rpc_response(resp: reqwest::Response) -> Result<Value, 
         .is_some_and(|length| length > MAX_RPC_BODY_BYTES as u64)
     {
         return Err(format!(
-            "response body exceeds {} byte limit",
-            MAX_RPC_BODY_BYTES
+            "response body exceeds {MAX_RPC_BODY_BYTES} byte limit"
         ));
     }
 
@@ -32,11 +31,10 @@ pub(super) async fn read_rpc_response(resp: reqwest::Response) -> Result<Value, 
     let mut stream = resp.bytes_stream();
     let mut bytes = Vec::new();
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("bad response body: {}", e))?;
+        let chunk = chunk.map_err(|e| format!("bad response body: {e}"))?;
         if bytes.len().saturating_add(chunk.len()) > MAX_RPC_BODY_BYTES {
             return Err(format!(
-                "response body exceeds {} byte limit",
-                MAX_RPC_BODY_BYTES
+                "response body exceeds {MAX_RPC_BODY_BYTES} byte limit"
             ));
         }
         bytes.extend_from_slice(&chunk);
@@ -46,7 +44,7 @@ pub(super) async fn read_rpc_response(resp: reqwest::Response) -> Result<Value, 
     if is_sse {
         extract_sse_json(&body)
     } else {
-        serde_json::from_str(&body).map_err(|e| format!("bad JSON: {}", e))
+        serde_json::from_str(&body).map_err(|e| format!("bad JSON: {e}"))
     }
 }
 

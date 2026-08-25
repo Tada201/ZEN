@@ -178,8 +178,8 @@ impl ToolService {
                             }
                             Ok(val)
                         },
-                        Ok(Err(e)) => Err(format!("Tool error: {}", e)),
-                        Err(_) => Err(format!("Tool execution timed out after {}s", timeout_seconds)),
+                        Ok(Err(e)) => Err(format!("Tool error: {e}")),
+                        Err(_) => Err(format!("Tool execution timed out after {timeout_seconds}s")),
                     }
                 },
                 _ = token.cancelled() => {

@@ -117,8 +117,7 @@ fn parse_one_request(key: &str, req: &Value) -> ElicitationRequest {
             url: None,
             requested_schema: None,
             blocked: Some(format!(
-                "server requested unsupported input method '{}'",
-                method
+                "server requested unsupported input method '{method}'"
             )),
             fatal: true,
         };
@@ -332,7 +331,7 @@ mod tests {
         // Common short credential field names are caught too.
         for name in ["pwd", "passcode", "authToken"] {
             let s = serde_json::json!({"properties": {name: {"type": "string"}}});
-            assert!(schema_requests_secret(&s), "{} should be secret", name);
+            assert!(schema_requests_secret(&s), "{name} should be secret");
         }
         let benign = serde_json::json!({
             "type": "object",
@@ -346,7 +345,7 @@ mod tests {
         let mut props = Map::new();
         for i in 0..4000 {
             props.insert(
-                format!("f{}", i),
+                format!("f{i}"),
                 serde_json::json!({"type": "string", "title": "x".repeat(20)}),
             );
         }

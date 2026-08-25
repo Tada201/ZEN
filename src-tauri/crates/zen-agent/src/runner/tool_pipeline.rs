@@ -306,7 +306,7 @@ fn summarize_tool_output(value: &Value) -> String {
         return summary.chars().take(500).collect();
     }
     if let Some(error) = value.get("error").and_then(|v| v.as_str()) {
-        return format!("Error: {}", error).chars().take(500).collect();
+        return format!("Error: {error}").chars().take(500).collect();
     }
     if let Some(s) = value.as_str() {
         return s.chars().take(500).collect();

@@ -48,13 +48,12 @@ impl zen_tools::AgentTool<tauri::AppHandle> for EarthquakeTool {
 
         let quakes = crate::services::gtsm::earthquakes::fetch_earthquakes(min_mag, hours)
             .await
-            .map_err(|e| anyhow!("Earthquake fetch failed: {}", e))?;
+            .map_err(|e| anyhow!("Earthquake fetch failed: {e}"))?;
 
         // Build narrative summary
         let summary = if quakes.is_empty() {
             format!(
-                "No earthquakes detected with magnitude ≥ {} in the past {} hours.",
-                min_mag, hours
+                "No earthquakes detected with magnitude ≥ {min_mag} in the past {hours} hours."
             )
         } else {
             let max_quake = quakes
@@ -76,10 +75,10 @@ impl zen_tools::AgentTool<tauri::AppHandle> for EarthquakeTool {
             )];
 
             if strong_count > 0 {
-                summary_parts.push(format!("{} exceeded M5.0", strong_count));
+                summary_parts.push(format!("{strong_count} exceeded M5.0"));
             }
             if tsunami_count > 0 {
-                summary_parts.push(format!("{} issued tsunami alerts", tsunami_count));
+                summary_parts.push(format!("{tsunami_count} issued tsunami alerts"));
             }
 
             summary_parts.push(format!(
@@ -148,7 +147,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for MilitaryTrackingTool {
         } else {
             crate::services::gtsm::military::fetch_military().await
         }
-        .map_err(|e| anyhow!("Military tracking failed: {}", e))?;
+        .map_err(|e| anyhow!("Military tracking failed: {e}"))?;
 
         // Build narrative summary
         let summary = if aircraft.is_empty() {
@@ -167,7 +166,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for MilitaryTrackingTool {
 
             let type_summary: Vec<String> = type_counts
                 .iter()
-                .map(|(t, c)| format!("{} x{}", t, c))
+                .map(|(t, c)| format!("{t} x{c}"))
                 .collect();
 
             let altitude_avg =
@@ -195,8 +194,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for MilitaryTrackingTool {
             }
 
             summary_parts.push(format!(
-                "Avg altitude: {:.0} ft, Max speed: {:.0} km/h",
-                altitude_avg, speed_max
+                "Avg altitude: {altitude_avg:.0} ft, Max speed: {speed_max:.0} km/h"
             ));
 
             summary_parts.join("; ") + "."

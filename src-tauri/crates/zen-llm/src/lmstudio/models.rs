@@ -170,8 +170,7 @@ impl super::LmStudioProvider {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             return Err(ZenError::Custom(format!(
-                "LM Studio returned {}: {}",
-                status, body
+                "LM Studio returned {status}: {body}"
             )));
         }
 

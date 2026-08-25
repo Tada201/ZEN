@@ -198,11 +198,13 @@ impl Task {
         }
 
         // Kahn's algorithm with priority-based tie-breaking
-        // Use BinaryHeap to always process highest-priority (lowest ordinal) tasks first
-        // when multiple tasks have in-degree 0 simultaneously
+        // Use BinaryHeap to always process highest-priority (lowest ordinal)
+        // tasks first when multiple tasks have in-degree 0 simultaneously.
+        // Reverse because TaskPriority ordinals run Critical=0..Low=3 while
+        // BinaryHeap pops its largest element.
         #[derive(Eq, PartialEq, Ord, PartialOrd)]
         struct PriorityTask {
-            priority: TaskPriority,
+            priority: std::cmp::Reverse<TaskPriority>,
             index: usize,
         }
 
@@ -210,7 +212,7 @@ impl Task {
         for (i, &deg) in in_degree.iter().enumerate() {
             if deg == 0 {
                 queue.push(PriorityTask {
-                    priority: tasks[i].priority,
+                    priority: std::cmp::Reverse(tasks[i].priority),
                     index: i,
                 });
             }
@@ -225,7 +227,7 @@ impl Task {
                 in_degree[next] -= 1;
                 if in_degree[next] == 0 {
                     queue.push(PriorityTask {
-                        priority: tasks[next].priority,
+                        priority: std::cmp::Reverse(tasks[next].priority),
                         index: next,
                     });
                 }
@@ -346,7 +348,7 @@ mod tests {
 
         let ids = [t1.id.clone(), t2.id.clone(), t3.id.clone()];
         let result =
-            Task::resolve_execution_order(vec![t3.clone(), t1.clone(), t2.clone()]).unwrap();
+            Task::resolve_execution_order(vec![t3, t1, t2]).unwrap();
 
         // t1 must come before t2, t2 before t3
         let pos: HashMap<String, usize> = result

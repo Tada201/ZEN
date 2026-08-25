@@ -24,7 +24,7 @@ pub fn canonicalize_workspace_root(path: &Path) -> Result<std::path::PathBuf> {
 pub fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .expect("Time went backwards")
+        .unwrap_or_default()
         .as_millis() as i64
 }
 

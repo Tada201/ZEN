@@ -25,7 +25,7 @@ pub async fn get_conversation_memories(
         .conversation_store
         .get()
         .await
-        .map_err(|e| format!("ConversationStore not initialized: {}", e))?;
+        .map_err(|e| format!("ConversationStore not initialized: {e}"))?;
 
     let limit_val = limit.unwrap_or(5).clamp(1, 100);
     let query_str = query.unwrap_or_default();
@@ -35,7 +35,7 @@ pub async fn get_conversation_memories(
         let results = store
             .search(dummy_vec, limit_val * 3)
             .await
-            .map_err(|e| format!("Memory search failed: {}", e))?;
+            .map_err(|e| format!("Memory search failed: {e}"))?;
 
         let filtered = if let Some(ref cid) = chat_id {
             results
@@ -81,7 +81,7 @@ pub async fn get_conversation_memories(
     let results = store
         .search(vec, limit_val * 3)
         .await
-        .map_err(|e| format!("Memory search failed: {}", e))?;
+        .map_err(|e| format!("Memory search failed: {e}"))?;
 
     let filtered = if let Some(ref cid) = chat_id {
         results
@@ -105,18 +105,18 @@ pub async fn clear_conversation_memories(
         .conversation_store
         .get()
         .await
-        .map_err(|e| format!("ConversationStore not initialized: {}", e))?;
+        .map_err(|e| format!("ConversationStore not initialized: {e}"))?;
 
     if let Some(cid) = chat_id {
         store
             .delete_by_chat_id(&cid)
             .await
-            .map_err(|e| format!("Failed to delete memories for chat {}: {}", cid, e))?;
+            .map_err(|e| format!("Failed to delete memories for chat {cid}: {e}"))?;
     } else {
         store
             .clear_all()
             .await
-            .map_err(|e| format!("Failed to clear all memories: {}", e))?;
+            .map_err(|e| format!("Failed to clear all memories: {e}"))?;
     }
 
     Ok(())
@@ -163,10 +163,10 @@ pub async fn get_memory_stats(
         .conversation_store
         .get()
         .await
-        .map_err(|e| format!("ConversationStore not initialized: {}", e))?;
+        .map_err(|e| format!("ConversationStore not initialized: {e}"))?;
 
     store
         .get_stats()
         .await
-        .map_err(|e| format!("Failed to get stats: {}", e))
+        .map_err(|e| format!("Failed to get stats: {e}"))
 }

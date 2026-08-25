@@ -119,8 +119,7 @@ pub fn generate_error_feedback(session_id: String, error: String) -> SessionFeed
 pub fn parse_session_action(value: Value) -> Result<SessionAction> {
     let action: SessionAction = serde_json::from_value(value).map_err(|e| {
         anyhow::anyhow!(
-            "Failed to parse session action: {}. Provide a valid 'action' field.",
-            e
+            "Failed to parse session action: {e}. Provide a valid 'action' field."
         )
     })?;
     Ok(action)

@@ -49,12 +49,12 @@ impl zen_tools::Tool<tauri::AppHandle> for ListDocumentsTool {
     ) -> Result<ToolOutput, ToolError> {
         let state = app.state::<AppState>();
         let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
-            message: format!("DB error: {}", e),
+            message: format!("DB error: {e}"),
         })?;
         let docs = crate::db::queries::list_documents(&pool)
             .await
             .map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Failed to list docs: {}", e),
+                message: format!("Failed to list docs: {e}"),
             })?;
 
         let mut formatted_docs = Vec::new();
@@ -121,7 +121,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ReadDocumentTool {
     ) -> Result<ToolOutput, ToolError> {
         let parsed_args: ReadDocumentArgs =
             serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
-                details: format!("Invalid arguments: {}", e),
+                details: format!("Invalid arguments: {e}"),
             })?;
         if parsed_args.file_path.trim().is_empty() {
             return Err(ToolError::InvalidArguments {
@@ -134,11 +134,11 @@ impl zen_tools::Tool<tauri::AppHandle> for ReadDocumentTool {
             .workspace_for_chat(&chat_id)
             .await
             .map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Unable to resolve session workspace: {}", e),
+                message: format!("Unable to resolve session workspace: {e}"),
             })?;
         let max_file_bytes = workspace_max_file_bytes(&state).await;
         let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
-            message: format!("DB error: {}", e),
+            message: format!("DB error: {e}"),
         })?;
 
         // 1. First try as direct absolute path
@@ -180,14 +180,14 @@ impl zen_tools::Tool<tauri::AppHandle> for ReadDocumentTool {
 
         let target_path = crate::workspace::validate_workspace_path(&workspace, &target_path)
             .map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Workspace violation: {}", e),
+                message: format!("Workspace violation: {e}"),
             })?;
 
         enforce_existing_file_size(&target_path, max_file_bytes).await?;
 
         let content = tokio::fs::read_to_string(&target_path).await.map_err(|e| {
             ToolError::ExecutionFailed {
-                message: format!("Failed to read file (might be binary?): {}", e),
+                message: format!("Failed to read file (might be binary?): {e}"),
             }
         })?;
 
@@ -270,7 +270,7 @@ impl zen_tools::Tool<tauri::AppHandle> for GrepDocumentsTool {
     ) -> Result<ToolOutput, ToolError> {
         let parsed_args: GrepDocumentsArgs =
             serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
-                details: format!("Invalid arguments: {}", e),
+                details: format!("Invalid arguments: {e}"),
             })?;
         if parsed_args.query.trim().is_empty() {
             return Err(ToolError::InvalidArguments {
@@ -283,11 +283,11 @@ impl zen_tools::Tool<tauri::AppHandle> for GrepDocumentsTool {
             .workspace_for_chat(&chat_id)
             .await
             .map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Unable to resolve session workspace: {}", e),
+                message: format!("Unable to resolve session workspace: {e}"),
             })?;
         let max_file_bytes = workspace_max_file_bytes(&state).await;
         let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
-            message: format!("DB error: {}", e),
+            message: format!("DB error: {e}"),
         })?;
         let docs = crate::db::queries::list_documents(&pool)
             .await

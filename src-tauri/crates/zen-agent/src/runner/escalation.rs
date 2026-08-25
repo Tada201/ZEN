@@ -266,7 +266,7 @@ impl Runner {
                                 }
                                 Err(cloud_err) => {
                                     tracing::error!("Cloud provider also failed: {}", cloud_err);
-                                    let error_text = format!("Cloud provider failed: {}", cloud_err);
+                                    let error_text = format!("Cloud provider failed: {cloud_err}");
                                     if let Some(ref db) = self.db_pool {
                                         persist_chat_failure(
                                             db,
@@ -361,14 +361,14 @@ impl Runner {
         if !self.is_local_provider(&provider_name) {
             let base_url = ctx
                 .settings
-                .get_setting(&format!("{}_base_url", provider_name))
+                .get_setting(&format!("{provider_name}_base_url"))
                 .await
                 .ok()
                 .flatten()
                 .unwrap_or_else(|| zen_llm::default_base_url(&provider_name));
             let api_key = ctx
                 .secrets
-                .get_secret(&format!("{}_api_key", provider_name))
+                .get_secret(&format!("{provider_name}_api_key"))
                 .await
                 .ok()
                 .flatten()
@@ -386,7 +386,7 @@ impl Runner {
         for cloud_name in ["anthropic", "openai", "groq", "openrouter"] {
             if let Some(key) = ctx
                 .secrets
-                .get_secret(&format!("{}_api_key", cloud_name))
+                .get_secret(&format!("{cloud_name}_api_key"))
                 .await
                 .ok()
                 .flatten()
@@ -394,7 +394,7 @@ impl Runner {
                 if !key.is_empty() {
                     let base_url = ctx
                         .settings
-                        .get_setting(&format!("{}_base_url", cloud_name))
+                        .get_setting(&format!("{cloud_name}_base_url"))
                         .await
                         .ok()
                         .flatten()

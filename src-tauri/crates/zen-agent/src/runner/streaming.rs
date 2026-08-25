@@ -430,7 +430,7 @@ impl Runner {
                             ) {
                                 AgentEvent::ChatStatus(ChatStatusPayload {
                                     chat_id: chat_id_clone.clone(),
-                                    message: format!("Preparing {}", tool_label),
+                                    message: format!("Preparing {tool_label}"),
                                     iteration: None,
                                     phase: Some(ChatStatusPhase::TOOL_CALL_STREAMING.to_string()),
                                     metadata: Some(serde_json::json!({
@@ -467,7 +467,7 @@ impl Runner {
                             ) {
                                 AgentEvent::ChatStatus(ChatStatusPayload {
                                     chat_id: chat_id_clone.clone(),
-                                    message: format!("{} is ready", name),
+                                    message: format!("{name} is ready"),
                                     iteration: None,
                                     phase: Some(ChatStatusPhase::TOOL_CALL_READY.to_string()),
                                     metadata: Some(serde_json::json!({
@@ -475,14 +475,14 @@ impl Runner {
                                         "toolCall": {
                                             "toolName": name,
                                             "toolCallId": id,
-                                            "args": safe_arguments.clone(),
+                                            "args": safe_arguments,
                                             "status": "running"
                                         },
                                         "toolCallPreview": {
                                             "index": index,
                                             "toolCallId": id,
                                             "toolName": name,
-                                            "argumentsPreview": safe_arguments.clone(),
+                                            "argumentsPreview": safe_arguments,
                                             "ready": true,
                                         }
                                     })),

@@ -214,8 +214,7 @@ pub async fn calculate_route(
     end_lon: f64,
 ) -> Result<Route, ZenError> {
     let key = format!(
-        "{:.4},{:.4}->{:.4},{:.4}",
-        start_lat, start_lon, end_lat, end_lon
+        "{start_lat:.4},{start_lon:.4}->{end_lat:.4},{end_lon:.4}"
     );
     if let Some(cached) = state.gtsm_cache.get_route(&key).await {
         return Ok(cached);
@@ -640,9 +639,9 @@ pub async fn save_geojson_layer_db(
         .map_err(|e| ZenError::Custom(e.to_string()))?;
 
     let geometry_types = serde_json::to_string(&metadata.geometry_types)
-        .map_err(|e| ZenError::Custom(format!("Serialization error: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Serialization error: {e}")))?;
     let bbox_json = if let Some(ref bbox) = metadata.bbox {
-        Some(serde_json::to_string(bbox).map_err(|e| ZenError::Custom(format!("Serialization error: {}", e)))?)
+        Some(serde_json::to_string(bbox).map_err(|e| ZenError::Custom(format!("Serialization error: {e}")))?)
     } else {
         None
     };

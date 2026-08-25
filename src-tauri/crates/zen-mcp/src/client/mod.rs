@@ -74,7 +74,7 @@ pub mod elicit;
 /// parsers) — every other location reads it through this helper and
 /// never re-derives the format.
 pub fn prefixed_external_tool_name(server_name: &str, tool_name: &str) -> String {
-    format!("ext:{}:{}", server_name, tool_name)
+    format!("ext:{server_name}:{tool_name}")
 }
 
 /// Returns true if `name` is the prefixed form (`ext:…`) of an external
@@ -241,7 +241,7 @@ fn map_tool_call_result(payload: Value) -> Result<Value, String> {
         })
         .filter(|text| !text.is_empty())
         .unwrap_or_else(|| "tool reported an error".to_string());
-    Err(format!("External tool error: {}", message))
+    Err(format!("External tool error: {message}"))
 }
 
 /// Build the credential-free pending-consent description for a server the
@@ -387,6 +387,36 @@ impl McpClient {
         &self.consent
     }
 
+    // Poison-tolerant lock helpers: a panic by one previous holder must never
+    // wedge MCP routing, so each recovers the map via PoisonError::into_inner
+    // instead of unwrapping.
+    pub(super) fn lock_feature_cache(
+        &self,
+    ) -> std::sync::MutexGuard<'_, HashMap<String, rpc::CacheEntry>> {
+        match self.feature_cache.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
+    pub(super) fn lock_external_endpoints(
+        &self,
+    ) -> std::sync::MutexGuard<'_, HashMap<String, ServerEndpoint>> {
+        match self.external_endpoints.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
+    fn lock_elicitations(
+        &self,
+    ) -> std::sync::MutexGuard<'_, HashMap<String, elicit::PendingElicit>> {
+        match self.elicitations.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
     // The HTTP handshake helpers (`apply_mcp_headers`, `discover_http_server`,
     // `initialize_server`, `send_initialized_notification`,
     // `fetch_external_tools`) live in the `http_handshake` child module, and
@@ -426,7 +456,7 @@ impl McpClient {
                 operation: PrivilegedOperation::NetworkFetch,
                 decision,
                 caller: "mcp_client".to_string(),
-                target: Some(format!("mcp_server:{}", server_name)),
+                target: Some(format!("mcp_server:{server_name}")),
                 reason: Some(reason.into()),
             })
             .await;

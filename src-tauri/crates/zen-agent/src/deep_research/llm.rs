@@ -132,11 +132,13 @@ impl<'a> IterativeDeepResearcher<'a> {
     /// Strip surrounding ```json or ``` code fences from text.
     pub(super) fn strip_code_block(text: &str) -> String {
         let text = text.trim();
-        if text.starts_with("```") {
-            let inner = text
-                .strip_prefix("```json")
-                .or_else(|| text.strip_prefix("```"))
-                .unwrap_or(text);
+        if let Some(rest) = text.strip_prefix("```") {
+            // Drop an optional language tag on the opening fence line
+            // (```json, ```python, …) up to and including its newline.
+            let inner = match rest.split_once('\n') {
+                Some((first_line, body)) if !first_line.trim().is_empty() => body,
+                _ => rest,
+            };
             inner
                 .strip_suffix("```")
                 .unwrap_or(inner)
@@ -159,23 +161,32 @@ impl<'a> IterativeDeepResearcher<'a> {
 
         // Try greedy match for outermost array
         if let Some(start) = cleaned.find('[') {
-            if cleaned[start..].contains(']') {
-                let end = start + cleaned[start..].rfind(']').unwrap();
-                let slice = &cleaned[start..=end];
-                if let Ok(parsed) = serde_json::from_str::<Vec<String>>(slice) {
-                    return parsed;
-                }
-                // Last resort: recover incomplete items from truncated array
-                let items: Vec<String> = slice
-                    .split('"')
-                    .enumerate()
-                    .filter(|(i, _)| i % 2 == 1)
-                    .map(|(_, s)| s.to_string())
-                    .collect();
-                if !items.is_empty() {
-                    info!("Recovered {} items from truncated JSON array", items.len());
-                    return items;
-                }
+            // Prefer a complete `[...]`; if the closing bracket was truncated
+            // away, fall back to the remainder after `[` so partial items can
+            // still be recovered below.
+            let slice = match cleaned[start..].rfind(']') {
+                Some(rel_end) => &cleaned[start..=start + rel_end],
+                None => &cleaned[start..],
+            };
+            if let Ok(parsed) = serde_json::from_str::<Vec<String>>(slice) {
+                return parsed;
+            }
+            // Last resort: recover complete quoted items from a truncated
+            // array. Pair up quotes and keep only whole "..." spans, so a
+            // dangling final item (no closing quote) is dropped rather than
+            // captured half-formed.
+            let quote_count = slice.matches('"').count();
+            let complete_spans = quote_count / 2;
+            let items: Vec<String> = slice
+                .split('"')
+                .enumerate()
+                .filter(|(i, _)| i % 2 == 1)
+                .take(complete_spans)
+                .map(|(_, s)| s.to_string())
+                .collect();
+            if !items.is_empty() {
+                info!("Recovered {} items from truncated JSON array", items.len());
+                return items;
             }
         }
 

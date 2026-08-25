@@ -121,7 +121,7 @@ pub fn validate_resource_uri(uri: &str) -> Result<(), String> {
         return Err("resource uri is empty".to_string());
     }
     if uri.len() > MAX_URI_LEN {
-        return Err(format!("resource uri exceeds {} bytes", MAX_URI_LEN));
+        return Err(format!("resource uri exceeds {MAX_URI_LEN} bytes"));
     }
     if uri.chars().any(|c| c.is_control()) {
         return Err("resource uri contains a control character".to_string());
@@ -131,7 +131,7 @@ pub fn validate_resource_uri(uri: &str) -> Result<(), String> {
         .map(|(scheme, _)| scheme.to_ascii_lowercase())
         .ok_or_else(|| "resource uri has no scheme".to_string())?;
     if !ALLOWED_URI_SCHEMES.contains(&scheme.as_str()) {
-        return Err(format!("resource uri scheme '{}' is not allowed", scheme));
+        return Err(format!("resource uri scheme '{scheme}' is not allowed"));
     }
     // Path traversal only matters for schemes that map to a filesystem path.
     if scheme == "file" && uri.split(['/', '\\']).any(|seg| seg == "..") {

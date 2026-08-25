@@ -134,7 +134,7 @@ Always use these specialized code blocks for visual scenarios:
     let mut instructions = match system_prompt {
         Some(p) if replace_system_prompt && !p.trim().is_empty() => p,
         Some(p) if !p.trim().is_empty() && !base_instructions.trim().is_empty() => {
-            format!("{}\n\n{}", base_instructions, p)
+            format!("{base_instructions}\n\n{p}")
         }
         Some(p) if !p.trim().is_empty() => p,
         _ => base_instructions,

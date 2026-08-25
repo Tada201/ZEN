@@ -96,7 +96,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for BrowserTool {
             }
             "click" => {
                 let sel = selector
-                    .clone()
+                    
                     .ok_or_else(|| anyhow!("browser click: missing 'selector'"))?;
                 mgr.click(&app, &sel).map_err(|e| anyhow!(e))?;
                 actions.push(format!("click {sel}"));

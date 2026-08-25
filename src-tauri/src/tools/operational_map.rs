@@ -79,7 +79,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ActivateOperationalMapTool {
                 let results = crate::services::gtsm::geocoding::search(name, 1)
                     .await
                     .map_err(|e| ToolError::ExecutionFailed {
-                        message: format!("Geocoding failed: {}", e),
+                        message: format!("Geocoding failed: {e}"),
                     })?;
 
                 if let Some(first) = results.first() {
@@ -88,7 +88,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ActivateOperationalMapTool {
                     resolved_name = Some(first.display_name.clone());
                 } else {
                     return Err(ToolError::ExecutionFailed {
-                        message: format!("Location '{}' could not be resolved.", name),
+                        message: format!("Location '{name}' could not be resolved."),
                     });
                 }
             } else {
@@ -99,8 +99,17 @@ impl zen_tools::Tool<tauri::AppHandle> for ActivateOperationalMapTool {
             }
         }
 
-        let lat = final_lat.unwrap();
-        let lon = final_lon.unwrap();
+        let (lat, lon) = match (final_lat, final_lon) {
+            (Some(lat), Some(lon)) => (lat, lon),
+            // Unreachable when a location_name was geocoded above, but kept
+            // local so the invariant doesn't depend on far-away control flow.
+            _ => {
+                return Err(ToolError::InvalidArguments {
+                    details: "Either location_name or both lat and lon must be provided."
+                        .to_string(),
+                });
+            }
+        };
         let zoom = args.zoom.unwrap_or(10);
 
         // Emit event to frontend
@@ -110,7 +119,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ActivateOperationalMapTool {
                 "lat": lat,
                 "lon": lon,
                 "zoom": zoom,
-                "label": resolved_name.clone().unwrap_or_else(|| format!("{:.4}, {:.4}", lat, lon))
+                "label": resolved_name.clone().unwrap_or_else(|| format!("{lat:.4}, {lon:.4}"))
             }),
         );
 

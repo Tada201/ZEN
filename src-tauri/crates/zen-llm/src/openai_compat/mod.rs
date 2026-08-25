@@ -58,7 +58,7 @@ impl OpenAiCompatProvider {
             client: Client::builder()
                 .connect_timeout(std::time::Duration::from_secs(10))
                 .build()
-                .expect("Failed to build OpenAI-Compat HTTP client"),
+                .unwrap_or_else(|e| panic!("Failed to build OpenAI-Compat HTTP client: {e}")),
             base_url: RwLock::new(base_url.trim_end_matches('/').to_string()),
             api_key: api_key.to_string(),
             provider_name: provider_name.to_string(),
@@ -78,7 +78,12 @@ impl OpenAiCompatProvider {
 
     /// Check if this is Groq provider (needs special rate limit handling)
     fn is_groq(&self) -> bool {
-        let base = self.base_url.read().unwrap().clone();
+        // A poisoned lock must not take down request routing; fall back to the
+        // pre-poison value (PoisonError::into_inner recovers the data).
+        let base = match self.base_url.read() {
+            Ok(guard) => guard.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        };
         self.provider_name.to_lowercase().contains("groq") || base.contains("groq.com")
     }
 
@@ -88,20 +93,23 @@ impl OpenAiCompatProvider {
     /// (e.g. Kilo Gateway's `https://api.kilo.ai/api/gateway`).
     /// Perplexity uses bare endpoints without a `/v1` prefix.
     fn url(&self, path: &str) -> String {
-        let base_locked = self.base_url.read().unwrap();
-        let base = base_locked.trim_end_matches('/');
+        // Poison-tolerant read: see is_groq.
+        let base = match self.base_url.read() {
+            Ok(guard) => guard.trim_end_matches('/').to_string(),
+            Err(poisoned) => poisoned.into_inner().trim_end_matches('/').to_string(),
+        };
         if self.provider_name.to_lowercase() == "mimo"
             || self.provider_name.to_lowercase() == "mimo-free"
         {
             if path == "/chat/completions" {
-                return base.to_string(); // The base URL itself IS the chat endpoint
+                return base; // The base URL itself IS the chat endpoint
             }
-            return format!("{}{}", base, path);
+            return format!("{base}{path}");
         }
         if base.ends_with("/v1") || base.contains("/gateway") || base.contains("perplexity") {
-            format!("{}{}", base, path)
+            format!("{base}{path}")
         } else {
-            format!("{}/v1{}", base, path)
+            format!("{base}/v1{path}")
         }
     }
 

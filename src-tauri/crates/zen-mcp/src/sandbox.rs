@@ -107,7 +107,7 @@ impl Sandbox {
             {
                 let err = std::io::Error::last_os_error();
                 CloseHandle(job);
-                return Err(format!("SetInformationJobObject(limits) failed: {}", err));
+                return Err(format!("SetInformationJobObject(limits) failed: {err}"));
             }
 
             let ui = JOBOBJECT_BASIC_UI_RESTRICTIONS {
@@ -129,13 +129,13 @@ impl Sandbox {
             {
                 let err = std::io::Error::last_os_error();
                 CloseHandle(job);
-                return Err(format!("SetInformationJobObject(ui) failed: {}", err));
+                return Err(format!("SetInformationJobObject(ui) failed: {err}"));
             }
 
             if AssignProcessToJobObject(job, process) == 0 {
                 let err = std::io::Error::last_os_error();
                 CloseHandle(job);
-                return Err(format!("AssignProcessToJobObject failed: {}", err));
+                return Err(format!("AssignProcessToJobObject failed: {err}"));
             }
 
             Ok(Some(Self { job }))

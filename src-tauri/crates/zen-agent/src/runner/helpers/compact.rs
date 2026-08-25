@@ -1,6 +1,6 @@
 //! Conversation compaction and tool-result / file-change bookkeeping.
 
-use super::budget::estimate_conversation_tokens;
+use super::budget::{estimate_conversation_tokens, estimate_tokens, truncate_to_budget};
 use zen_db::models::ChatMessage;
 
 
@@ -164,14 +164,14 @@ pub fn compact_tool_result_for_context(content: &str) -> String {
             continue;
         }
         if duplicate_count > 0 {
-            compacted_lines.push(format!("[{} repeated lines removed]", duplicate_count));
+            compacted_lines.push(format!("[{duplicate_count} repeated lines removed]"));
             duplicate_count = 0;
         }
         compacted_lines.push(line.to_string());
         previous = Some(line);
     }
     if duplicate_count > 0 {
-        compacted_lines.push(format!("[{} repeated lines removed]", duplicate_count));
+        compacted_lines.push(format!("[{duplicate_count} repeated lines removed]"));
     }
 
     let compacted = compacted_lines.join("\n");
@@ -235,6 +235,22 @@ pub fn compact_conversation_token_aware(
                 removable_end -= 1;
             } else {
                 break;
+            }
+        }
+    }
+
+    // If message removal alone could not reach the target (e.g. `min_keep`
+    // pins every message, or the survivors are large plain-content messages
+    // with no tool-call pairs to drop), condense message content down to an
+    // even per-message share of the target. Without this, the "aggressive"
+    // path could return far over budget and overflow the context window. The
+    // real system prompt lives in `ctx.system_content`, not here, so every
+    // conversation message is eligible to be condensed.
+    if estimate_conversation_tokens(conversation) > target_tokens && !conversation.is_empty() {
+        let per_msg = (target_tokens / conversation.len()).max(1);
+        for msg in conversation.iter_mut() {
+            if estimate_tokens(&msg.content) > per_msg {
+                msg.content = truncate_to_budget(&msg.content, per_msg);
             }
         }
     }
@@ -342,7 +358,7 @@ mod summary_compaction_tests {
             compaction_budget: 100_000,
         };
         // Build 10 non-system messages; cap at 3.
-        let conv: Vec<ChatMessage> = (0..10).map(|i| user_msg(&format!("msg {}", i))).collect();
+        let conv: Vec<ChatMessage> = (0..10).map(|i| user_msg(&format!("msg {i}"))).collect();
         let mut ctx = make_ctx(1, conv);
         ctx.max_messages_in_memory = Some(3);
         mw.enrich(&mut ctx).await.unwrap();
@@ -362,7 +378,7 @@ mod summary_compaction_tests {
         let mw = CompactionMiddleware {
             compaction_budget: 100_000,
         };
-        let conv: Vec<ChatMessage> = (0..5).map(|i| user_msg(&format!("msg {}", i))).collect();
+        let conv: Vec<ChatMessage> = (0..5).map(|i| user_msg(&format!("msg {i}"))).collect();
         let original_len = conv.len();
         let mut ctx = make_ctx(1, conv);
         ctx.max_messages_in_memory = None;
@@ -372,9 +388,10 @@ mod summary_compaction_tests {
 
     #[tokio::test]
     async fn compaction_aggressive_path_runs_when_over_budget() {
-        // Build a conversation that exceeds the compaction budget.
-        // Each chat message ~4 chars/token; 10000-char content \u2248 2500 tokens.
-        let big = "x".repeat(10_000);
+        // Build a conversation that exceeds the compaction budget. Use varied
+        // tokens (not a run of one char, which tiktoken compresses heavily) so
+        // the token count tracks the text size under the real BPE estimator.
+        let big: String = (0..3_000).map(|i| format!("word{i} ")).collect();
         let conv: Vec<ChatMessage> = (0..8).map(|_| user_msg(&big)).collect();
         // Sanity: the conversation is over 10_000 tokens.
         let pre_tokens = estimate_conversation_tokens(&conv);
@@ -393,9 +410,7 @@ mod summary_compaction_tests {
         let post_tokens = estimate_conversation_tokens(&ctx.conversation);
         assert!(
             post_tokens <= 2_000,
-            "post-compaction tokens ({}) should be at or under the 2x budget headroom, pre was {}",
-            post_tokens,
-            pre_tokens
+            "post-compaction tokens ({post_tokens}) should be at or under the 2x budget headroom, pre was {pre_tokens}"
         );
     }
 

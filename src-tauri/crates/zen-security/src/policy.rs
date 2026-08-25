@@ -58,7 +58,7 @@ impl PermissionDecision {
                 && settings.cache.matches_any(&args_str, &rules.always_deny)
             {
                 return PermissionDecision::Deny {
-                    reason: format!("Blocked by per-tool always_deny pattern for '{}'", tool_name),
+                    reason: format!("Blocked by per-tool always_deny pattern for '{tool_name}'"),
                 };
             }
             if !rules.always_confirm.is_empty()
@@ -77,7 +77,7 @@ impl PermissionDecision {
             if let Some(default) = &rules.default {
                 return match default {
                     PermissionDefault::AlwaysDeny => PermissionDecision::Deny {
-                        reason: format!("Blocked by per-tool default deny for '{}'", tool_name),
+                        reason: format!("Blocked by per-tool default deny for '{tool_name}'"),
                     },
                     PermissionDefault::AlwaysAllow => PermissionDecision::Allow,
                     PermissionDefault::Confirm => PermissionDecision::Confirm {
@@ -127,16 +127,14 @@ impl PermissionDecision {
                     } else {
                         PermissionDecision::Deny {
                             reason: format!(
-                                "File modification on '{}' blocked by Plan Mode (read-only)",
-                                tool_name
+                                "File modification on '{tool_name}' blocked by Plan Mode (read-only)"
                             ),
                         }
                     }
                 } else {
                     PermissionDecision::Deny {
                         reason: format!(
-                            "High-risk command execution '{}' blocked by Plan Mode (read-only)",
-                            tool_name
+                            "High-risk command execution '{tool_name}' blocked by Plan Mode (read-only)"
                         ),
                     }
                 }
@@ -560,6 +558,11 @@ fn command_from_args(args_str: &str) -> Option<String> {
         })
 }
 
+// Every pattern below is a compile-time literal, and both policy regression
+// suites (policy_tests.rs, policy_mode_risk_tests.rs) exercise matching for
+// each rule — a pattern that stopped compiling fails every test loudly.
+// These expects are therefore infallible by construction.
+#[allow(clippy::expect_used)]
 pub static HARDCODED_SECURITY_RULES: LazyLock<HardcodedSecurityRules> = LazyLock::new(|| {
     let flags = r"(?:-[a-zA-Z]+\s+)*";
     let trailing_flags = r"(?:\s+-[a-zA-Z]+)*\s*";
@@ -567,36 +570,34 @@ pub static HARDCODED_SECURITY_RULES: LazyLock<HardcodedSecurityRules> = LazyLock
     let terminal_deny = vec![
         // rm -rf / or rm -rf /*
         CompiledRegex::new(
-            &format!(r"\brm\s+{}(?:--\s+)?/\*?{}$", flags, trailing_flags),
+            &format!(r"\brm\s+{flags}(?:--\s+)?/\*?{trailing_flags}$"),
             false,
         )
         .expect("Hardcoded regex should compile"),
         // rm -rf ~ or rm -rf ~/
         CompiledRegex::new(
-            &format!(r"\brm\s+{}(?:--\s+)?~/?\*?{}$", flags, trailing_flags),
+            &format!(r"\brm\s+{flags}(?:--\s+)?~/?\*?{trailing_flags}$"),
             false,
         )
         .expect("Hardcoded regex should compile"),
         // rm -rf $HOME or rm -rf ${HOME}
         CompiledRegex::new(
             &format!(
-                r"\brm\s+{}(?:--\s+)?(?:\$HOME|\$\{{HOME\}})/?\*?{}$",
-                flags, trailing_flags
+                r"\brm\s+{flags}(?:--\s+)?(?:\$HOME|\$\{{HOME\}})/?\*?{trailing_flags}$"
             ),
             false,
         )
         .expect("Hardcoded regex should compile"),
         // rm -rf . or rm -rf ./
         CompiledRegex::new(
-            &format!(r"\brm\s+{}(?:--\s+)?\.(?:/?\*)?{}$", flags, trailing_flags),
+            &format!(r"\brm\s+{flags}(?:--\s+)?\.(?:/?\*)?{trailing_flags}$"),
             false,
         )
         .expect("Hardcoded regex should compile"),
         // rm -rf .. or rm -rf ../
         CompiledRegex::new(
             &format!(
-                r"\brm\s+{}(?:--\s+)?\.\.(?:/?\*)?{}$",
-                flags, trailing_flags
+                r"\brm\s+{flags}(?:--\s+)?\.\.(?:/?\*)?{trailing_flags}$"
             ),
             false,
         )

@@ -21,8 +21,7 @@ struct CurrentWeather {
 /// Fetch current weather for a coordinate (Open-Meteo, free, no API key)
 pub async fn fetch_weather(lat: f64, lon: f64) -> Result<WeatherPoint> {
     let url = format!(
-        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m,weather_code",
-        lat, lon
+        "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m,weather_code"
     );
 
     let client = crate::utils::gtsm_http_client();
@@ -100,8 +99,8 @@ pub async fn fetch_weather_grid(
     let mut results: Vec<WeatherGridPoint> = Vec::new();
 
     for chunk in coords.chunks(50) {
-        let lats: Vec<String> = chunk.iter().map(|(lat, _)| format!("{:.2}", lat)).collect();
-        let lons: Vec<String> = chunk.iter().map(|(_, lon)| format!("{:.2}", lon)).collect();
+        let lats: Vec<String> = chunk.iter().map(|(lat, _)| format!("{lat:.2}")).collect();
+        let lons: Vec<String> = chunk.iter().map(|(_, lon)| format!("{lon:.2}")).collect();
 
         let url = format!(
             "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weather_code,cloud_cover,wind_speed_10m",

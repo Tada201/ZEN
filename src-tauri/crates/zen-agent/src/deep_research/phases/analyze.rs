@@ -114,16 +114,16 @@ impl<'a> IterativeDeepResearcher<'a> {
         ));
 
         if let Some(val) = mean_result.and_then(|v| v.get("result").and_then(|r| r.as_f64())) {
-            output.push_str(&format!("Mean: {:.2}\n", val));
+            output.push_str(&format!("Mean: {val:.2}\n"));
         }
         if let Some(val) = median_result.and_then(|v| v.get("result").and_then(|r| r.as_f64())) {
-            output.push_str(&format!("Median: {:.2}\n", val));
+            output.push_str(&format!("Median: {val:.2}\n"));
         }
         if let Some(val) = stddev_result.and_then(|v| v.get("result").and_then(|r| r.as_f64())) {
-            output.push_str(&format!("Std Dev: {:.2}\n", val));
+            output.push_str(&format!("Std Dev: {val:.2}\n"));
         }
         if let Some(val) = sum_result.and_then(|v| v.get("result").and_then(|r| r.as_f64())) {
-            output.push_str(&format!("Sum: {:.2}\n", val));
+            output.push_str(&format!("Sum: {val:.2}\n"));
         }
 
         output

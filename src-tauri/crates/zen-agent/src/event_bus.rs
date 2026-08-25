@@ -457,6 +457,7 @@ pub struct StreamingArtifactDetector<F: Fn(AgentEvent)> {
     active_artifact: Option<ActiveArtifact>,
 }
 
+#[derive(Clone)]
 struct ActiveArtifact {
     artifact_id: String,
     chat_id: String,
@@ -538,10 +539,15 @@ impl<F: Fn(AgentEvent)> StreamingArtifactDetector<F> {
                     }
                 }
             } else {
-                // Inside an active artifact — look for closing tag
+                // Inside an active artifact (guaranteed Some by the is_none
+                // check at the top of this iteration) — look for closing tag.
+                let artifact = self.active_artifact.clone();
+                let Some(artifact) = artifact else {
+                    return;
+                };
                 if let Some(close_pos) = self.partial.find("</nexus_artifact>") {
-                    let artifact_id = self.active_artifact.as_ref().unwrap().artifact_id.clone();
-                    let cid = self.active_artifact.as_ref().unwrap().chat_id.clone();
+                    let artifact_id = artifact.artifact_id.clone();
+                    let cid = artifact.chat_id.clone();
 
                     // Body is everything between the opening tag's '>' and the close tag
                     let body_start = if let Some(gt) = self.partial.find('>') {
@@ -586,9 +592,7 @@ impl<F: Fn(AgentEvent)> StreamingArtifactDetector<F> {
                     if self.partial.len() > body_start {
                         let body = self.partial[body_start..].to_string();
                         if !body.is_empty() {
-                            let artifact_id =
-                                self.active_artifact.as_ref().unwrap().artifact_id.clone();
-                            let cid = self.active_artifact.as_ref().unwrap().chat_id.clone();
+                            let ActiveArtifact { artifact_id, chat_id: cid } = artifact;
                             (self.emit_fn)(AgentEvent::ArtifactDelta(ArtifactDeltaPayload {
                                 chat_id: cid,
                                 artifact_id,

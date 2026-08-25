@@ -81,12 +81,12 @@ impl McpClient {
     /// Build a stable cache key for a per-server list result.
     pub(super) fn cache_key(server_name: &str, kind: &str) -> String {
         // NUL can't appear in a server name or method, so it's a safe joiner.
-        format!("{}\u{0}{}", server_name, kind)
+        format!("{server_name}\u{0}{kind}")
     }
 
     /// Return a live (non-expired) cached value, evicting it if it has expired.
     pub(super) fn cache_get(&self, key: &str) -> Option<Value> {
-        let mut cache = self.feature_cache.lock().unwrap();
+        let mut cache = self.lock_feature_cache();
         match cache.get(key) {
             Some(entry) if entry.expires_at > Instant::now() => Some(entry.value.clone()),
             Some(_) => {
@@ -103,7 +103,7 @@ impl McpClient {
         let Some((ttl, scope)) = hint else {
             return;
         };
-        let mut cache = self.feature_cache.lock().unwrap();
+        let mut cache = self.lock_feature_cache();
         if cache.len() >= MAX_CACHE_ENTRIES && !cache.contains_key(&key) {
             // Drop any expired entry first; otherwise evict an arbitrary one.
             let now = Instant::now();
@@ -131,8 +131,8 @@ impl McpClient {
     /// on teardown/resync and on a `*_list_changed` notification so a stale
     /// list is never served after the server says it changed.
     pub(super) fn cache_invalidate_server(&self, server_name: &str) {
-        let prefix = format!("{}\u{0}", server_name);
-        let mut cache = self.feature_cache.lock().unwrap();
+        let prefix = format!("{server_name}\u{0}");
+        let mut cache = self.lock_feature_cache();
         cache.retain(|key, _| !key.starts_with(&prefix));
     }
 
@@ -154,11 +154,11 @@ impl McpClient {
         header_name: Option<&str>,
     ) -> Result<Value, String> {
         let endpoint = {
-            let endpoints = self.external_endpoints.lock().unwrap();
+            let endpoints = self.lock_external_endpoints();
             endpoints
                 .get(server_name)
                 .cloned()
-                .ok_or_else(|| format!("No endpoint for external MCP server '{}'", server_name))?
+                .ok_or_else(|| format!("No endpoint for external MCP server '{server_name}'"))?
         };
         let name_header = header_name.unwrap_or(method);
 
@@ -193,18 +193,18 @@ impl McpClient {
                     Some(token) => tokio::select! {
                         result = request => result,
                         _ = token.cancelled() => {
-                            return Err(format!("MCP {} cancelled", method));
+                            return Err(format!("MCP {method} cancelled"));
                         }
                     },
                     None => request.await,
                 }
-                .map_err(|e| format!("MCP {} failed: {}", method, e))?;
+                .map_err(|e| format!("MCP {method} failed: {e}"))?;
                 if !resp.status().is_success() {
                     return Err(format!("MCP {} returned HTTP {}", method, resp.status()));
                 }
                 let json = read_rpc_response(resp)
                     .await
-                    .map_err(|e| format!("MCP {}: {}", method, e))?;
+                    .map_err(|e| format!("MCP {method}: {e}"))?;
                 unwrap_result(json, method)
             }
             ServerEndpoint::Stdio(endpoint) => {
@@ -241,11 +241,11 @@ fn unwrap_result(json: Value, method: &str) -> Result<Value, String> {
             .get("message")
             .and_then(Value::as_str)
             .unwrap_or("unknown");
-        return Err(format!("MCP {} error: {}", method, message));
+        return Err(format!("MCP {method} error: {message}"));
     }
     json.get("result")
         .cloned()
-        .ok_or_else(|| format!("MCP {} returned no result", method))
+        .ok_or_else(|| format!("MCP {method} returned no result"))
 }
 
 #[cfg(test)]

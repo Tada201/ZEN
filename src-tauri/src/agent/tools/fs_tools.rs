@@ -45,7 +45,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for ListDocumentsTool {
         let pool = state
             .db()
             .await
-            .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("DB init failed: {e}"))?;
         // Chat-scoped: only this chat's attachments. Falls back to nothing when
         // the chat has no uploads (rather than leaking the global library).
         let docs = crate::db::queries::list_documents_for_chat(&pool, &chat_id).await?;
@@ -146,19 +146,19 @@ impl zen_tools::AgentTool<tauri::AppHandle> for ListDirectoryTool {
         let workspace = state
             .workspace_for_chat(&chat_id)
             .await
-            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {e}"))?;
 
         // Resolve the requested path (or the workspace root) and confirm it
         // stays inside the workspace boundary.
         let target = match args.path.as_deref().map(str::trim) {
             Some(p) if !p.is_empty() => {
                 crate::workspace::resolve_workspace_path(&workspace, p)
-                    .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?
+                    .map_err(|e| anyhow::anyhow!("Workspace violation: {e}"))?
             }
             _ => workspace.clone(),
         };
         let target = crate::workspace::validate_workspace_path(&workspace, &target)
-            .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Workspace violation: {e}"))?;
 
         if !target.exists() {
             return Err(anyhow::anyhow!(
@@ -362,7 +362,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for ReadDocumentTool {
         let pool = state
             .db()
             .await
-            .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("DB init failed: {e}"))?;
 
         // 1. Chat attachment fast-path. Uploaded files live under appdata
         // (outside the workspace) and their originals may be binary, so we read
@@ -389,7 +389,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for ReadDocumentTool {
         let workspace = state
             .workspace_for_chat(&chat_id)
             .await
-            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {e}"))?;
 
         let mut target_path = PathBuf::from(&args.file_path);
 
@@ -408,7 +408,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for ReadDocumentTool {
         }
 
         let target_path = crate::workspace::validate_workspace_path(&workspace, &target_path)
-            .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Workspace violation: {e}"))?;
         let max_file_bytes = crate::tools::fs_tools::workspace_max_file_bytes(&state).await;
         crate::tools::fs_tools::enforce_existing_file_size(&target_path, max_file_bytes)
             .await
@@ -471,7 +471,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for GrepDocumentsTool {
         let pool = state
             .db()
             .await
-            .map_err(|e| anyhow::anyhow!("DB init failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("DB init failed: {e}"))?;
         // Chat-scoped: search only THIS chat's uploaded attachments, over their
         // pre-extracted plain-text sidecars (originals may be binary).
         let docs = crate::db::queries::list_documents_for_chat(&pool, &chat_id).await?;
@@ -574,11 +574,11 @@ impl zen_tools::AgentTool<tauri::AppHandle> for WriteFileTool {
         let workspace = state
             .workspace_for_chat(&chat_id)
             .await
-            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {e}"))?;
 
         // Resolve and validate path is within workspace
         let target_path = resolve_workspace_path(&workspace, &args.file_path)
-            .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Workspace violation: {e}"))?;
 
         // Check if file exists and read original content
         let original_content = if target_path.exists() {
@@ -685,7 +685,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for EditFileTool {
             args.occurrence,
         )
         .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
         Ok(output.content)
     }
 }
@@ -753,7 +753,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for crate::tools::fs_tools::ApplyPat
             json!({ "patch": patch }),
         )
         .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
         Ok(output.content)
     }
 }

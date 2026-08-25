@@ -43,7 +43,7 @@ impl AnthropicProvider {
                 .timeout(std::time::Duration::from_secs(60))
                 .connect_timeout(std::time::Duration::from_secs(10))
                 .build()
-                .expect("Failed to build Anthropic HTTP client"),
+                .unwrap_or_else(|e| panic!("Failed to build Anthropic HTTP client: {e}")),
             api_key: api_key.to_string(),
             base_url: base_url.trim_end_matches('/').to_string(),
             version: ANTHROPIC_VERSION.to_string(),
@@ -56,7 +56,7 @@ impl AnthropicProvider {
         // expose an OpenAI-style `/v1` base URL. The request paths below
         // already include `/v1`, so avoid producing `/v1/v1/...`.
         let base_url = self.base_url.strip_suffix("/v1").unwrap_or(&self.base_url);
-        format!("{}{}", base_url, path)
+        format!("{base_url}{path}")
     }
 
     pub(crate) fn parse_data_url(&self, data_url: &str) -> Option<AnthropicImageSource> {

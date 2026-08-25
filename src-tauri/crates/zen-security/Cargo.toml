@@ -1,16 +1,16 @@
 [package]
 name = "zen-security"
-version = "0.1.0"
-edition = "2021"
-publish = false
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
 
 [dependencies]
 zen-core = { workspace = true }
 zen-db = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-regex = "1"
-url = "2"
+regex = { workspace = true }
+url = { workspace = true }
 # url_safety builds DNS-pinned no-redirect clients; native-tls keeps the
 # pinned HTTPS behavior identical to the app build (feature-unified anyway).
 reqwest = { workspace = true, features = ["native-tls", "json"] }
@@ -19,3 +19,7 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 sqlx = { workspace = true }
+
+# Inherit the workspace lint policy ([workspace.lints] at the root).
+[lints]
+workspace = true

@@ -79,11 +79,6 @@ Integrate the new findings into the existing report. Produce an updated, well-or
 Include specific data-driven analysis with relevant statistics (means, medians, trends, percentages) to support conclusions. Numerical data has been pre-analyzed and the results are shown above — incorporate these into the report.
 
 Write only the updated report — no preamble or meta-commentary."#,
-            question = question,
-            scope_context = scope_context,
-            report_hint = report_hint,
-            findings_text = findings_text,
-            calculator_analysis = calculator_analysis,
         );
 
         match self
@@ -121,9 +116,6 @@ Based on the report so far, do we have enough information to answer the question
 Reply with ONLY "YES" or "NO" followed by a brief one-sentence reason.
 Example: "YES — The report covers all major aspects with evidence from multiple sources."
 Example: "NO — We still lack information about the economic impact.""#,
-            question = question,
-            report = report,
-            round_num = round_num,
         );
 
         match self.call_llm(&prompt, 0.1, 128, 30).await {
@@ -176,7 +168,7 @@ impl<'a> IterativeDeepResearcher<'a> {
             let display_title = if title.is_empty() || title == url {
                 url.clone()
             } else {
-                format!("[{}]({})", title, url)
+                format!("[{title}]({url})")
             };
             refs.push_str(&format!("{}. {}\n", i + 1, display_title));
         }
@@ -235,17 +227,13 @@ Requirements:
 - **Do NOT** include a ## References section — one will be added automatically
 
 Include concrete numbers and data-driven analysis in the report to support conclusions. Where numerical data was found in the sources, pre-computed statistics are included above — reference these figures in your analysis."#,
-            question = question,
-            scope_context = scope_context,
-            report = report,
-            source_index = source_index,
         );
 
         // Append category-specific format override if applicable
         if let Some(cat) = category {
             let override_str = cat.prompt_override();
             if !override_str.is_empty() {
-                return format!("{}\n\n{}", base_prompt, override_str);
+                return format!("{base_prompt}\n\n{override_str}");
             }
         }
 
@@ -288,8 +276,7 @@ Include concrete numbers and data-driven analysis in the report to support concl
 Original report:
 {result}
 
-Write the full expanded report now."#,
-                result = result
+Write the full expanded report now."#
             );
             if let Ok(expanded) = self
                 .call_llm(&expand_prompt, 0.4, self.max_report_tokens as usize, 180)
@@ -312,6 +299,6 @@ Write the full expanded report now."#,
 
         // Append structured ## References section
         let references = Self::format_references(&sources);
-        format!("{}\n{}", cleaned, references)
+        format!("{cleaned}\n{references}")
     }
 }

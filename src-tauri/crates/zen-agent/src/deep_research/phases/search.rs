@@ -161,7 +161,11 @@ impl<'a> IterativeDeepResearcher<'a> {
         for ((url, title), display_text) in urls_to_fetch.into_iter().zip(url_display) {
             let sem = semaphore.clone();
             futures.push(async move {
-                let _permit = sem.acquire().await.expect("Semaphore closed");
+                // The semaphore is owned by this scope and never closed early; if that
+                // ever changes, skipping the fetch beats panicking mid-research.
+                let Ok(_permit) = sem.acquire().await else {
+                    return None;
+                };
 
                 let content = self_ref.fetch_page(&url).await;
 

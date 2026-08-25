@@ -127,8 +127,7 @@ pub async fn repair_mermaid(
         .await
         .map_err(|e| {
             ZenError::Internal(format!(
-                "Mermaid repair provider resolution failed: {}",
-                e
+                "Mermaid repair provider resolution failed: {e}"
             ))
         })?;
 
@@ -149,10 +148,9 @@ pub async fn repair_mermaid(
 
     let user_prompt = format!(
         "The following Mermaid diagram failed to render.\n\n\
-         ## Broken diagram\n```mermaid\n{}\n```\n\n\
-         ## Renderer error\n{}\n\n\
-         Return ONLY the corrected Mermaid diagram code.",
-        code, error
+         ## Broken diagram\n```mermaid\n{code}\n```\n\n\
+         ## Renderer error\n{error}\n\n\
+         Return ONLY the corrected Mermaid diagram code."
     );
 
     let messages = vec![
@@ -185,7 +183,7 @@ pub async fn repair_mermaid(
         )
         .await
         .map_err(|e| {
-            ZenError::Internal(format!("Mermaid repair generation failed: {}", e))
+            ZenError::Internal(format!("Mermaid repair generation failed: {e}"))
         })?;
 
     let fixed = extract_fenced_code(&response.content);
@@ -267,8 +265,7 @@ pub async fn repair_chart(
         .await
         .map_err(|e| {
             ZenError::Internal(format!(
-                "Chart repair provider resolution failed: {}",
-                e
+                "Chart repair provider resolution failed: {e}"
             ))
         })?;
 
@@ -288,10 +285,9 @@ pub async fn repair_chart(
 
     let user_prompt = format!(
         "The following chart JSON failed to render.\n\n\
-         ## Broken chart\n```chart\n{}\n```\n\n\
-         ## Renderer error\n{}\n\n\
-         Return ONLY the corrected chart JSON.",
-        code, error
+         ## Broken chart\n```chart\n{code}\n```\n\n\
+         ## Renderer error\n{error}\n\n\
+         Return ONLY the corrected chart JSON."
     );
 
     let messages = vec![
@@ -324,7 +320,7 @@ pub async fn repair_chart(
         )
         .await
         .map_err(|e| {
-            ZenError::Internal(format!("Chart repair generation failed: {}", e))
+            ZenError::Internal(format!("Chart repair generation failed: {e}"))
         })?;
 
     let fixed = extract_fenced_code(&response.content);

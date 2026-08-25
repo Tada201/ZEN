@@ -454,7 +454,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for DrawTool {
         } else {
             let parts: Vec<String> = shape_counts
                 .iter()
-                .map(|(kind, count)| format!("{} {}", count, kind))
+                .map(|(kind, count)| format!("{count} {kind}"))
                 .collect();
             format!("Drew {}", parts.join(", "))
         };

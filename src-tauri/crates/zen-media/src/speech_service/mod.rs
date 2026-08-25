@@ -229,8 +229,7 @@ impl SpeechService {
         }
 
         let url = format!(
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
-            model_name
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{model_name}"
         );
 
         info!(url = %url, model = %model_name, "Downloading Whisper model...");
@@ -371,8 +370,7 @@ impl SpeechService {
                     Ok(())
                 } else {
                     Err(format!(
-                        "Failed to download model '{}' and no fallback models found on disk: {}.",
-                        model_name, e
+                        "Failed to download model '{model_name}' and no fallback models found on disk: {e}."
                     ))
                 }
             }
@@ -461,7 +459,7 @@ impl SpeechService {
         let part = multipart::Part::bytes(audio_data)
             .file_name("audio.wav")
             .mime_str("audio/wav")
-            .unwrap();
+            .unwrap_or_else(|e| panic!("static MIME type 'audio/wav' rejected: {e}"));
 
         let form = multipart::Form::new()
             .text("language", "en")
@@ -479,7 +477,7 @@ impl SpeechService {
             .timeout(std::time::Duration::from_secs(90))
             .send()
             .await
-            .map_err(|e| format!("Failed to send request to whisper-server: {}", e))?;
+            .map_err(|e| format!("Failed to send request to whisper-server: {e}"))?;
 
         if !res.status().is_success() {
             return Err(format!(
@@ -491,7 +489,7 @@ impl SpeechService {
         let body: serde_json::Value = res
             .json()
             .await
-            .map_err(|e| format!("Failed to parse whisper-server JSON: {}", e))?;
+            .map_err(|e| format!("Failed to parse whisper-server JSON: {e}"))?;
         info!(
             inference_ms = inference_started_at.elapsed().as_millis(),
             total_ms = total_started_at.elapsed().as_millis(),

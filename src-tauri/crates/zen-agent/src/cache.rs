@@ -15,7 +15,7 @@ impl CacheEntry {
     pub fn is_expired(&self) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         now > self.timestamp + self.ttl_secs
     }
@@ -44,7 +44,7 @@ impl ToolCache {
         let canonical = serde_json::to_string(args).unwrap_or_else(|_| args.to_string());
         hasher.update(canonical.as_bytes());
         let hash = hasher.finalize();
-        format!("{}{:x}", tool_name, hash)
+        format!("{tool_name}{hash:x}")
     }
 
     /// Get cached result if available and not expired
@@ -67,7 +67,7 @@ impl ToolCache {
     pub fn set_with_ttl(&mut self, key: String, result: serde_json::Value, ttl_secs: u64) {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         self.cache.insert(
@@ -110,7 +110,7 @@ impl ToolCache {
     pub fn stats(&self) -> CacheStats {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         let total = self.cache.len();

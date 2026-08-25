@@ -41,7 +41,7 @@ impl Runner {
             execution_id: Some(result.tool_call_id.clone()),
             batch_id: Some(self.tool_batch_id(chat_id, agent_id, iteration)),
             tool_batch_id: Some(self.tool_batch_id(chat_id, agent_id, iteration)),
-            message_id: assistant_message_id.clone(),
+            message_id: assistant_message_id,
             agent_id: agent_id.to_string(),
             agent_name: agent_name.to_string(),
             chat_id: chat_id.to_string(),
@@ -132,7 +132,7 @@ fn format_tool_result_output(result: &ToolResult) -> String {
                     _ => formatted_result.to_string(),
                 }
             } else if let Some(error) = obj.get("error") {
-                format!("Error: {}", error)
+                format!("Error: {error}")
             } else {
                 result.content.to_string()
             }

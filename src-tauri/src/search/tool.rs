@@ -23,7 +23,7 @@ async fn duckduckgo_search(query: &str) -> Result<Vec<SearchResult>, String> {
         .form(&params)
         .send()
         .await
-        .map_err(|e| format!("Failed to reach DuckDuckGo: {}", e))?;
+        .map_err(|e| format!("Failed to reach DuckDuckGo: {e}"))?;
 
     if !response.status().is_success() {
         return Err(format!("DuckDuckGo returned status: {}", response.status()));
@@ -32,7 +32,7 @@ async fn duckduckgo_search(query: &str) -> Result<Vec<SearchResult>, String> {
     let html_body = response
         .text()
         .await
-        .map_err(|e| format!("Failed to read response body: {}", e))?;
+        .map_err(|e| format!("Failed to read response body: {e}"))?;
 
     parse_duckduckgo_results(&html_body)
 }
@@ -256,7 +256,7 @@ async fn nine_router_search_fallback(
     let db_pool = state
         .db()
         .await
-        .map_err(|e| format!("Failed to get database pool: {}", e))?;
+        .map_err(|e| format!("Failed to get database pool: {e}"))?;
 
     let nine_router_base_url = state
         .settings_manager
@@ -356,7 +356,7 @@ async fn nine_router_search_fallback(
     let resp = post_req
         .send()
         .await
-        .map_err(|e| format!("Failed to reach 9Router chat completion: {}", e))?;
+        .map_err(|e| format!("Failed to reach 9Router chat completion: {e}"))?;
 
     if !resp.status().is_success() {
         return Err(format!(
@@ -368,7 +368,7 @@ async fn nine_router_search_fallback(
     let text_content = resp
         .text()
         .await
-        .map_err(|e| format!("Failed to read 9Router response text: {}", e))?;
+        .map_err(|e| format!("Failed to read 9Router response text: {e}"))?;
 
     // Parse the chat completions JSON
     #[derive(serde::Deserialize)]
@@ -385,7 +385,7 @@ async fn nine_router_search_fallback(
     }
 
     let completion: ChatCompletion = serde_json::from_str(&text_content)
-        .map_err(|e| format!("Failed to parse chat completion structure: {}", e))?;
+        .map_err(|e| format!("Failed to parse chat completion structure: {e}"))?;
 
     let raw_content = completion
         .choices
@@ -402,8 +402,7 @@ async fn nine_router_search_fallback(
 
     let results: Vec<SearchResult> = serde_json::from_str(cleaned_json).map_err(|e| {
         format!(
-            "Failed to parse search results JSON from model content: {}",
-            e
+            "Failed to parse search results JSON from model content: {e}"
         )
     })?;
 
@@ -415,7 +414,7 @@ async fn nine_router_search_fallback(
 fn clean_ddg_url(href: &str) -> String {
     // Skip protocol-relative prefix and parse query parameters
     let href = href.trim_start_matches("//");
-    if let Ok(parsed) = url::Url::parse(&format!("https://{}", href)) {
+    if let Ok(parsed) = url::Url::parse(&format!("https://{href}")) {
         if let Some(uddg) = parsed.query_pairs().find(|(k, _)| k == "uddg") {
             // uddg is already percent-decoded by query_pairs(); return it directly
             return uddg.1.to_string();
@@ -432,11 +431,11 @@ fn parse_duckduckgo_results(html: &str) -> Result<Vec<SearchResult>, String> {
     let document = Html::parse_document(html);
 
     let result_selector = Selector::parse(".result")
-        .map_err(|e| format!("Failed to parse result selector: {}", e))?;
+        .map_err(|e| format!("Failed to parse result selector: {e}"))?;
     let title_selector = Selector::parse(".result__title a")
-        .map_err(|e| format!("Failed to parse title selector: {}", e))?;
+        .map_err(|e| format!("Failed to parse title selector: {e}"))?;
     let snippet_selector = Selector::parse(".result__snippet")
-        .map_err(|e| format!("Failed to parse snippet selector: {}", e))?;
+        .map_err(|e| format!("Failed to parse snippet selector: {e}"))?;
 
     let mut results = Vec::new();
 

@@ -62,17 +62,17 @@ pub async fn authorize(
     // building the authorization URL.
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
-        .map_err(|e| format!("loopback bind failed: {}", e))?;
+        .map_err(|e| format!("loopback bind failed: {e}"))?;
     let port = listener
         .local_addr()
-        .map_err(|e| format!("loopback addr failed: {}", e))?
+        .map_err(|e| format!("loopback addr failed: {e}"))?
         .port();
-    let redirect_uri = format!("http://127.0.0.1:{}/callback", port);
+    let redirect_uri = format!("http://127.0.0.1:{port}/callback");
 
     let auth_url = build_authorize_url(&meta, client_id, &redirect_uri, &state, &pkce, scopes)?;
     browser
         .open_url(&auth_url)
-        .map_err(|e| format!("failed to open browser for OAuth: {}", e))?;
+        .map_err(|e| format!("failed to open browser for OAuth: {e}"))?;
 
     let code = wait_for_code(listener, &state).await?;
     exchange_code(&meta, client_id, &redirect_uri, &code, &pkce).await
@@ -88,7 +88,7 @@ fn build_authorize_url(
     scopes: Option<&str>,
 ) -> Result<String, String> {
     let mut url = url::Url::parse(&meta.authorization_endpoint)
-        .map_err(|e| format!("invalid authorization endpoint: {}", e))?;
+        .map_err(|e| format!("invalid authorization endpoint: {e}"))?;
     {
         let mut q = url.query_pairs_mut();
         q.append_pair("response_type", "code");
@@ -113,12 +113,12 @@ async fn wait_for_code(listener: TcpListener, expected_state: &str) -> Result<St
             let (mut stream, _) = listener
                 .accept()
                 .await
-                .map_err(|e| format!("loopback accept failed: {}", e))?;
+                .map_err(|e| format!("loopback accept failed: {e}"))?;
             let mut buf = [0u8; 4096];
             let n = stream
                 .read(&mut buf)
                 .await
-                .map_err(|e| format!("loopback read failed: {}", e))?;
+                .map_err(|e| format!("loopback read failed: {e}"))?;
             let request = String::from_utf8_lossy(&buf[..n]);
             let Some(target) = request
                 .lines()
@@ -133,9 +133,9 @@ async fn wait_for_code(listener: TcpListener, expected_state: &str) -> Result<St
                 write_response(&mut stream, "Waiting for authorization…").await;
                 continue;
             }
-            let full = format!("http://127.0.0.1{}", target);
+            let full = format!("http://127.0.0.1{target}");
             let parsed = url::Url::parse(&full)
-                .map_err(|e| format!("callback URL parse failed: {}", e))?;
+                .map_err(|e| format!("callback URL parse failed: {e}"))?;
             let mut code = None;
             let mut got_state = None;
             let mut oauth_error = None;
@@ -149,7 +149,7 @@ async fn wait_for_code(listener: TcpListener, expected_state: &str) -> Result<St
             }
             if let Some(err) = oauth_error {
                 write_response(&mut stream, "Authorization denied. You can close this tab.").await;
-                return Err(format!("authorization server returned error: {}", err));
+                return Err(format!("authorization server returned error: {err}"));
             }
             if got_state.as_deref() != Some(expected_state) {
                 write_response(&mut stream, "State mismatch. You can close this tab.").await;
@@ -172,8 +172,7 @@ async fn wait_for_code(listener: TcpListener, expected_state: &str) -> Result<St
 /// message. Errors are swallowed — the flow's success is decided by the code.
 async fn write_response(stream: &mut tokio::net::TcpStream, message: &str) {
     let body = format!(
-        "<!doctype html><meta charset=utf-8><body style=\"font-family:sans-serif;padding:2rem\">{}</body>",
-        message
+        "<!doctype html><meta charset=utf-8><body style=\"font-family:sans-serif;padding:2rem\">{message}</body>"
     );
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -194,7 +193,7 @@ async fn exchange_code(
     pkce: &PkcePair,
 ) -> Result<StoredToken, String> {
     let parsed = url::Url::parse(&meta.token_endpoint)
-        .map_err(|e| format!("invalid token endpoint: {}", e))?;
+        .map_err(|e| format!("invalid token endpoint: {e}"))?;
     let client = build_pinned_http_client(&parsed, HTTP_TIMEOUT).await?;
     let form = [
         ("grant_type", "authorization_code"),
@@ -211,14 +210,14 @@ async fn exchange_code(
         .timeout(HTTP_TIMEOUT)
         .send()
         .await
-        .map_err(|e| format!("token exchange failed: {}", e))?;
+        .map_err(|e| format!("token exchange failed: {e}"))?;
     if !resp.status().is_success() {
         return Err(format!("token exchange returned HTTP {}", resp.status()));
     }
     let token: TokenResponse = resp
         .json()
         .await
-        .map_err(|e| format!("token response parse failed: {}", e))?;
+        .map_err(|e| format!("token response parse failed: {e}"))?;
     let obtained_at_unix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())

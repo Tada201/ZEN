@@ -54,14 +54,14 @@ impl PtySession {
     /// Check if the child process has exited.
     pub async fn try_wait(&self) -> Result<Option<portable_pty::ExitStatus>> {
         let mut child = self.child.lock().await;
-        child.try_wait().map_err(|e| anyhow::anyhow!("{}", e))
+        child.try_wait().map_err(|e| anyhow::anyhow!("{e}"))
     }
 
     /// Kill the child process.
     pub async fn kill(&self) -> Result<()> {
         let mut child = self.child.lock().await;
         tracing::info!(session_id = %self.session_id, "Killing PTY session");
-        child.kill().map_err(|e| anyhow::anyhow!("{}", e))
+        child.kill().map_err(|e| anyhow::anyhow!("{e}"))
     }
 
     /// Write data (keystrokes) to the PTY.
@@ -74,7 +74,7 @@ impl PtySession {
 
     /// Read and drain the accumulated output buffer.
     pub async fn read_output(&self) -> TerminalOutputSnapshot {
-        let mut buf = self.output_buffer.write().unwrap();
+        let mut buf = self.output_buffer.write().unwrap_or_else(|err| err.into_inner());
         TerminalOutputSnapshot {
             sequence: buf.sequence,
             data: std::mem::take(&mut buf.data),
@@ -83,7 +83,7 @@ impl PtySession {
 
     /// Get the current output without draining.
     pub async fn peek_output(&self) -> TerminalOutputSnapshot {
-        let buf = self.output_buffer.read().unwrap();
+        let buf = self.output_buffer.read().unwrap_or_else(|err| err.into_inner());
         TerminalOutputSnapshot {
             sequence: buf.sequence,
             data: buf.data.clone(),
@@ -157,7 +157,7 @@ impl TerminalManager {
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|e| anyhow::anyhow!("Failed to open PTY: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to open PTY: {e}"))?;
 
         if let Some(dir) = cwd {
             cmd.cwd(dir);
@@ -166,7 +166,7 @@ impl TerminalManager {
         let child = pair
             .slave
             .spawn_command(cmd)
-            .map_err(|e| anyhow::anyhow!("Failed to spawn command: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to spawn command: {e}"))?;
 
         let pid = child.process_id().unwrap_or(0);
 
@@ -174,12 +174,12 @@ impl TerminalManager {
         let mut reader = pair
             .master
             .try_clone_reader()
-            .map_err(|e| anyhow::anyhow!("Failed to clone PTY reader: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to clone PTY reader: {e}"))?;
 
         let writer = pair
             .master
             .take_writer()
-            .map_err(|e| anyhow::anyhow!("Failed to clone PTY writer: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to clone PTY writer: {e}"))?;
 
         // Set up background reader that accumulates output
         let output_buffer = Arc::new(std::sync::RwLock::new(TerminalOutputBuffer {
@@ -188,7 +188,7 @@ impl TerminalManager {
         }));
         let buffer_clone = output_buffer.clone();
         let reader_done = Arc::new(tokio::sync::Notify::new());
-        let reader_done_clone = reader_done.clone();
+        let reader_done_clone = reader_done;
         let sid = session_id.clone();
 
         let reader_handle = tokio::task::spawn_blocking(move || {
@@ -204,7 +204,7 @@ impl TerminalManager {
                         let text = String::from_utf8_lossy(&chunk[..n]).to_string();
                         // tracing::debug!("PTY Read {} bytes: {:?}", n, text);
                         let sequence = {
-                            let mut b = buffer_clone.write().unwrap();
+                            let mut b = buffer_clone.write().unwrap_or_else(|err| err.into_inner());
                             b.sequence = b.sequence.saturating_add(1);
                             b.data.push_str(&text);
                             if b.data.len() > OUTPUT_BUFFER_LIMIT {
@@ -341,7 +341,7 @@ impl TerminalManager {
                 let combined = if stderr_str.is_empty() {
                     stdout_str.clone()
                 } else {
-                    format!("{}{}", stdout_str, stderr_str)
+                    format!("{stdout_str}{stderr_str}")
                 };
 
                 Ok(CommandResult {
@@ -353,7 +353,7 @@ impl TerminalManager {
                     was_truncated: false,
                 })
             }
-            Ok(Err(e)) => Err(anyhow::anyhow!("Command execution failed: {}", e)),
+            Ok(Err(e)) => Err(anyhow::anyhow!("Command execution failed: {e}")),
             Err(is_timeout) => {
                 // Timeout or Cancellation occurred — kill process tree but capture any partial output
                 if let Some(ref pm) = process_manager {
@@ -368,7 +368,7 @@ impl TerminalManager {
                 let combined = if stderr_str.is_empty() {
                     stdout_str.clone()
                 } else {
-                    format!("{}{}", stdout_str, stderr_str)
+                    format!("{stdout_str}{stderr_str}")
                 };
                 Ok(CommandResult {
                     output: combined,
@@ -482,15 +482,14 @@ impl CommandResult {
             ""
         };
 
-        let content_block = format!("{}```\n{}\n```", truncation_warning, content);
+        let content_block = format!("{truncation_warning}```\n{content}\n```");
 
         if self.timed_out {
             if is_empty {
-                format!("Command \"{}\" timed out with no output captured.", command)
+                format!("Command \"{command}\" timed out with no output captured.")
             } else {
                 format!(
-                    "Command \"{}\" timed out. Partial output:\n\n{}",
-                    command, content_block
+                    "Command \"{command}\" timed out. Partial output:\n\n{content_block}"
                 )
             }
         } else {
@@ -504,11 +503,10 @@ impl CommandResult {
                 }
                 Some(code) => {
                     if is_empty {
-                        format!("Command \"{}\" failed with exit code {}.", command, code)
+                        format!("Command \"{command}\" failed with exit code {code}.")
                     } else {
                         format!(
-                            "Command \"{}\" failed with exit code {}. Output:\n\n{}",
-                            command, code, content_block
+                            "Command \"{command}\" failed with exit code {code}. Output:\n\n{content_block}"
                         )
                     }
                 }
@@ -516,7 +514,7 @@ impl CommandResult {
                     if is_empty {
                         "Command terminated. No output was captured.".to_string()
                     } else {
-                        format!("Command completed. Output:\n\n{}", content_block)
+                        format!("Command completed. Output:\n\n{content_block}")
                     }
                 }
             }

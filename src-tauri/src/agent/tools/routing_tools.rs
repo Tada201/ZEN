@@ -61,16 +61,16 @@ impl zen_tools::AgentTool<tauri::AppHandle> for RouteTool {
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let args: RouteArgs = serde_json::from_value(input)
-            .map_err(|e| anyhow!("Invalid routing arguments: {}", e))?;
+            .map_err(|e| anyhow!("Invalid routing arguments: {e}"))?;
 
         // ── Resolve Origin ──
         let start_coords = if let Some(origin_name) = args.origin {
             let results = crate::services::gtsm::geocoding::search(&origin_name, 1)
                 .await
-                .map_err(|e| anyhow!("Failed to geocode origin '{}': {}", origin_name, e))?;
+                .map_err(|e| anyhow!("Failed to geocode origin '{origin_name}': {e}"))?;
             let first = results
                 .first()
-                .ok_or_else(|| anyhow!("Origin '{}' not found", origin_name))?;
+                .ok_or_else(|| anyhow!("Origin '{origin_name}' not found"))?;
             [first.lat, first.lon]
         } else {
             [
@@ -85,10 +85,10 @@ impl zen_tools::AgentTool<tauri::AppHandle> for RouteTool {
         let end_coords = if let Some(dest_name) = args.destination {
             let results = crate::services::gtsm::geocoding::search(&dest_name, 1)
                 .await
-                .map_err(|e| anyhow!("Failed to geocode destination '{}': {}", dest_name, e))?;
+                .map_err(|e| anyhow!("Failed to geocode destination '{dest_name}': {e}"))?;
             let first = results
                 .first()
-                .ok_or_else(|| anyhow!("Destination '{}' not found", dest_name))?;
+                .ok_or_else(|| anyhow!("Destination '{dest_name}' not found"))?;
             [first.lat, first.lon]
         } else {
             [
@@ -108,7 +108,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for RouteTool {
         let pool = state
             .db()
             .await
-            .map_err(|e| anyhow::anyhow!("DB Init failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("DB Init failed: {e}"))?;
 
         // Fetch API keys through SecretService; settings reads must not expose credentials.
         let here_key = state
@@ -140,7 +140,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for RouteTool {
             Some(&pool),
         )
         .await
-        .map_err(|e| anyhow!("Route calculation failed: {}", e))?;
+        .map_err(|e| anyhow!("Route calculation failed: {e}"))?;
 
         // Emit route to frontend
         let _ = app.emit("map:show-route", serde_json::to_value(&route)?);
@@ -207,7 +207,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for GeocodeTool {
 
         let results = crate::services::gtsm::geocoding::search(query, limit)
             .await
-            .map_err(|e| anyhow!("Geocoding failed: {}", e))?;
+            .map_err(|e| anyhow!("Geocoding failed: {e}"))?;
 
         Ok(json!({
             "count": results.len(),
@@ -260,7 +260,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for ReverseGeocodeTool {
 
         let result = crate::services::gtsm::geocoding::reverse(lat, lon)
             .await
-            .map_err(|e| anyhow!("Reverse geocoding failed: {}", e))?;
+            .map_err(|e| anyhow!("Reverse geocoding failed: {e}"))?;
 
         Ok(serde_json::to_value(&result)?)
     }

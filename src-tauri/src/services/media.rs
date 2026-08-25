@@ -38,7 +38,7 @@ impl MediaService {
     /// Called once during app setup, after the AppHandle is available.
     pub fn setup(&self, app: &tauri::AppHandle) -> AppResult<()> {
         let dir = app.path().app_data_dir().map_err(|e| {
-            ZenError::Internal(format!("Failed to resolve AppData directory: {}", e))
+            ZenError::Internal(format!("Failed to resolve AppData directory: {e}"))
         })?;
         self.app_data_dir
             .set(dir)
@@ -57,7 +57,7 @@ impl MediaService {
         let dir = self.app_data_dir()?.join(WALLPAPERS_SUBDIR);
         if !dir.exists() {
             tokio::fs::create_dir_all(&dir).await.map_err(|e| {
-                ZenError::Internal(format!("Failed to create wallpapers directory: {}", e))
+                ZenError::Internal(format!("Failed to create wallpapers directory: {e}"))
             })?;
         }
         Ok(dir)
@@ -97,8 +97,7 @@ impl MediaService {
             .await
             .map_err(|e| {
                 ZenError::Internal(format!(
-                    "Failed to copy wallpaper into app folder: {}",
-                    e
+                    "Failed to copy wallpaper into app folder: {e}"
                 ))
             })?;
 
@@ -140,11 +139,11 @@ impl MediaService {
     async fn evict_all(&self) -> AppResult<bool> {
         let dir = self.wallpapers_dir().await?;
         let mut entries = tokio::fs::read_dir(&dir).await.map_err(|e| {
-            ZenError::Internal(format!("Failed to read wallpapers directory: {}", e))
+            ZenError::Internal(format!("Failed to read wallpapers directory: {e}"))
         })?;
         let mut removed = false;
         while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            ZenError::Internal(format!("Failed to iterate wallpapers directory: {}", e))
+            ZenError::Internal(format!("Failed to iterate wallpapers directory: {e}"))
         })? {
             let path = entry.path();
             if path.is_file() {
@@ -238,8 +237,8 @@ mod tests {
 
         let bogus = tmp.path().join("does-not-exist.mp4");
         let err = svc.set_wallpaper(&bogus).await.unwrap_err();
-        let msg = format!("{}", err);
-        assert!(msg.contains("not a file"), "unexpected error: {}", msg);
+        let msg = format!("{err}");
+        assert!(msg.contains("not a file"), "unexpected error: {msg}");
     }
 
     #[tokio::test]

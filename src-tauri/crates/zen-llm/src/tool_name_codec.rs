@@ -78,7 +78,7 @@ fn sanitize(name: &str) -> String {
 }
 
 fn truncate_with_suffix(base: &str, n: usize) -> String {
-    let suffix = format!("_{}", n);
+    let suffix = format!("_{n}");
     let keep = MAX_NAME_LEN.saturating_sub(suffix.len());
     let mut s: String = base.chars().take(keep).collect();
     s.push_str(&suffix);

@@ -27,7 +27,7 @@ fn normalize_ip_for_check(ip: IpAddr) -> IpAddr {
     ip
 }
 pub fn validate_public_http_url(raw_url: &str) -> Result<Url, String> {
-    let parsed = Url::parse(raw_url).map_err(|e| format!("Invalid URL: {}", e))?;
+    let parsed = Url::parse(raw_url).map_err(|e| format!("Invalid URL: {e}"))?;
     match parsed.scheme() {
         "http" | "https" => {}
         _ => return Err("URL scheme must be http or https".to_string()),
@@ -63,8 +63,7 @@ pub fn validate_public_ip(ip: IpAddr) -> Result<(), String> {
 
     if blocked {
         Err(format!(
-            "Private, local, or reserved IP is not allowed: {}",
-            ip
+            "Private, local, or reserved IP is not allowed: {ip}"
         ))
     } else {
         Ok(())
@@ -95,7 +94,7 @@ fn is_blocked_ipv6(ip: Ipv6Addr) -> bool {
 pub fn resolve_redirect_url(current: &Url, location: &str) -> Result<Url, String> {
     current
         .join(location)
-        .map_err(|e| format!("Invalid redirect URL: {}", e))
+        .map_err(|e| format!("Invalid redirect URL: {e}"))
         .and_then(|url| validate_public_http_url(url.as_str()))
 }
 
@@ -110,9 +109,9 @@ pub async fn validate_url_dns_safety(parsed_url: &Url) -> Result<(), String> {
     if let Ok(ip) = ip_host.parse::<std::net::IpAddr>() {
         validate_public_ip(ip)?;
     } else {
-        let lookup_target = format!("{}:80", host);
+        let lookup_target = format!("{host}:80");
         let addrs = tokio::net::lookup_host(lookup_target).await
-            .map_err(|e| format!("DNS resolution failed for {}: {}", host, e))?;
+            .map_err(|e| format!("DNS resolution failed for {host}: {e}"))?;
 
         for addr in addrs {
             validate_public_ip(addr.ip())?;
@@ -145,10 +144,10 @@ pub async fn build_pinned_http_client(
         validate_public_ip(ip)?;
         SocketAddr::new(ip, port)
     } else {
-        let lookup_target = format!("{}:{}", host, port);
+        let lookup_target = format!("{host}:{port}");
         let addrs = tokio::net::lookup_host(lookup_target)
             .await
-            .map_err(|e| format!("DNS resolution failed for {}: {}", host, e))?;
+            .map_err(|e| format!("DNS resolution failed for {host}: {e}"))?;
         let validated = addrs
             .map(|addr| {
                 validate_public_ip(addr.ip())?;
@@ -166,7 +165,7 @@ pub async fn build_pinned_http_client(
         .redirect(reqwest::redirect::Policy::none())
         .resolve(host, pinned_addr)
         .build()
-        .map_err(|e| format!("Failed to build pinned HTTP client: {}", e))
+        .map_err(|e| format!("Failed to build pinned HTTP client: {e}"))
 }
 
 /// Build a `reqwest::RequestBuilder` for `url` that is DNS-pinned to a single
@@ -222,14 +221,14 @@ pub async fn build_pinned_get_request(
             .redirect(reqwest::redirect::Policy::none())
             .resolve(host, addr)
             .build()
-            .map_err(|e| format!("Failed to build pinned HTTP client: {}", e))?;
+            .map_err(|e| format!("Failed to build pinned HTTP client: {e}"))?;
         return Ok(pinned.get(url.clone()));
     }
 
-    let lookup_target = format!("{}:{}", host, port);
+    let lookup_target = format!("{host}:{port}");
     let addrs = tokio::net::lookup_host(&lookup_target)
         .await
-        .map_err(|e| format!("DNS resolution failed for {}: {}", host, e))?;
+        .map_err(|e| format!("DNS resolution failed for {host}: {e}"))?;
 
     let pinned_addr = addrs
         .map(|addr| {
@@ -246,7 +245,7 @@ pub async fn build_pinned_get_request(
         .redirect(reqwest::redirect::Policy::none())
         .resolve(host, pinned_addr)
         .build()
-        .map_err(|e| format!("Failed to build pinned HTTP client: {}", e))?;
+        .map_err(|e| format!("Failed to build pinned HTTP client: {e}"))?;
     Ok(pinned.get(url.clone()))
 }
 
@@ -274,8 +273,7 @@ mod ipv6_mapped_ipv4_tests {
         ] {
             assert!(
                 validate_public_http_url(raw).is_err(),
-                "expected rejection of {}",
-                raw
+                "expected rejection of {raw}"
             );
         }
     }
@@ -314,8 +312,7 @@ mod ipv6_mapped_ipv4_tests {
             let mapped: Ipv6Addr = raw.parse().unwrap();
             assert!(
                 validate_public_ip(IpAddr::V6(mapped)).is_err(),
-                "expected rejection of mapped {}",
-                raw
+                "expected rejection of mapped {raw}"
             );
         }
     }

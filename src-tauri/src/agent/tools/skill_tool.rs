@@ -111,12 +111,12 @@ impl zen_tools::AgentTool<tauri::AppHandle> for SkillTool {
                 let name = input
                     .get("name")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("missing 'name' for action={}", action))?;
+                    .ok_or_else(|| anyhow!("missing 'name' for action={action}"))?;
                 let args = input.get("args").and_then(|v| v.as_str()).unwrap_or("");
                 let outcome = self.manager.enabled_skills_for_cwd(&cwd).await;
                 let skill = outcome
                     .find_by_name(name)
-                    .ok_or_else(|| anyhow!("skill not found: {}", name))?;
+                    .ok_or_else(|| anyhow!("skill not found: {name}"))?;
                 let body = tokio::fs::read_to_string(&skill.path)
                     .await
                     .map_err(|e| anyhow!("failed to read {}: {}", skill.path.display(), e))?;
@@ -124,7 +124,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for SkillTool {
                     let suffix = if args.is_empty() {
                         String::new()
                     } else {
-                        format!(": {}", args)
+                        format!(": {args}")
                     };
                     let expanded = body
                         .replace("$ARGUMENTS_SUFFIX", &suffix)
@@ -145,7 +145,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for SkillTool {
                     }))
                 }
             }
-            other => Err(anyhow!("unknown action: {}", other)),
+            other => Err(anyhow!("unknown action: {other}")),
         }
     }
 }

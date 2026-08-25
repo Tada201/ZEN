@@ -101,7 +101,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for SearchFilesTool {
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let args: SearchFilesArgs = serde_json::from_value(input)
-            .map_err(|e| anyhow::anyhow!("Invalid search_files arguments: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Invalid search_files arguments: {e}"))?;
         if args.pattern.trim().is_empty() {
             anyhow::bail!("pattern must not be empty");
         }
@@ -111,7 +111,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for SearchFilesTool {
         let regex = regex::RegexBuilder::new(&args.pattern)
             .case_insensitive(args.case_insensitive.unwrap_or(false))
             .build()
-            .map_err(|e| anyhow::anyhow!("Invalid regex pattern: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Invalid regex pattern: {e}"))?;
 
         let mode = args.output_mode.as_deref().unwrap_or("files_with_matches");
         if !matches!(mode, "files_with_matches" | "content" | "count") {
@@ -127,15 +127,15 @@ impl zen_tools::AgentTool<tauri::AppHandle> for SearchFilesTool {
         let workspace = state
             .workspace_for_chat(&chat_id)
             .await
-            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Unable to resolve session workspace: {e}"))?;
 
         let target = match args.path.as_deref().map(str::trim) {
             Some(p) if !p.is_empty() => crate::workspace::resolve_workspace_path(&workspace, p)
-                .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?,
+                .map_err(|e| anyhow::anyhow!("Workspace violation: {e}"))?,
             _ => workspace.clone(),
         };
         let target = crate::workspace::validate_workspace_path(&workspace, &target)
-            .map_err(|e| anyhow::anyhow!("Workspace violation: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Workspace violation: {e}"))?;
         if !target.is_dir() {
             anyhow::bail!("Not a directory: {}", target.display());
         }

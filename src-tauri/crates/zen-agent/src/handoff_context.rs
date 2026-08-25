@@ -9,12 +9,15 @@ use std::sync::LazyLock;
 
 const DEFAULT_SUCCESS_CRITERIA: &str = "Complete the delegated task and return a concise, well-structured summary of your findings or actions.";
 
+// Compile-time literal exercised by the build_handoff_context tests; cannot
+// fail at runtime.
+#[allow(clippy::expect_used)]
 static FILE_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r#"(?x)
         (?:
             [`'\"]?                                 # optional quote
-            (?:[\w.-]+/)+[\w.-]+\.(?:rs|ts|tsx|js|jsx|json|md|toml|yaml|yml|css|html|py|go|sql)
+            (?:[\w.-]+/)+[\w.-]+\.(?:rs|tsx|ts|jsx|js|json|md|toml|yaml|yml|css|html|py|go|sql)
             [`'\"]?
         )
         |

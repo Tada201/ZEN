@@ -198,7 +198,7 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         fs::write(
             dir.join(super::super::discovery::SKILLS_FILENAME),
-            format!("---\nname: {}\ndescription: {}\n---\n", name, desc),
+            format!("---\nname: {name}\ndescription: {desc}\n---\n"),
         )
         .unwrap();
     }
@@ -218,6 +218,9 @@ mod tests {
         let project = tmp.join("project");
         fs::create_dir_all(home.join(".zen/skills")).unwrap();
         fs::create_dir_all(project.join(".agents/skills")).unwrap();
+        // Mark `project` as a workspace root so skill_roots' ancestor walk
+        // discovers its `.agents/skills` (find_project_root looks for .git).
+        fs::create_dir_all(project.join(".git")).unwrap();
         write_skill(&home.join(".zen/skills"), "shared", "user-shared");
         write_skill(&project.join(".agents/skills"), "local", "repo-local");
 

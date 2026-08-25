@@ -11,7 +11,7 @@ use zen_core::SecretStore;
 
 /// Keyring key namespace for MCP OAuth tokens. One entry per server name.
 fn token_key(server_name: &str) -> String {
-    format!("mcp.oauth.{}", server_name)
+    format!("mcp.oauth.{server_name}")
 }
 
 /// A stored OAuth token set. `obtained_at_unix` + `expires_in_secs` let the
@@ -64,11 +64,11 @@ pub async fn store_token(
     server_name: &str,
     token: &StoredToken,
 ) -> Result<(), String> {
-    let blob = serde_json::to_string(token).map_err(|e| format!("token serialize: {}", e))?;
+    let blob = serde_json::to_string(token).map_err(|e| format!("token serialize: {e}"))?;
     secrets
         .set_secret(token_key(server_name), blob)
         .await
-        .map_err(|e| format!("token keyring write: {}", e))
+        .map_err(|e| format!("token keyring write: {e}"))
 }
 
 /// Load the stored token for `server_name`, if any.
@@ -79,13 +79,13 @@ pub async fn load_token(
     let Some(blob) = secrets
         .get_secret(&token_key(server_name))
         .await
-        .map_err(|e| format!("token keyring read: {}", e))?
+        .map_err(|e| format!("token keyring read: {e}"))?
     else {
         return Ok(None);
     };
     serde_json::from_str(&blob)
         .map(Some)
-        .map_err(|e| format!("token parse: {}", e))
+        .map_err(|e| format!("token parse: {e}"))
 }
 
 /// Delete any stored token for `server_name` (e.g. on consent revoke).
@@ -93,7 +93,7 @@ pub async fn clear_token(secrets: &dyn SecretStore, server_name: &str) -> Result
     secrets
         .delete_secret(&token_key(server_name))
         .await
-        .map_err(|e| format!("token keyring delete: {}", e))
+        .map_err(|e| format!("token keyring delete: {e}"))
 }
 
 #[cfg(test)]
@@ -141,7 +141,7 @@ mod tests {
         // A non-bearer scheme is preserved verbatim.
         let dpop = StoredToken {
             token_type: Some("DPoP".into()),
-            ..lower.clone()
+            ..lower
         };
         assert_eq!(dpop.authorization_header(), "DPoP tok");
     }

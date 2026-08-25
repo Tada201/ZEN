@@ -229,7 +229,7 @@ pub async fn run_deep_research(params: DeepResearchParams<'_>) {
                 }
             } else {
                 if engine.evolving_report.is_empty() {
-                    (format!("**Research failed:** {}", err_msg), "error")
+                    (format!("**Research failed:** {err_msg}"), "error")
                 } else {
                     (
                         format!(
@@ -298,7 +298,7 @@ async fn save_artifact(
     content: &str,
 ) {
     info!("Saving markdown research report as artifact...");
-    let title = format!("Deep Research: {}", query);
+    let title = format!("Deep Research: {query}");
     let _ = queries::upsert_artifact(
         db,
         &zen_db::models::Artifact {

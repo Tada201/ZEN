@@ -8,7 +8,7 @@ use crate::utils::now_ms;
 /// - Task status tracking
 /// - Dynamic task addition during execution
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Maximum retry attempts per task before marking as failed
 const MAX_TASK_RETRIES: usize = 3;
@@ -73,6 +73,10 @@ pub struct TaskQueue {
     failed: HashSet<String>,
     /// Task execution history (for debugging and analytics)
     history: Vec<TaskExecutionRecord>,
+    /// Tasks handed out by pop_next/pop_all_ready that have not yet been
+    /// marked completed or failed. Without this, mark_failed/retry could
+    /// never see a task that was actually executing.
+    running: HashMap<String, QueuedTask>,
 }
 
 /// Record of a task execution for history tracking
@@ -95,6 +99,7 @@ impl TaskQueue {
             completed: HashSet::new(),
             failed: HashSet::new(),
             history: Vec::new(),
+            running: HashMap::new(),
         }
     }
 
@@ -153,6 +158,8 @@ impl TaskQueue {
         let next_idx = ready_indices[0];
         let mut next_task = self.tasks.remove(next_idx);
         next_task.task.start();
+        self.running
+            .insert(next_task.task.id.clone(), next_task.clone());
         Some(next_task)
     }
 
@@ -201,6 +208,7 @@ impl TaskQueue {
     /// Mark a task as completed
     pub fn mark_completed(&mut self, task_id: &str, duration_ms: Option<i64>) {
         self.completed.insert(task_id.to_string());
+        self.running.remove(task_id);
 
         // Update task status if still in queue
         if let Some(task) = self.tasks.iter_mut().find(|t| t.task.id == task_id) {
@@ -223,6 +231,21 @@ impl TaskQueue {
 
         // Update task status if still in queue
         if let Some(task) = self.tasks.iter_mut().find(|t| t.task.id == task_id) {
+            task.task.fail(error);
+            self.history.push(TaskExecutionRecord {
+                task_id: task_id.to_string(),
+                description: task.task.description.clone(),
+                status: TaskStatus::Failed,
+                executed_at: now_ms(),
+                duration_ms,
+                error: Some(error.to_string()),
+                retry_count: task.retry_count,
+            });
+        } else if let Some(task) = self.running.get_mut(task_id) {
+            // The task was popped for execution, so it no longer lives in
+            // self.tasks — fail the running copy so the retry path can find the
+            // error and see a terminal status. The running entry stays until
+            // retry_failed_tasks or a later terminal mark consumes it.
             task.task.fail(error);
             self.history.push(TaskExecutionRecord {
                 task_id: task_id.to_string(),
@@ -293,10 +316,16 @@ impl TaskQueue {
             // Find the task in history to get error details
             if let Some(record) = self.history.iter().rfind(|r| r.task_id == task_id) {
                 if let Some(error) = &record.error {
-                    // Find original task definition (if still available)
-                    if let Some(pos) = self.tasks.iter().position(|t| t.task.id == task_id) {
-                        let task = self.tasks.remove(pos);
-
+                    // Find original task definition: either still pending in
+                    // the queue, or held in `running` after a pop + fail.
+                    let source = if let Some(pos) =
+                        self.tasks.iter().position(|t| t.task.id == task_id)
+                    {
+                        Some(self.tasks.remove(pos))
+                    } else {
+                        self.running.remove(&task_id)
+                    };
+                    if let Some(task) = source {
                         if task.can_retry() {
                             let plan_b = generate_plan_b(&task.task, error);
                             let retry_task = task.retry_with_plan_b(plan_b);
@@ -496,7 +525,7 @@ mod tests {
         queue.mark_failed(&task_id, "Test error", Some(50));
 
         // Retry with Plan B
-        let plan_b_generator = |_task: &Task, error: &str| format!("Plan B: {}", error);
+        let plan_b_generator = |_task: &Task, error: &str| format!("Plan B: {error}");
 
         let retried = queue.retry_failed_tasks(plan_b_generator);
         assert_eq!(retried, 1);
@@ -508,7 +537,7 @@ mod tests {
         let mut queue = TaskQueue::new();
 
         for i in 0..10 {
-            let task = Task::new(format!("Task {}", i), TaskType::ToolCall);
+            let task = Task::new(format!("Task {i}"), TaskType::ToolCall);
             queue.push(QueuedTask::from_task(task));
         }
 

@@ -115,7 +115,7 @@ impl McpClient {
         {
             Ok(response) => response,
             Err(error) if error.is_timeout() => return Ok(None),
-            Err(error) => return Err(format!("server/discover request failed: {}", error)),
+            Err(error) => return Err(format!("server/discover request failed: {error}")),
         };
 
         if matches!(response.status().as_u16(), 400 | 404 | 405 | 415) {
@@ -126,14 +126,14 @@ impl McpClient {
         }
         let json = read_rpc_response(response)
             .await
-            .map_err(|error| format!("server/discover: {}", error))?;
+            .map_err(|error| format!("server/discover: {error}"))?;
         if let Some(error) = json.get("error") {
             let code = error.get("code").and_then(Value::as_i64).unwrap_or_default();
             if code == -32601 || code == -32600 {
                 return Ok(None);
             }
             let message = error.get("message").and_then(Value::as_str).unwrap_or("unknown");
-            return Err(format!("server/discover: server error: {}", message));
+            return Err(format!("server/discover: server error: {message}"));
         }
         let result = json
             .get("result")
@@ -173,7 +173,7 @@ impl McpClient {
                 version: env!("CARGO_PKG_VERSION").to_string(),
             },
         })
-        .map_err(|e| format!("initialize: serialize failed: {}", e))?;
+        .map_err(|e| format!("initialize: serialize failed: {e}"))?;
         let envelope = serde_json::json!({
             "jsonrpc": "2.0",
             "id": next_http_request_id(),
@@ -195,14 +195,14 @@ impl McpClient {
             .timeout(timeout)
             .send()
             .await
-            .map_err(|e| format!("initialize POST failed: {}", e))?;
+            .map_err(|e| format!("initialize POST failed: {e}"))?;
 
         // Reject transport-level failures (401/5xx) BEFORE attempting to
         // parse JSON — otherwise an HTML error page bubbles up as a
         // confusing "bad JSON" message.
         let status = resp.status();
         if !status.is_success() {
-            return Err(format!("initialize: server returned HTTP {}", status));
+            return Err(format!("initialize: server returned HTTP {status}"));
         }
 
         // Canonical source of the session id is the response header.
@@ -215,21 +215,21 @@ impl McpClient {
 
         let json: serde_json::Value = read_rpc_response(resp)
             .await
-            .map_err(|e| format!("initialize: {}", e))?;
+            .map_err(|e| format!("initialize: {e}"))?;
 
         if let Some(err) = json.get("error") {
             let msg = err
                 .get("message")
                 .and_then(|m| m.as_str())
                 .unwrap_or("unknown");
-            return Err(format!("initialize: server error: {}", msg));
+            return Err(format!("initialize: server error: {msg}"));
         }
         let init: InitializeResult = serde_json::from_value(
             json.get("result")
                 .cloned()
                 .ok_or_else(|| "initialize: missing result".to_string())?,
         )
-        .map_err(|e| format!("initialize: deserialize failed: {}", e))?;
+        .map_err(|e| format!("initialize: deserialize failed: {e}"))?;
 
         if init.protocol_version != PROTOCOL_VERSION {
             // Forward-compat: MCP servers should pick a version they support
@@ -271,7 +271,7 @@ impl McpClient {
             .timeout(endpoint.request_timeout)
             .send()
             .await
-            .map_err(|e| format!("notifications/initialized send failed: {}", e))?;
+            .map_err(|e| format!("notifications/initialized send failed: {e}"))?;
         if !resp.status().is_success() {
             return Err(format!(
                 "notifications/initialized: server returned HTTP {}",

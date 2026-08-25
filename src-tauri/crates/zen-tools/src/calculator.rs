@@ -47,7 +47,7 @@ fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             let num_str: String = chars[start..i].iter().collect();
             let val: f64 = num_str
                 .parse()
-                .map_err(|_| format!("Invalid number: '{}'", num_str))?;
+                .map_err(|_| format!("Invalid number: '{num_str}'"))?;
             tokens.push(Token::Number(val));
             continue;
         }
@@ -70,7 +70,7 @@ fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             ')' => tokens.push(Token::RParen),
             ',' => tokens.push(Token::Comma),
             '%' => tokens.push(Token::Percent),
-            other => return Err(format!("Unexpected character: '{}'", other)),
+            other => return Err(format!("Unexpected character: '{other}'")),
         }
         i += 1;
     }
@@ -258,7 +258,7 @@ impl Parser {
                     match name.as_str() {
                         "pi" => Ok(std::f64::consts::PI),
                         "e" => Ok(std::f64::consts::E),
-                        _ => Err(format!("Unknown identifier: '{}'", name)),
+                        _ => Err(format!("Unknown identifier: '{name}'")),
                     }
                 }
             }
@@ -390,7 +390,7 @@ fn call_function(name: &str, args: &[f64]) -> Result<f64, String> {
             Ok(args.iter().sum())
         }
         "count" => Ok(args.len() as f64),
-        _ => Err(format!("Unknown function: '{}'", name)),
+        _ => Err(format!("Unknown function: '{name}'")),
     }
 }
 
@@ -555,7 +555,7 @@ impl<A: Send + Sync + 'static> Tool<A> for CalculatorTool {
                 })
             }
             Err(e) => Err(ToolError::ExecutionFailed {
-                message: format!("Failed to evaluate '{}': {}", trimmed, e),
+                message: format!("Failed to evaluate '{trimmed}': {e}"),
             }),
         }
     }

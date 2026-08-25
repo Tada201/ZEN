@@ -98,8 +98,7 @@ pub async fn generate_session_title(
                         .await
                         .map_err(|e| {
                             crate::error::ZenError::Internal(format!(
-                                "Title provider resolution failed: {}",
-                                e
+                                "Title provider resolution failed: {e}"
                             ))
                         })?
                 }
@@ -109,8 +108,7 @@ pub async fn generate_session_title(
                 .await
                 .map_err(|e| {
                     crate::error::ZenError::Internal(format!(
-                        "Title provider resolution failed: {}",
-                        e
+                        "Title provider resolution failed: {e}"
                     ))
                 })?,
         }
@@ -174,7 +172,7 @@ pub async fn generate_session_title(
             tokio_util::sync::CancellationToken::new(),
         )
         .await
-        .map_err(|e| crate::error::ZenError::Internal(format!("Title generation failed: {}", e)))?;
+        .map_err(|e| crate::error::ZenError::Internal(format!("Title generation failed: {e}")))?;
 
     let raw = response.content;
     let title = sanitize_title(&raw);

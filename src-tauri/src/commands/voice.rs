@@ -343,7 +343,7 @@ pub async fn list_voice_models(app: AppHandle) -> Result<Vec<VoiceModel>, ZenErr
 
     if voices_dir.exists() {
         let entries = std::fs::read_dir(&voices_dir)
-            .map_err(|e| ZenError::Internal(format!("Failed to read voices dir: {}", e)))?;
+            .map_err(|e| ZenError::Internal(format!("Failed to read voices dir: {e}")))?;
 
         for entry in entries.flatten() {
             let path = entry.path();
@@ -410,7 +410,7 @@ pub async fn add_voice_model(
     }
 
     let onnx_meta = std::fs::metadata(&onnx_src)
-        .map_err(|e| ZenError::Internal(format!("Failed to inspect ONNX file: {}", e)))?;
+        .map_err(|e| ZenError::Internal(format!("Failed to inspect ONNX file: {e}")))?;
     if !onnx_meta.is_file() || onnx_meta.len() > MAX_VOICE_MODEL_BYTES {
         return Err(ZenError::Custom(
             "ONNX file is invalid or too large".to_string(),
@@ -418,7 +418,7 @@ pub async fn add_voice_model(
     }
 
     let config_meta = std::fs::metadata(&config_src)
-        .map_err(|e| ZenError::Internal(format!("Failed to inspect config file: {}", e)))?;
+        .map_err(|e| ZenError::Internal(format!("Failed to inspect config file: {e}")))?;
     if !config_meta.is_file() || config_meta.len() > MAX_VOICE_CONFIG_BYTES {
         return Err(ZenError::Custom(
             "Config file is invalid or too large".to_string(),
@@ -426,9 +426,9 @@ pub async fn add_voice_model(
     }
 
     let config_text = std::fs::read_to_string(&config_src)
-        .map_err(|e| ZenError::Internal(format!("Failed to read config file: {}", e)))?;
+        .map_err(|e| ZenError::Internal(format!("Failed to read config file: {e}")))?;
     serde_json::from_str::<serde_json::Value>(&config_text)
-        .map_err(|e| ZenError::Custom(format!("Config file is not valid JSON: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Config file is not valid JSON: {e}")))?;
 
     let app_data_dir = app
         .path()
@@ -437,10 +437,10 @@ pub async fn add_voice_model(
     let voices_dir = app_data_dir.join("voices");
 
     std::fs::create_dir_all(&voices_dir)
-        .map_err(|e| ZenError::Internal(format!("Failed to create voices dir: {}", e)))?;
+        .map_err(|e| ZenError::Internal(format!("Failed to create voices dir: {e}")))?;
     let voices_dir = voices_dir
         .canonicalize()
-        .map_err(|e| ZenError::Internal(format!("Failed to resolve voices dir: {}", e)))?;
+        .map_err(|e| ZenError::Internal(format!("Failed to resolve voices dir: {e}")))?;
 
     let onnx_file_name = onnx_src
         .file_name()
@@ -453,7 +453,7 @@ pub async fn add_voice_model(
     }
 
     std::fs::copy(&onnx_src, &onnx_dest)
-        .map_err(|e| ZenError::Internal(format!("Failed to copy ONNX file: {}", e)))?;
+        .map_err(|e| ZenError::Internal(format!("Failed to copy ONNX file: {e}")))?;
 
     // Copy config file. Piper expects {model}.json (e.g., voice.onnx -> voice.onnx.json)
     let mut config_dest = onnx_dest.clone().into_os_string();
@@ -466,7 +466,7 @@ pub async fn add_voice_model(
     }
 
     std::fs::copy(&config_src, &config_dest)
-        .map_err(|e| ZenError::Internal(format!("Failed to copy config file: {}", e)))?;
+        .map_err(|e| ZenError::Internal(format!("Failed to copy config file: {e}")))?;
 
     let name = onnx_dest
         .file_stem()
@@ -505,8 +505,8 @@ pub async fn download_piper_model(
     app: AppHandle,
     voice_name: String,
 ) -> Result<PiperDownloadStatus, ZenError> {
-    let model_file = format!("{}.onnx", voice_name);
-    let config_file = format!("{}.onnx.json", voice_name);
+    let model_file = format!("{voice_name}.onnx");
+    let config_file = format!("{voice_name}.onnx.json");
 
     let app_data_dir = app
         .path()
@@ -557,7 +557,7 @@ pub async fn download_piper_model(
         let lang = &locale[..locale.find('_').unwrap_or(2).min(locale.len())];
         (
             lang.to_string(),
-            format!("{}/{}/{}", locale, voice, quality),
+            format!("{locale}/{voice}/{quality}"),
         )
     } else {
         // Fallback: use repo root
@@ -566,17 +566,15 @@ pub async fn download_piper_model(
     let base_url = if lang_prefix.is_empty() {
         // fallback: no lang prefix
         format!(
-            "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/{}",
-            hf_path
+            "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/{hf_path}"
         )
     } else {
         format!(
-            "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/{}/{}",
-            lang_prefix, hf_path
+            "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/{lang_prefix}/{hf_path}"
         )
     };
-    let model_url = format!("{}/{}", base_url, model_file);
-    let config_url = format!("{}/{}", base_url, config_file);
+    let model_url = format!("{base_url}/{model_file}");
+    let config_url = format!("{base_url}/{config_file}");
 
     info!(
         model_url = %model_url,
@@ -665,7 +663,7 @@ pub async fn set_active_voice_model(
     let model = voices
         .into_iter()
         .find(|v| v.id == voice_id)
-        .ok_or_else(|| ZenError::Custom(format!("Voice model '{}' not found", voice_id)))?;
+        .ok_or_else(|| ZenError::Custom(format!("Voice model '{voice_id}' not found")))?;
 
     let path = std::path::PathBuf::from(&model.path);
 

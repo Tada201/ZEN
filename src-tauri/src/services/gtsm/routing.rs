@@ -51,8 +51,7 @@ pub async fn calculate_route(
     end_lon: f64,
 ) -> Result<Route> {
     let url = format!(
-        "https://router.project-osrm.org/route/v1/driving/{},{};{},{}?overview=full&geometries=geojson&steps=true",
-        start_lon, start_lat, end_lon, end_lat
+        "https://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}?overview=full&geometries=geojson&steps=true"
     );
 
     let client = crate::utils::gtsm_http_client();
@@ -126,7 +125,7 @@ pub async fn calculate_route_waypoints(waypoints: &[[f64; 2]]) -> Result<Route> 
 
     let coords: Vec<String> = waypoints
         .iter()
-        .map(|[lat, lon]| format!("{},{}", lon, lat))
+        .map(|[lat, lon]| format!("{lon},{lat}"))
         .collect();
 
     let url = format!(

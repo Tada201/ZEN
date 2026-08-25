@@ -90,7 +90,9 @@ fn dirs_between_project_root_and_cwd(cwd: &Path, project_root: &Path) -> Vec<Pat
 /// BFS-scan each root up to MAX_SCAN_DEPTH, looking for `<dir>/SKILLS_FILENAME` files.
 /// Returns merged outcome with dedup by `path` (Repo scope wins over User).
 pub fn load_skills_from_roots(roots: &[SkillRoot]) -> SkillLoadOutcome {
-    let mut by_path: HashMap<PathBuf, SkillMetadata> = HashMap::new();
+    // Keyed by skill NAME, not path: a repo skill must shadow a user skill of
+    // the same name even though they live in different directories.
+    let mut by_name: HashMap<String, SkillMetadata> = HashMap::new();
     let mut scanned_dirs = 0usize;
 
     for root in roots {
@@ -101,17 +103,17 @@ pub fn load_skills_from_roots(roots: &[SkillRoot]) -> SkillLoadOutcome {
         for (path, mut skill) in found {
             // Dedup: if existing entry has lower scope number (=higher priority), keep it.
             // SkillScope is ordered User(0) < Repo(1) < System(2); Repo wins.
-            if let Some(existing) = by_path.get(&path) {
+            if let Some(existing) = by_name.get(&skill.name) {
                 if existing.scope >= skill.scope {
                     continue;
                 }
             }
-            skill.path = path.clone();
-            by_path.insert(path, skill);
+            skill.path = path;
+            by_name.insert(skill.name.clone(), skill);
         }
     }
 
-    let mut skills: Vec<SkillMetadata> = by_path.into_values().collect();
+    let mut skills: Vec<SkillMetadata> = by_name.into_values().collect();
     // Stable order: scope asc (User first), then name asc.
     skills.sort_by(|a, b| a.scope.cmp(&b.scope).then_with(|| a.name.cmp(&b.name)));
 
@@ -194,7 +196,7 @@ fn parse_skill_md(path: &Path, scope: SkillScope) -> Option<SkillMetadata> {
         tools_required: fm.requires_tools.unwrap_or_default(),
         invocation_syntax: fm
             .invocation_syntax
-            .unwrap_or_else(|| format!("/{}", dir_name)),
+            .unwrap_or_else(|| format!("/{dir_name}")),
     })
 }
 
@@ -228,10 +230,7 @@ mod tests {
         let skill_dir = dir.join(name);
         fs::create_dir_all(&skill_dir).unwrap();
         let body = format!(
-            "---\nname: {}\ndescription: {}\nallow_implicit_invocation: {}\n---\n\n# Body\n",
-            name,
-            desc,
-            allow_implicit
+            "---\nname: {name}\ndescription: {desc}\nallow_implicit_invocation: {allow_implicit}\n---\n\n# Body\n"
         );
         fs::write(skill_dir.join(SKILLS_FILENAME), body).unwrap();
     }

@@ -87,7 +87,7 @@ impl Orchestrator {
         {
             Ok(b) => b,
             Err(e) => {
-                let error_msg = format!("Failed to break goal into tasks: {}", e);
+                let error_msg = format!("Failed to break goal into tasks: {e}");
                 if let (Some(pool), Some(msg_id)) =
                     (self.db_pool.as_ref(), orchestrator_message_id.as_ref())
                 {
@@ -349,7 +349,7 @@ impl Orchestrator {
 
                             all_messages.push(ChatMessage {
                                 role: "assistant".to_string(),
-                                content: format!("[Task {} complete] {}", agent_id, result_content),
+                                content: format!("[Task {agent_id} complete] {result_content}"),
                                 reasoning_details: None,
                                 images: None,
                                 tool_calls: None,
@@ -367,9 +367,9 @@ impl Orchestrator {
                                 queue.push(retry_task);
                                 info!("Queued task {} for retry with Plan B", task_id);
                             } else {
-                                task_results.push((task_id.clone(), format!("Failed after 3 attempts: {}", error_msg)));
+                                task_results.push((task_id.clone(), format!("Failed after 3 attempts: {error_msg}")));
                                 if let Some(ref pool) = self.db_pool {
-                                    let _ = queries::update_orchestration_task_status(pool, &task_id, "failed", Some(&format!("Failed after 3 attempts: {}", error_msg))).await;
+                                    let _ = queries::update_orchestration_task_status(pool, &task_id, "failed", Some(&format!("Failed after 3 attempts: {error_msg}"))).await;
                                 }
                             }
                         }
@@ -377,7 +377,7 @@ impl Orchestrator {
                             let error_msg = "Task execution timed out after 120s".to_string();
                             warn!("Task {} failed: {}", task_id, error_msg);
                             queue.mark_failed(&task_id, &error_msg, Some(100));
-                            task_results.push((task_id.clone(), format!("Timed out: {}", error_msg)));
+                            task_results.push((task_id.clone(), format!("Timed out: {error_msg}")));
                         }
                     }
 
@@ -493,7 +493,7 @@ impl Orchestrator {
         {
             Ok(response) => response,
             Err(e) => {
-                let error_msg = format!("Orchestration synthesis failed: {}", e);
+                let error_msg = format!("Orchestration synthesis failed: {e}");
                 // Persist the failure to the orchestrator assistant message so
                 // a reload shows a coherent failed row instead of an
                 // incomplete placeholder.

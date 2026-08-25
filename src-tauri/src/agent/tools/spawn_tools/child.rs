@@ -318,7 +318,7 @@ impl SpawnAgentTool {
             _ = tokio::time::sleep(std::time::Duration::from_secs(SUBAGENT_TIMEOUT_SECONDS)) => {
                 Err(anyhow::Error::new(SpawnFailureError::new(
                     SpawnFailure::Timeout,
-                    format!("Sub-agent timed out after {} seconds", SUBAGENT_TIMEOUT_SECONDS),
+                    format!("Sub-agent timed out after {SUBAGENT_TIMEOUT_SECONDS} seconds"),
                 )))
             }
             res = child_runner_instance.run(

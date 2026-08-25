@@ -1,8 +1,8 @@
 [package]
 name = "zen-media"
-version = "0.1.0"
-edition = "2021"
-publish = false
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
 description = "Speech (whisper) + TTS (piper) runtimes, hardware probing and subprocess lifecycle for the Zen backend workspace (BIG_MIGRATION.md Phase 10)"
 
 [dependencies]
@@ -18,10 +18,9 @@ reqwest = { workspace = true, features = ["native-tls", "json", "multipart"] }
 # Security.md provenance unchanged).
 rodio = "0.20"
 hound = "3.5"
-cpal = "0.15"
+cpal = { workspace = true }
 # System/GPU probing moved with hardware.rs.
-sysinfo = "0.38"
-
+sysinfo = { workspace = true }
 # POSIX process signalling for whisper/piper cleanup on non-Windows. Already
 # resolved transitively in the tree at this exact version (>30 days old per
 # Security.md); pinned so no net-new supply-chain surface is introduced.
@@ -29,4 +28,8 @@ sysinfo = "0.38"
 nix = { version = "=0.28.0", features = ["signal", "process"] }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }
+
+# Inherit the workspace lint policy ([workspace.lints] at the root).
+[lints]
+workspace = true

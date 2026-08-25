@@ -53,15 +53,15 @@ Assert-NoMatches `
 
 Assert-NoMatches `
     "Direct registry execution found outside ToolService" `
-    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool\.rs' -and $_.Name -ne "mod.rs" } | Select-String -Pattern 'execute_authorized|execute_with_permission' }
+    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool([/\\]|\.rs)' -and $_.Name -ne "mod.rs" } | Select-String -Pattern 'execute_authorized|execute_with_permission' }
 
 Assert-NoMatches `
     "Direct Tool.execute(app, ...) calls found outside ToolService" `
-    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool\.rs' -and $_.Name -ne "mod.rs" } | Select-String -Pattern '\.execute\(\s*app' }
+    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool([/\\]|\.rs)' -and $_.Name -ne "mod.rs" } | Select-String -Pattern '\.execute\(\s*app' }
 
 Assert-NoMatches `
     "Direct AgentTool.run(...) calls found outside ToolService" `
-    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool\.rs' } | Select-String -Pattern 'tool\.run\(' }
+    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool([/\\]|\.rs)' } | Select-String -Pattern 'tool\.run\(' }
 
 Assert-NoMatches `
     "Backend command reads secret-like keys through SettingsService" `
@@ -94,14 +94,14 @@ foreach ($entry in @($coverage)) {
     $coverageById[$entry.id] = $entry
 }
 
-$toolsMod = Get-Content "src-tauri/src/tools/mod.rs" -Raw
+$toolsMod = Get-Content "src-tauri/crates/zen-tools/src/registry.rs" -Raw
 $defaultRiskStart = $toolsMod.IndexOf("pub fn default_tool_risk")
 if ($defaultRiskStart -lt 0) {
     Fail "default_tool_risk not found"
 }
-$defaultRiskEnd = $toolsMod.IndexOf("pub fn init_tool_registry", $defaultRiskStart)
+$defaultRiskEnd = $toolsMod.IndexOf("LAZY TOOL SOURCE PORT", $defaultRiskStart)
 if ($defaultRiskEnd -lt 0) {
-    Fail "init_tool_registry not found after default_tool_risk"
+    Fail "LAZY TOOL SOURCE PORT marker not found after default_tool_risk"
 }
 $defaultRiskBody = $toolsMod.Substring($defaultRiskStart, $defaultRiskEnd - $defaultRiskStart)
 
@@ -201,6 +201,30 @@ Get-ChildItem src -Recurse -File -Include *.ts,*.tsx | ForEach-Object {
 if ($violations.Count -gt 0) {
     $violations | ForEach-Object { Write-Host $_ }
     Fail "File size hard-limit violations found"
+}
+
+# ── Crate boundary guard (BIG_MIGRATION.md Phase 13, RULES.md §3.1) ──────────
+# Library crates under src-tauri/crates must never depend on `tauri` or
+# `keyring`: host coupling and OS-keyring access belong to the app crate only.
+# A manifest match here means a dependency edge crossed the boundary.
+if (Test-Path "src-tauri/crates") {
+    $boundaryViolations = @()
+    Get-ChildItem src-tauri/crates -Recurse -File -Filter Cargo.toml | ForEach-Object {
+        $manifest = $_.FullName
+        Get-Content $manifest | ForEach-Object {
+            $line = $_.Trim()
+            # Skip comments so an explanatory note mentioning the crate name
+            # is not mistaken for a dependency edge.
+            if ($line.StartsWith("#")) { return }
+            if ($line -match '^(tauri|keyring)\b' -or $line -match '^(tauri|keyring)\s*=') {
+                $boundaryViolations += "${manifest}: forbidden crate dependency '$($matches[1])' (crates must stay tauri/keyring-free)"
+            }
+        }
+    }
+    if ($boundaryViolations.Count -gt 0) {
+        $boundaryViolations | ForEach-Object { Write-Host $_ }
+        Fail "Crate boundary violations found"
+    }
 }
 
 Write-Host "Quality checks passed."

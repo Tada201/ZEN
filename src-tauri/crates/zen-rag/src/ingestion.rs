@@ -61,7 +61,7 @@ impl IngestionEngine {
                 Err(pdf_error) => self
                     .extract_with_markitdown(path)
                     .await
-                    .with_context(|| format!("{}; MarkItDown fallback also failed", pdf_error)),
+                    .with_context(|| format!("{pdf_error}; MarkItDown fallback also failed")),
             },
             "txt" | "md" | "csv" | "json" | "rs" | "js" | "ts" | "py" | "html" | "css" => {
                 self.extract_plaintext(path).await
@@ -78,7 +78,7 @@ impl IngestionEngine {
             "png" | "jpg" | "jpeg" | "webp" | "tif" | "tiff" | "bmp" => {
                 self.extract_image_ocr(path).await
             }
-            _ => Err(anyhow::anyhow!("Unsupported file extension: {}", extension)),
+            _ => Err(anyhow::anyhow!("Unsupported file extension: {extension}")),
         }
     }
 
@@ -123,7 +123,7 @@ impl IngestionEngine {
         let path_buf = path.to_path_buf();
         let text = tokio::task::spawn_blocking(move || -> Result<String> {
             let result = pdf_inspector::process_pdf(&path_buf)
-                .map_err(|e| anyhow::anyhow!("PDF extraction failed: {}", e))?;
+                .map_err(|e| anyhow::anyhow!("PDF extraction failed: {e}"))?;
 
             // Prefer markdown output (preserves structure, handles Identity-H/CMap encodings)
             if let Some(md) = result.markdown {
@@ -134,7 +134,7 @@ impl IngestionEngine {
 
             // Fallback to plain text extraction
             let plain = pdf_inspector::extract_text(&path_buf)
-                .map_err(|e| anyhow::anyhow!("PDF text extraction failed: {}", e))?;
+                .map_err(|e| anyhow::anyhow!("PDF text extraction failed: {e}"))?;
 
             if plain.trim().is_empty() {
                 Err(anyhow::anyhow!(
@@ -162,8 +162,7 @@ impl IngestionEngine {
             .await
             .with_context(|| {
                 format!(
-                    "Failed to run MarkItDown extractor '{}'. Install with: pip install 'markitdown[all]' or set ZEN_MARKITDOWN_BIN.",
-                    bin
+                    "Failed to run MarkItDown extractor '{bin}'. Install with: pip install 'markitdown[all]' or set ZEN_MARKITDOWN_BIN."
                 )
             })?;
 
@@ -201,8 +200,7 @@ impl IngestionEngine {
             .await
             .with_context(|| {
                 format!(
-                    "Failed to run Tesseract OCR '{}'. Install Tesseract or set ZEN_TESSERACT_BIN.",
-                    bin
+                    "Failed to run Tesseract OCR '{bin}'. Install Tesseract or set ZEN_TESSERACT_BIN."
                 )
             })?;
 
@@ -250,7 +248,7 @@ impl IngestionEngine {
             .chunks(text)
             .enumerate()
             .map(|(i, chunk_text)| DocumentChunk {
-                id: format!("{}-chunk-{}", source_path, i),
+                id: format!("{source_path}-chunk-{i}"),
                 source: source_path.to_string(),
                 text: chunk_text.to_string(),
                 metadata: serde_json::json!({

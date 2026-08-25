@@ -231,7 +231,7 @@ impl McpDiscoveryService {
             } else {
                 String::new()
             };
-            output.push_str(&format!("- `{}`: {}, {}, {}{}\n", name, status, scope, transport, detail));
+            output.push_str(&format!("- `{name}`: {status}, {scope}, {transport}{detail}\n"));
             if output.len() >= MAX_PROMPT_CHARS {
                 output.truncate(MAX_PROMPT_CHARS);
                 output.push_str("\n- Inventory truncated. Use tool_list for bounded command discovery.\n");

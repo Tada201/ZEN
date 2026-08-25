@@ -179,7 +179,7 @@ impl McpConsentStore {
                         .to_string(),
                 )
             }
-            None => return Err(format!("no pending consent for MCP server '{}'", name)),
+            None => return Err(format!("no pending consent for MCP server '{name}'")),
         }
 
         self.approved
@@ -241,7 +241,7 @@ impl McpConsentStore {
                 operation: PrivilegedOperation::McpConnectionConsent,
                 decision,
                 caller: AUDIT_CALLER.to_string(),
-                target: Some(format!("mcp_server:{}", name)),
+                target: Some(format!("mcp_server:{name}")),
                 reason: Some(reason.to_string()),
             })
             .await;

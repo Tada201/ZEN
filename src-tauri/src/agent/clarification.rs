@@ -91,13 +91,13 @@ pub async fn submit_clarification_response(
 
     // Update database
     let response_json = serde_json::to_string(&selected_ids)
-        .map_err(|e| format!("Failed to serialize response: {}", e))?;
+        .map_err(|e| format!("Failed to serialize response: {e}"))?;
 
     let responded_at = chrono::Utc::now().to_rfc3339();
 
     queries::update_clarification_response(&pool, &chat_id, &response_json, &responded_at)
         .await
-        .map_err(|e| format!("Database error: {}", e))?;
+        .map_err(|e| format!("Database error: {e}"))?;
 
     // Emit event to resume agent execution (via the shared EventSink port)
     state.inner().events.emit(

@@ -215,7 +215,7 @@ impl<'a> IterativeDeepResearcher<'a> {
         let plan_status = if task_count == 0 {
             "Research plan created".to_string()
         } else {
-            format!("Research plan created with {} investigation tasks", task_count)
+            format!("Research plan created with {task_count} investigation tasks")
         };
         self.emit_phase("planning", &plan_status, "completed");
 
@@ -253,13 +253,13 @@ impl<'a> IterativeDeepResearcher<'a> {
                 // Track sub-agent queries for metadata
                 for i in 0..self.sub_agent_count {
                     self.queries_used
-                        .insert(format!("sub-agent-{}-round-{}", i, round_num));
+                        .insert(format!("sub-agent-{i}-round-{round_num}"));
                 }
                 findings
             } else {
                 self.emit_phase(
                     "searching",
-                    &format!("Round {}: Generating search queries...", round_num),
+                    &format!("Round {round_num}: Generating search queries..."),
                     "running",
                 );
                 let queries = self.generate_queries(question, round_num).await;
@@ -288,8 +288,7 @@ impl<'a> IterativeDeepResearcher<'a> {
                 self.emit_phase(
                     "analyzing",
                     &format!(
-                        "Round {}: Synthesizing {} new findings...",
-                        round_num, finding_count
+                        "Round {round_num}: Synthesizing {finding_count} new findings..."
                     ),
                     "running",
                 );
@@ -305,7 +304,7 @@ impl<'a> IterativeDeepResearcher<'a> {
                 if round_num >= 2 && round_num % self.compression_interval == 0 {
                     self.emit_phase(
                         "analyzing",
-                        &format!("Round {}: Compressing findings log...", round_num),
+                        &format!("Round {round_num}: Compressing findings log..."),
                         "running",
                     );
                     self.compress_report(question, round_num).await;
@@ -313,7 +312,7 @@ impl<'a> IterativeDeepResearcher<'a> {
 
                 self.emit_phase(
                     "analyzing",
-                    &format!("Round {}: Analysis complete", round_num),
+                    &format!("Round {round_num}: Analysis complete"),
                     "completed",
                 );
 
@@ -322,7 +321,7 @@ impl<'a> IterativeDeepResearcher<'a> {
                 if round_num >= 2 {
                     self.emit_phase(
                         "planning",
-                        &format!("Round {}: Reviewing research plan...", round_num),
+                        &format!("Round {round_num}: Reviewing research plan..."),
                         "running",
                     );
                     let updated_plan = self.revise_plan(question, round_num).await;

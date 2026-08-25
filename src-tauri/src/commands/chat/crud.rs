@@ -21,7 +21,7 @@ pub async fn create_chat(
     let workspace_root = match workspace_root {
         Some(root) if !root.trim().is_empty() => Some(
             crate::workspace::canonicalize_workspace_root(std::path::Path::new(&root))
-                .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e)))?,
+                .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {e}")))?,
         ),
         _ => Some(state.workspace_folder.read().await.clone()),
     };
@@ -56,7 +56,7 @@ pub async fn set_chat_workspace(
     let canonical_root = match workspace_root {
         Some(root) if !root.trim().is_empty() => Some(
             crate::workspace::canonicalize_workspace_root(std::path::Path::new(&root))
-                .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e)))?,
+                .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {e}")))?,
         ),
         _ => return Err(crate::error::ZenError::Custom(
             "A workspace root is required when assigning a legacy chat".to_string(),

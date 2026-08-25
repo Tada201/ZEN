@@ -29,7 +29,7 @@ impl ToolService {
                     .and_then(|value| value.as_str())
                     .ok_or_else(|| "Patch mutation is missing patch contents.".to_string())?;
                 crate::tools::patch_parser::parse_patches(patch)
-                    .map_err(|error| format!("Cannot checkpoint patch: {}", error))?
+                    .map_err(|error| format!("Cannot checkpoint patch: {error}"))?
                     .into_iter()
                     .map(|hunk| hunk.path().to_path_buf())
                     .collect()
@@ -55,7 +55,7 @@ impl ToolService {
                 Ok(resolved) => resolved,
                 Err(error) => {
                     self.discard_file_mutations(app, chat_id, captures).await;
-                    return Err(format!("Cannot checkpoint workspace path: {}", error));
+                    return Err(format!("Cannot checkpoint workspace path: {error}"));
                 }
             };
             let original = if tokio::fs::try_exists(&resolved).await.unwrap_or(false) {

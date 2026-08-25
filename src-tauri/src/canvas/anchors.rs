@@ -16,8 +16,8 @@ pub enum AnchorType {
 impl std::fmt::Display for AnchorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AnchorType::Canvas(point) => write!(f, "canvas.{}", point),
-            AnchorType::Object { object_id, point } => write!(f, "{}.{}", object_id, point),
+            AnchorType::Canvas(point) => write!(f, "canvas.{point}"),
+            AnchorType::Object { object_id, point } => write!(f, "{object_id}.{point}"),
         }
     }
 }
@@ -82,7 +82,7 @@ impl AnchorResolver {
                 let bbox = self
                     .objects
                     .get(object_id)
-                    .ok_or_else(|| anyhow::anyhow!("Object '{}' not found", object_id))?;
+                    .ok_or_else(|| anyhow::anyhow!("Object '{object_id}' not found"))?;
                 self.resolve_object_anchor(bbox, point)
             }
         }
@@ -111,7 +111,7 @@ impl AnchorResolver {
             "bottom_center" => (cw / 2.0, 2.0 * ch / 3.0),
             "left_center" => (cw / 3.0, ch / 2.0),
             "right_center" => (2.0 * cw / 3.0, ch / 2.0),
-            _ => bail!("Unknown canvas anchor point: '{}'", point),
+            _ => bail!("Unknown canvas anchor point: '{point}'"),
         };
 
         Ok(AnchorPoint { x, y })
@@ -136,7 +136,7 @@ impl AnchorResolver {
             "top_right" => (x2, y1),
             "bottom_left" => (x1, y2),
             "bottom_right" => (x2, y2),
-            _ => bail!("Unknown object anchor point: '{}'", point),
+            _ => bail!("Unknown object anchor point: '{point}'"),
         };
 
         Ok(AnchorPoint { x, y })

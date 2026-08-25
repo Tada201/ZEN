@@ -179,7 +179,7 @@ pub async fn install_managed_dependency(
     id: String,
 ) -> Result<DependencyInstallResult, String> {
     let archive_ids =
-        managed_archive_ids(&id).ok_or_else(|| format!("'{}' is not a Zen-managed runtime", id))?;
+        managed_archive_ids(&id).ok_or_else(|| format!("'{id}' is not a Zen-managed runtime"))?;
     let app_data_dir = app
         .path()
         .app_data_dir()
@@ -304,7 +304,7 @@ fn install_archive(
                 let mut content = Vec::new();
                 entry
                     .read_to_end(&mut content)
-                    .map_err(|error| format!("Could not extract {}: {error}", name))?;
+                    .map_err(|error| format!("Could not extract {name}: {error}"))?;
                 atomic_write(&destination, &content)?;
                 paths.push(destination.to_string_lossy().to_string());
             }

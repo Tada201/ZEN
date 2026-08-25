@@ -41,7 +41,7 @@ pub(crate) fn truncate_utf8(text: &str, max_bytes: usize) -> &str {
 /// tools that need to handle binaries should go through a different path.
 pub(crate) async fn read_text_file(path: &Path) -> Result<String, ToolError> {
     tokio::fs::read_to_string(path).await.map_err(|e| ToolError::ExecutionFailed {
-        message: format!("Failed to read file as UTF-8 text: {}", e),
+        message: format!("Failed to read file as UTF-8 text: {e}"),
     })
 }
 
@@ -91,7 +91,7 @@ pub(crate) async fn workspace_max_file_bytes(state: &AppState) -> u64 {
 pub(crate) async fn enforce_existing_file_size(path: &Path, max_bytes: u64) -> Result<(), ToolError> {
     let metadata = tokio::fs::metadata(path).await.map_err(|e| {
         ToolError::ExecutionFailed {
-            message: format!("Failed to inspect file size: {}", e),
+            message: format!("Failed to inspect file size: {e}"),
         }
     })?;
     enforce_content_size(metadata.len() as usize, max_bytes, "file")
@@ -102,8 +102,7 @@ pub(crate) fn enforce_content_size(size_bytes: usize, max_bytes: u64, label: &st
     if size_bytes as u64 > max_bytes {
         return Err(ToolError::ExecutionFailed {
             message: format!(
-                "{} exceeds workspace.max-file-size ({} bytes > {} bytes)",
-                label, size_bytes, max_bytes
+                "{label} exceeds workspace.max-file-size ({size_bytes} bytes > {max_bytes} bytes)"
             ),
         });
     }
@@ -124,14 +123,14 @@ pub(crate) fn unified_diff(path: &Path, old: &str, new: &str) -> (String, usize,
     let old_range = if old_line_count == 0 {
         "0,0".to_string()
     } else {
-        format!("1,{}", old_line_count)
+        format!("1,{old_line_count}")
     };
     let new_range = if new_line_count == 0 {
         "0,0".to_string()
     } else {
-        format!("1,{}", new_line_count)
+        format!("1,{new_line_count}")
     };
-    diff_lines.push(format!("@@ -{} +{} @@", old_range, new_range));
+    diff_lines.push(format!("@@ -{old_range} +{new_range} @@"));
 
     for change in diff.iter_all_changes() {
         // Remove only the line terminator. `trim_end()` would corrupt
@@ -139,15 +138,15 @@ pub(crate) fn unified_diff(path: &Path, old: &str, new: &str) -> (String, usize,
         let value = change.value().trim_end_matches([13 as char, 10 as char]);
         match change.tag() {
             ChangeTag::Delete => {
-                diff_lines.push(format!("-{}", value));
+                diff_lines.push(format!("-{value}"));
                 lines_removed += 1;
             }
             ChangeTag::Insert => {
-                diff_lines.push(format!("+{}", value));
+                diff_lines.push(format!("+{value}"));
                 lines_added += 1;
             }
             ChangeTag::Equal => {
-                diff_lines.push(format!(" {}", value));
+                diff_lines.push(format!(" {value}"));
             }
         }
     }

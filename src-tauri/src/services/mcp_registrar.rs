@@ -35,7 +35,10 @@ impl McpRegistrar {
 
     /// Call immediately after wrapping the `McpClient` in its `Arc`.
     pub fn set_client_weak(self: &Arc<Self>, client: &Arc<McpClient>) {
-        *self.client_weak.write().unwrap() = Some(Arc::downgrade(client));
+        *self
+            .client_weak
+            .write()
+            .unwrap_or_else(|err| err.into_inner()) = Some(Arc::downgrade(client));
     }
 }
 
@@ -50,7 +53,7 @@ impl ExternalToolRegistrar for McpRegistrar {
         let mcp_client = self
             .client_weak
             .read()
-            .unwrap()
+            .unwrap_or_else(|err| err.into_inner())
             .clone()
             .unwrap_or_else(|| {
                 Weak::new()

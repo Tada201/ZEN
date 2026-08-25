@@ -204,7 +204,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for GraphSessionTool {
             .get("session_id")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("chat_{}", chat_id));
+            .unwrap_or_else(|| format!("chat_{chat_id}"));
 
         let state = app.state::<AppState>();
         let mut sessions = state.graph_sessions.lock().await;
@@ -213,13 +213,13 @@ impl zen_tools::AgentTool<tauri::AppHandle> for GraphSessionTool {
         if !sessions.contains_key(&session_id) {
             sessions.insert(
                 session_id.clone(),
-                GraphSession::new(session_id.clone(), format!("Session for {}", chat_id)),
+                GraphSession::new(session_id.clone(), format!("Session for {chat_id}")),
             );
         }
 
         let session = sessions
             .get_mut(&session_id)
-            .ok_or_else(|| anyhow::anyhow!("Graph session {} not found", session_id))?;
+            .ok_or_else(|| anyhow::anyhow!("Graph session {session_id} not found"))?;
 
         // Handle capture_vision separately - it doesn't modify state
         let action_str = input.get("action").and_then(|v| v.as_str()).unwrap_or("");
@@ -282,24 +282,24 @@ fn describe_action(input: &Value) -> String {
     match action {
         "add_expression" => {
             let expr = input.get("expr").and_then(|v| v.as_str()).unwrap_or("?");
-            format!("LLM added expression: {}", expr)
+            format!("LLM added expression: {expr}")
         }
         "update_expression" => {
             let id = input.get("id").and_then(|v| v.as_str()).unwrap_or("?");
             let expr = input.get("expr").and_then(|v| v.as_str()).unwrap_or("?");
-            format!("LLM updated {} = {}", id, expr)
+            format!("LLM updated {id} = {expr}")
         }
         "delete_expression" => {
             let id = input.get("id").and_then(|v| v.as_str()).unwrap_or("?");
-            format!("LLM deleted {}", id)
+            format!("LLM deleted {id}")
         }
         "set_variable" => {
             let name = input.get("name").and_then(|v| v.as_str()).unwrap_or("?");
             let val = input.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            format!("LLM set {} = {}", name, val)
+            format!("LLM set {name} = {val}")
         }
         "capture_vision" => "LLM captured graph for vision analysis".to_string(),
         "reset_session" => "LLM reset session".to_string(),
-        other => format!("LLM action: {}", other),
+        other => format!("LLM action: {other}"),
     }
 }

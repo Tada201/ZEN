@@ -47,7 +47,7 @@ impl GeofenceEngine {
         let mut inside_map = self.inside.write().await;
         let mut alerts = Vec::new();
         let now = chrono::Utc::now().timestamp();
-        let entity_key = format!("{}:{}", entity_type, entity_id);
+        let entity_key = format!("{entity_type}:{entity_id}");
 
         for (zone_id, zone) in zones.iter() {
             let is_inside = match &zone.zone_type {

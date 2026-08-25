@@ -14,7 +14,7 @@ pub fn default_http_client() -> &'static reqwest::Client {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
-            .expect("default HTTP client configuration is valid")
+            .unwrap_or_else(|e| panic!("default HTTP client configuration is invalid: {e}"))
     })
 }
 
@@ -23,6 +23,6 @@ pub fn model_download_http_client() -> &'static reqwest::Client {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(300))
             .build()
-            .expect("model download HTTP client configuration is valid")
+            .unwrap_or_else(|e| panic!("model download HTTP client configuration is invalid: {e}"))
     })
 }

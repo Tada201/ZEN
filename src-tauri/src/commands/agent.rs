@@ -34,8 +34,7 @@ async fn validate_profile_tools(state: &AppState, profile: &AgentProfile) -> Zen
     for tool_id in &profile.agent.tool_ids {
         if !state.tool_manager.exists(tool_id).await {
             return Err(crate::error::ZenError::Custom(format!(
-                "Unknown or unavailable tool '{}'. Refresh the tool list and try again.",
-                tool_id
+                "Unknown or unavailable tool '{tool_id}'. Refresh the tool list and try again."
             )));
         }
     }
@@ -311,8 +310,7 @@ pub async fn run_tool_command(
     };
     if !renderer_allowed {
         return Err(format!(
-            "Tool '{}' is not available through renderer-initiated execution.",
-            tool_name
+            "Tool '{tool_name}' is not available through renderer-initiated execution."
         ));
     }
 

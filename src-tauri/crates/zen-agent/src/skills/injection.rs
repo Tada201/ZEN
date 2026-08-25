@@ -82,10 +82,10 @@ mod tests {
             description: String::new(),
             short_description: None,
             scope: SkillScope::Repo,
-            path: PathBuf::from(format!("/skills/{}/SKILL.md", name)),
+            path: PathBuf::from(format!("/skills/{name}/SKILL.md")),
             allow_implicit_invocation: true,
             tools_required: vec![],
-            invocation_syntax: format!("/{}", name),
+            invocation_syntax: format!("/{name}"),
         }
     }
 

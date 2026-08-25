@@ -23,7 +23,7 @@ pub(crate) fn canonicalize_workspace_root(path: &Path) -> Result<PathBuf, String
         ));
     }
     path.canonicalize()
-        .map_err(|e| format!("Failed to resolve workspace root: {}", e))
+        .map_err(|e| format!("Failed to resolve workspace root: {e}"))
 }
 
 impl McpConfigService {
@@ -38,7 +38,7 @@ impl McpConfigService {
                     return Err(McpConfigError::NoWorkspace);
                 }
                 canonicalize_workspace_root(&root)
-                    .map_err(|e| McpConfigError::InvalidWorkspace(e.to_string()))?;
+                    .map_err(McpConfigError::InvalidWorkspace)?;
                 Ok(root.join(MCP_CONFIG_FILENAME))
             }
             McpScope::User => {
@@ -83,7 +83,7 @@ impl McpConfigService {
                     PrivilegedOperation::FileRead,
                     PermissionDecision::Deny,
                     None,
-                    format!("MCP config read denied: {}", e),
+                    format!("MCP config read denied: {e}"),
                 )
                 .await;
                 return Err(e);
@@ -107,7 +107,7 @@ impl McpConfigService {
                         PrivilegedOperation::FileRead,
                         PermissionDecision::Deny,
                         Some(target_path.display().to_string()),
-                        format!("MCP config parse failed: {}", e),
+                        format!("MCP config parse failed: {e}"),
                     )
                     .await;
                     Err(McpConfigError::Parse(
@@ -131,7 +131,7 @@ impl McpConfigService {
                     PrivilegedOperation::FileRead,
                     PermissionDecision::Deny,
                     Some(target_path.display().to_string()),
-                    format!("MCP config read failed: {}", e),
+                    format!("MCP config read failed: {e}"),
                 )
                 .await;
                 Err(McpConfigError::Io(
@@ -154,7 +154,7 @@ impl McpConfigService {
                     PrivilegedOperation::FileWrite,
                     PermissionDecision::Deny,
                     None,
-                    format!("MCP config save denied: {}", e),
+                    format!("MCP config save denied: {e}"),
                 )
                 .await;
                 return Err(e);
@@ -168,7 +168,7 @@ impl McpConfigService {
                     PrivilegedOperation::FileWrite,
                     PermissionDecision::Deny,
                     Some(target_path.display().to_string()),
-                    format!("MCP config serialize failed: {}", e),
+                    format!("MCP config serialize failed: {e}"),
                 )
                 .await;
                 return Err(McpConfigError::Parse(
@@ -185,7 +185,7 @@ impl McpConfigService {
                     PrivilegedOperation::FileWrite,
                     PermissionDecision::Deny,
                     Some(target_path.display().to_string()),
-                    format!("MCP config dir create failed: {}", e),
+                    format!("MCP config dir create failed: {e}"),
                 )
                 .await;
                 return Err(McpConfigError::Io(
@@ -211,7 +211,7 @@ impl McpConfigService {
                     PrivilegedOperation::FileWrite,
                     PermissionDecision::Deny,
                     Some(target_path.display().to_string()),
-                    format!("MCP config write failed: {}", e),
+                    format!("MCP config write failed: {e}"),
                 )
                 .await;
                 Err(McpConfigError::Io(

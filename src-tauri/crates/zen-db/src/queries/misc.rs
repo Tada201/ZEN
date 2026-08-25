@@ -305,8 +305,7 @@ pub async fn mark_messages_compacted_by_ids(pool: &SqlitePool, ids: &[String]) -
     // safe and consistent with the rest of the codebase.
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
     let sql = format!(
-        "UPDATE messages SET is_compacted = 1 WHERE id IN ({})",
-        placeholders
+        "UPDATE messages SET is_compacted = 1 WHERE id IN ({placeholders})"
     );
     let mut q = sqlx::query(&sql);
     for id in ids {

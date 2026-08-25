@@ -196,7 +196,7 @@ impl PluginManager {
         info!("Loading plugin: {} v{}", plugin_name, plugin_version);
 
         {
-            let loaded = self.loaded_plugins.read().unwrap();
+            let loaded = self.loaded_plugins.read().unwrap_or_else(|err| err.into_inner());
             if loaded.contains(&plugin_id) {
                 return Err(PluginError::AlreadyLoaded(plugin_id));
             }
@@ -206,11 +206,11 @@ impl PluginManager {
         self.validate_dependencies(&dependencies, &plugin_id)?;
 
         for dep in &dependencies {
-            let plugins = self.plugins.read().unwrap();
+            let plugins = self.plugins.read().unwrap_or_else(|err| err.into_inner());
             if !plugins.contains_key(dep) {
                 return Err(PluginError::MissingDependency(
                     dep.clone(),
-                    plugin_id.clone(),
+                    plugin_id,
                 ));
             }
         }
@@ -225,12 +225,12 @@ impl PluginManager {
         let plugin_arc: PluginHandle = Arc::new(RwLock::new(plugin));
 
         {
-            let mut plugins = self.plugins.write().unwrap();
+            let mut plugins = self.plugins.write().unwrap_or_else(|err| err.into_inner());
             plugins.insert(plugin_id.clone(), plugin_arc);
         }
 
         {
-            let mut loaded = self.loaded_plugins.write().unwrap();
+            let mut loaded = self.loaded_plugins.write().unwrap_or_else(|err| err.into_inner());
             loaded.insert(plugin_id.clone());
         }
 
@@ -242,7 +242,7 @@ impl PluginManager {
         info!("Unloading plugin: {}", plugin_id);
 
         {
-            let loaded = self.loaded_plugins.read().unwrap();
+            let loaded = self.loaded_plugins.read().unwrap_or_else(|err| err.into_inner());
             if !loaded.contains(plugin_id) {
                 return Err(PluginError::NotFound(plugin_id.to_string()));
             }
@@ -258,9 +258,9 @@ impl PluginManager {
         }
 
         {
-            let mut plugins = self.plugins.write().unwrap();
+            let mut plugins = self.plugins.write().unwrap_or_else(|err| err.into_inner());
             if let Some(plugin_arc) = plugins.remove(plugin_id) {
-                let plugin = plugin_arc.write().unwrap();
+                let plugin = plugin_arc.write().unwrap_or_else(|err| err.into_inner());
                 if let Err(e) = plugin.shutdown() {
                     warn!("Error during plugin shutdown: {}", e);
                 }
@@ -270,7 +270,7 @@ impl PluginManager {
         self.unregister_extension_handlers(plugin_id);
 
         {
-            let mut loaded = self.loaded_plugins.write().unwrap();
+            let mut loaded = self.loaded_plugins.write().unwrap_or_else(|err| err.into_inner());
             loaded.remove(plugin_id);
         }
 
@@ -282,17 +282,15 @@ impl PluginManager {
         info!("Reloading plugin: {}", plugin_id);
 
         let plugin_arc = {
-            let plugins = self.plugins.read().unwrap();
+            let plugins = self.plugins.read().unwrap_or_else(|err| err.into_inner());
             plugins.get(plugin_id).cloned()
         };
 
-        if plugin_arc.is_none() {
+        let Some(plugin_arc) = plugin_arc else {
             return Err(PluginError::NotFound(plugin_id.to_string()));
-        }
-
-        let plugin_arc = plugin_arc.unwrap();
+        };
         let (plugin_id, name, version, dependencies, ext_points) = {
-            let plugin = plugin_arc.read().unwrap();
+            let plugin = plugin_arc.read().unwrap_or_else(|err| err.into_inner());
             (
                 plugin.id().to_string(),
                 plugin.name().to_string(),
@@ -320,7 +318,7 @@ impl PluginManager {
             point, handler.plugin_id
         );
 
-        let mut ext_points = self.extension_points.write().unwrap();
+        let mut ext_points = self.extension_points.write().unwrap_or_else(|err| err.into_inner());
 
         let handlers = ext_points.entry(point.to_string()).or_default();
         handlers.push(handler);
@@ -337,7 +335,7 @@ impl PluginManager {
         debug!("Invoking extensions for point: {}", point);
 
         let handlers = {
-            let ext_points = self.extension_points.read().unwrap();
+            let ext_points = self.extension_points.read().unwrap_or_else(|err| err.into_inner());
             ext_points.get(point).cloned()
         };
 
@@ -363,8 +361,7 @@ impl PluginManager {
                 Err(e) => {
                     error!("Extension handler error for plugin {}: {}", plugin_id, e);
                     results.push(PluginResultData::failure(format!(
-                        "Plugin {} error: {}",
-                        plugin_id, e
+                        "Plugin {plugin_id} error: {e}"
                     )));
                 }
             }
@@ -374,7 +371,7 @@ impl PluginManager {
     }
 
     pub fn get_plugin(&self, plugin_id: &str) -> PluginResult<PluginHandle> {
-        let plugins = self.plugins.read().unwrap();
+        let plugins = self.plugins.read().unwrap_or_else(|err| err.into_inner());
         plugins
             .get(plugin_id)
             .cloned()
@@ -382,11 +379,11 @@ impl PluginManager {
     }
 
     pub fn list_plugins(&self) -> Vec<(String, String, String)> {
-        let plugins = self.plugins.read().unwrap();
+        let plugins = self.plugins.read().unwrap_or_else(|err| err.into_inner());
         plugins
             .iter()
             .map(|(id, arc)| {
-                let plugin = arc.read().unwrap();
+                let plugin = arc.read().unwrap_or_else(|err| err.into_inner());
                 (
                     id.clone(),
                     plugin.name().to_string(),
@@ -401,7 +398,7 @@ impl PluginManager {
             return Ok(());
         }
 
-        let loaded = self.loaded_plugins.read().unwrap();
+        let loaded = self.loaded_plugins.read().unwrap_or_else(|err| err.into_inner());
         let mut visiting = HashSet::new();
         let mut visited = HashSet::new();
 
@@ -440,9 +437,9 @@ impl PluginManager {
             }
 
             let dep_deps = {
-                let plugins = self.plugins.read().unwrap();
+                let plugins = self.plugins.read().unwrap_or_else(|err| err.into_inner());
                 if let Some(p) = plugins.get(dep) {
-                    let p = p.read().unwrap();
+                    let p = p.read().unwrap_or_else(|err| err.into_inner());
                     p.dependencies()
                 } else {
                     vec![]
@@ -459,14 +456,14 @@ impl PluginManager {
     }
 
     fn find_dependent_plugins(&self, plugin_id: &str) -> Vec<String> {
-        let plugins = self.plugins.read().unwrap();
+        let plugins = self.plugins.read().unwrap_or_else(|err| err.into_inner());
         let mut dependents = Vec::new();
 
         for (id, arc) in plugins.iter() {
             if id == plugin_id {
                 continue;
             }
-            let plugin = arc.read().unwrap();
+            let plugin = arc.read().unwrap_or_else(|err| err.into_inner());
             if plugin.dependencies().contains(&plugin_id.to_string()) {
                 dependents.push(id.clone());
             }
@@ -476,13 +473,13 @@ impl PluginManager {
     }
 
     fn register_extension_point(&self, point: &str) -> PluginResult<()> {
-        let mut ext_points = self.extension_points.write().unwrap();
+        let mut ext_points = self.extension_points.write().unwrap_or_else(|err| err.into_inner());
         ext_points.entry(point.to_string()).or_default();
         Ok(())
     }
 
     fn unregister_extension_handlers(&self, plugin_id: &str) {
-        let mut ext_points = self.extension_points.write().unwrap();
+        let mut ext_points = self.extension_points.write().unwrap_or_else(|err| err.into_inner());
         for handlers in ext_points.values_mut() {
             handlers.retain(|h| h.plugin_id != plugin_id);
         }

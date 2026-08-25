@@ -40,7 +40,7 @@ impl ProviderRegistry {
 
     /// Return the settings key used for the provider's API base URL.
     fn base_url_key(provider: &str) -> String {
-        format!("{}_base_url", provider)
+        format!("{provider}_base_url")
     }
 
     /// Return the settings key used for the provider's API key.
@@ -51,7 +51,7 @@ impl ProviderRegistry {
             .find(|p| p.name == lower)
             .and_then(|p| p.api_key_key)
             .map(|k| k.to_string())
-            .unwrap_or_else(|| format!("{}_api_key", lower))
+            .unwrap_or_else(|| format!("{lower}_api_key"))
     }
 
     /// Build a [`ProviderConfig`] from the settings store.
@@ -70,7 +70,7 @@ impl ProviderRegistry {
             || (!base_url.starts_with("http://") && !base_url.starts_with("https://"))
         {
             return Err(ZenError::Custom(
-                format!("Unknown provider '{}': no base URL configured. Configure '{base_url_key}' in Settings → Providers, or check the provider name.", provider_name)
+                format!("Unknown provider '{provider_name}': no base URL configured. Configure '{base_url_key}' in Settings → Providers, or check the provider name.")
             ));
         }
 
@@ -81,12 +81,12 @@ impl ProviderRegistry {
             .unwrap_or_default();
         let headers = self
             .settings
-            .get_setting(&format!("{}_headers", p_type))
+            .get_setting(&format!("{p_type}_headers"))
             .await?
             .and_then(|value| serde_json::from_str::<HashMap<String, String>>(&value).ok());
         let api_format = self
             .settings
-            .get_setting(&format!("{}_api_format", p_type))
+            .get_setting(&format!("{p_type}_api_format"))
             .await?
             .filter(|value| !value.is_empty());
 

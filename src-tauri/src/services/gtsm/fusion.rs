@@ -111,8 +111,7 @@ pub fn correlate_flights_military(
                     id: format!("fuse-prox-{}-{}", ac.hex, flight.icao24),
                     event_type: "military_civilian_proximity".to_string(),
                     description: format!(
-                        "Military {} and civilian {} within {:.0} km",
-                        mil_name, civ_name, dist
+                        "Military {mil_name} and civilian {civ_name} within {dist:.0} km"
                     ),
                     timestamp: now,
                     entities: vec![

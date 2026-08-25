@@ -21,7 +21,7 @@ pub fn public_no_redirect_http_client() -> &'static reqwest::Client {
             .timeout(Duration::from_secs(10))
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .expect("public no-redirect HTTP client configuration is valid")
+            .unwrap_or_else(|e| panic!("public no-redirect HTTP client configuration is invalid: {e}"))
     })
 }
 
@@ -32,7 +32,7 @@ pub fn duckduckgo_http_client() -> &'static reqwest::Client {
             .user_agent("Mozilla/5.0 (Windows NT 10.0; rv:135.0) Gecko/20100101 Firefox/135.0")
             .redirect(reqwest::redirect::Policy::limited(5))
             .build()
-            .expect("DuckDuckGo HTTP client configuration is valid")
+            .unwrap_or_else(|e| panic!("DuckDuckGo HTTP client configuration is invalid: {e}"))
     })
 }
 
@@ -42,7 +42,7 @@ pub fn gtsm_http_client() -> &'static reqwest::Client {
             .timeout(Duration::from_secs(10))
             .user_agent("ZenGTSM/0.1 (operational-monitor)")
             .build()
-            .expect("GTSM HTTP client configuration is valid")
+            .unwrap_or_else(|e| panic!("GTSM HTTP client configuration is invalid: {e}"))
     })
 }
 
@@ -61,7 +61,7 @@ pub fn validate_path(path: &str) -> AppResult<std::path::PathBuf> {
     }
     let resolved = if p.exists() {
         p.canonicalize()
-            .map_err(|e| ZenError::Internal(format!("Failed to resolve path: {}", e)))?
+            .map_err(|e| ZenError::Internal(format!("Failed to resolve path: {e}")))?
     } else {
         p.to_path_buf()
     };
@@ -82,7 +82,7 @@ pub fn is_path_in_root(path: &Path, root: &Path) -> bool {
 
 pub fn validate_generated_image_path(app: &tauri::AppHandle, filename: &str) -> AppResult<std::path::PathBuf> {
     let app_data_dir = app.path().app_data_dir().map_err(|e| {
-        ZenError::Internal(format!("Failed to resolve AppData directory: {}", e))
+        ZenError::Internal(format!("Failed to resolve AppData directory: {e}"))
     })?;
     let generated_images_dir = app_data_dir.join("generated_images");
     let clean_filename = Path::new(filename)
@@ -95,7 +95,7 @@ pub fn validate_generated_image_path(app: &tauri::AppHandle, filename: &str) -> 
     }
     let source_path = generated_images_dir.join(&clean_filename);
     let resolved_source = source_path.canonicalize().map_err(|e| {
-        ZenError::Internal(format!("Image file does not exist or invalid path: {}", e))
+        ZenError::Internal(format!("Image file does not exist or invalid path: {e}"))
     })?;
     if !is_path_in_root(&resolved_source, &generated_images_dir) {
         return Err(ZenError::Internal("Security check failed: Target path lies outside generated_images directory".to_string()));
@@ -111,7 +111,7 @@ pub fn validate_remote_auth_safety(url_str: &str, has_token: bool) -> AppResult<
         return Ok(());
     }
     let parsed = url::Url::parse(url_str).map_err(|e| {
-        ZenError::Internal(format!("Invalid URL format: {}", e))
+        ZenError::Internal(format!("Invalid URL format: {e}"))
     })?;
     let is_loopback = if let Some(host) = parsed.host_str() {
         host == "localhost" || host == "127.0.0.1" || host == "[::1]"

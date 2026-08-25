@@ -96,14 +96,14 @@ pub async fn get_provider_catalog(state: State<'_, AppState>) -> ZenResult<Vec<P
         let api_key_key = meta
             .api_key_key
             .map(str::to_string)
-            .unwrap_or_else(|| format!("{}_api_key", provider_id));
+            .unwrap_or_else(|| format!("{provider_id}_api_key"));
         let api_key_present = state
             .secret_manager
             .has_secret(&api_key_key)
             .await
             .unwrap_or(false);
         let base_url = settings
-            .get(&format!("{}_base_url", provider_id))
+            .get(&format!("{provider_id}_base_url"))
             .filter(|value| !value.is_empty())
             .cloned()
             .unwrap_or_else(|| meta.default_base_url.to_string());
@@ -111,7 +111,7 @@ pub async fn get_provider_catalog(state: State<'_, AppState>) -> ZenResult<Vec<P
             || base_url.starts_with("http://127.0.0.1")
             || matches!(provider_id, "ollama" | "lmstudio" | "nine_router" | "vx");
         let configured = api_key_present
-            || settings.contains_key(&format!("{}_base_url", provider_id))
+            || settings.contains_key(&format!("{provider_id}_base_url"))
             || meta.api_key_key.is_none();
 
         entries.push(ProviderCatalogEntry {
@@ -121,7 +121,7 @@ pub async fn get_provider_catalog(state: State<'_, AppState>) -> ZenResult<Vec<P
             category: meta.category.to_string(),
             requires_key: meta.api_key_key.is_some(),
             api_key_key: meta.api_key_key.map(str::to_string),
-            base_url_key: format!("{}_base_url", provider_id),
+            base_url_key: format!("{provider_id}_base_url"),
             default_base_url: meta.default_base_url.to_string(),
             base_url,
             is_local,
@@ -146,7 +146,7 @@ pub async fn get_provider_catalog(state: State<'_, AppState>) -> ZenResult<Vec<P
                     .to_string();
                 let api_key_present = state
                     .secret_manager
-                    .has_secret(&format!("{}_api_key", id))
+                    .has_secret(&format!("{id}_api_key"))
                     .await
                     .unwrap_or(false);
                 entries.push(ProviderCatalogEntry {
@@ -162,8 +162,8 @@ pub async fn get_provider_catalog(state: State<'_, AppState>) -> ZenResult<Vec<P
                         .get("requiresKey")
                         .and_then(|value| value.as_bool())
                         .unwrap_or(false),
-                    api_key_key: Some(format!("{}_api_key", id)),
-                    base_url_key: format!("{}_base_url", id),
+                    api_key_key: Some(format!("{id}_api_key")),
+                    base_url_key: format!("{id}_base_url"),
                     default_base_url: base_url.clone(),
                     base_url,
                     is_local: false,
@@ -201,7 +201,7 @@ pub async fn get_setting(state: State<'_, AppState>, key: String) -> AppResult<O
 pub async fn set_setting(state: State<'_, AppState>, key: String, value: String) -> AppResult<()> {
     if is_workspace_root_key(&key) {
         crate::workspace::canonicalize_workspace_root(std::path::Path::new(&value)).map_err(
-            |e| crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e)),
+            |e| crate::error::ZenError::Custom(format!("Invalid workspace root: {e}")),
         )?;
     }
 
@@ -318,7 +318,7 @@ pub async fn set_settings(
     if let Some(workspace_root) = workspace_root.as_deref() {
         crate::workspace::canonicalize_workspace_root(std::path::Path::new(workspace_root))
             .map_err(|e| {
-                crate::error::ZenError::Custom(format!("Invalid workspace root: {}", e))
+                crate::error::ZenError::Custom(format!("Invalid workspace root: {e}"))
             })?;
     }
     let (secret_settings, public_settings): (HashMap<_, _>, HashMap<_, _>) = settings
@@ -399,7 +399,7 @@ pub async fn get_all_available_models(
                 Ok(normalize_model_catalog(models))
             }
             Err(error) if !manual_models.is_empty() => {
-                eprintln!("Using saved manual models for {} after discovery failed: {}", p_name, error);
+                eprintln!("Using saved manual models for {p_name} after discovery failed: {error}");
                 Ok(normalize_model_catalog(manual_models))
             }
             Err(error) => Err(error),
@@ -417,8 +417,8 @@ pub async fn get_all_available_models(
                 .find(|meta| meta.name == p_name)
                 .and_then(|meta| meta.api_key_key)
                 .map(str::to_string)
-                .unwrap_or_else(|| format!("{}_api_key", p_name));
-            let base_url_key = format!("{}_base_url", p_name);
+                .unwrap_or_else(|| format!("{p_name}_api_key"));
+            let base_url_key = format!("{p_name}_base_url");
 
             let has_key = state
                 .secret_manager
@@ -459,7 +459,7 @@ pub async fn get_all_available_models(
                     match provider_instance.list_models().await {
                         Ok(models) => all_models.extend(models),
                         Err(e) => {
-                            eprintln!("Failed to fetch models from {}: {}", p_name, e);
+                            eprintln!("Failed to fetch models from {p_name}: {e}");
                         }
                     }
                 }
@@ -492,10 +492,10 @@ pub async fn get_all_available_models(
                                 all_models.extend(models);
                             }
                             Err(e) if !manual_models.is_empty() => {
-                                eprintln!("Using saved manual models for {} after discovery failed: {}", custom_id, e);
+                                eprintln!("Using saved manual models for {custom_id} after discovery failed: {e}");
                                 all_models.extend(manual_models);
                             }
-                            Err(e) => eprintln!("Failed to fetch models from custom provider {}: {}", custom_id, e),
+                            Err(e) => eprintln!("Failed to fetch models from custom provider {custom_id}: {e}"),
                         }
                     }
                 }
@@ -543,9 +543,9 @@ pub async fn fetch_9router_image_models(
 
     let base = base_url.trim_end_matches('/');
     let endpoint = if base.ends_with("/v1") {
-        format!("{}/models/image", base)
+        format!("{base}/models/image")
     } else {
-        format!("{}/v1/models/image", base)
+        format!("{base}/v1/models/image")
     };
 
     // Validate security boundary: prevent leaking API key over remote plain HTTP
@@ -567,7 +567,7 @@ pub async fn fetch_9router_image_models(
         crate::error::ZenError::Custom("9Router image models request timed out".to_string())
     })?
     .map_err(|e| {
-        crate::error::ZenError::Custom(format!("Failed to connect to 9Router: {}", e))
+        crate::error::ZenError::Custom(format!("Failed to connect to 9Router: {e}"))
     })?;
 
     if !response.status().is_success() {
@@ -578,7 +578,7 @@ pub async fn fetch_9router_image_models(
     }
 
     let body: serde_json::Value = response.json().await.map_err(|e| {
-        crate::error::ZenError::Custom(format!("Failed to parse 9Router response: {}", e))
+        crate::error::ZenError::Custom(format!("Failed to parse 9Router response: {e}"))
     })?;
 
     let data_arr = body.get("data").and_then(|d| d.as_array()).ok_or_else(|| {

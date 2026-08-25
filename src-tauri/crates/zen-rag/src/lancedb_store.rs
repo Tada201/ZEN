@@ -168,10 +168,27 @@ impl VectorStore for LanceDbStore {
             // Assuming default lancedb behavior includes _distance
             let distance_col = batch.column_by_name("_distance");
 
-            let id_col = batch.column_by_name("id").unwrap().as_string::<i32>();
-            let source_col = batch.column_by_name("source").unwrap().as_string::<i32>();
-            let text_col = batch.column_by_name("text").unwrap().as_string::<i32>();
-            let metadata_col = batch.column_by_name("metadata").unwrap().as_string::<i32>();
+            // The table schema is created by this store (see add()), so these
+            // columns are structural invariants — but schema drift must fail
+            // the query loudly rather than panic.
+            let missing =
+                |name: &str| format!("lancedb search result batch missing column '{name}'");
+            let id_col = batch
+                .column_by_name("id")
+                .ok_or_else(|| missing("id"))?
+                .as_string::<i32>();
+            let source_col = batch
+                .column_by_name("source")
+                .ok_or_else(|| missing("source"))?
+                .as_string::<i32>();
+            let text_col = batch
+                .column_by_name("text")
+                .ok_or_else(|| missing("text"))?
+                .as_string::<i32>();
+            let metadata_col = batch
+                .column_by_name("metadata")
+                .ok_or_else(|| missing("metadata"))?
+                .as_string::<i32>();
 
             for i in 0..batch.num_rows() {
                 let score = if let Some(dist) = distance_col {
@@ -202,7 +219,7 @@ impl VectorStore for LanceDbStore {
         let table = conn.open_table(&self.collection_name).execute().await?;
         // Escape single-quotes in the source path to prevent SQL injection
         let escaped = source.replace('\'', "''");
-        table.delete(&format!("source = '{}'", escaped)).await?;
+        table.delete(&format!("source = '{escaped}'")).await?;
         Ok(())
     }
 }

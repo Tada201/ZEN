@@ -124,7 +124,7 @@ fn dependency_placeholder_regex() -> &'static regex::Regex {
     static RE: OnceLock<regex::Regex> = OnceLock::new();
     RE.get_or_init(|| {
         regex::Regex::new(r"\{\{\s*([a-zA-Z0-9_\-]+)(?:\.([a-zA-Z0-9_\-]+))?(?:\.([a-zA-Z0-9_\-]+))?\s*\}\}")
-            .expect("valid dependency placeholder regex")
+            .unwrap_or_else(|e| panic!("dependency placeholder regex failed to compile: {e}"))
     })
 }
 
@@ -177,7 +177,7 @@ pub(super) fn substitute_dependency_placeholders(template: &str, results: &HashM
                     .unwrap_or("")
                     .to_string(),
             },
-            None => format!("{{{{{}.{}}}}}", id, field),
+            None => format!("{{{{{id}.{field}}}}}"),
         }
     })
     .into_owned()

@@ -30,8 +30,7 @@ impl OpenAiCompatProvider {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             return Err(ZenError::Custom(format!(
-                "Embedding failed ({}): {}",
-                status, body
+                "Embedding failed ({status}): {body}"
             )));
         }
 
@@ -53,7 +52,10 @@ impl OpenAiCompatProvider {
         {
             Ok(resp) => resp.status().is_success(),
             Err(_) => {
-                let base_str = self.base_url.read().unwrap().clone();
+                let base_str = match self.base_url.read() {
+                    Ok(guard) => guard.clone(),
+                    Err(poisoned) => poisoned.into_inner().clone(),
+                };
                 if base_str.contains("localhost") {
                     let alt_base = base_str.replace("localhost", "127.0.0.1");
                     let alt_provider = Self {

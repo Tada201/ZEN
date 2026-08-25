@@ -272,7 +272,7 @@ impl MiddlewareChain {
                 recall_budget: budgets.recall,
             }))
             .add(Box::new(SummaryMiddleware {
-                db_pool: db_pool.clone(),
+                db_pool,
                 summary_budget: budgets.summary,
             }))
             .add(Box::new(CompactionMiddleware {
@@ -282,7 +282,7 @@ impl MiddlewareChain {
             chain = chain.add_after_priority(
                 0,
                 Box::new(SkillsCatalogMiddleware {
-                    ctx: ctx.clone(),
+                    ctx,
                     context_window,
                     skills_catalog_budget: budgets.skills_catalog,
                 }),

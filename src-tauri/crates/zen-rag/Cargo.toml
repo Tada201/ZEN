@@ -1,7 +1,8 @@
 [package]
 name = "zen-rag"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
 description = "Vector stores, embeddings and document ingestion for the Zen backend workspace (BIG_MIGRATION.md Phase 9)"
 
 [dependencies]
@@ -20,8 +21,8 @@ futures = { workspace = true }
 uuid = { workspace = true }
 reqwest = { workspace = true, features = ["native-tls", "json"] }
 
-# ── Relocated pins (same versions as the app crate; usage moved, not new
-# dependencies — Security.md provenance unchanged) ───────────────────────────
+# Pins hoisted to [workspace.dependencies] in Phase 13 (relocated usage,
+# Security.md provenance unchanged).
 lancedb = "0.26"
 arrow-array = "57"
 arrow-schema = "57"
@@ -30,13 +31,16 @@ candle-transformers = "0.9"
 candle-nn = "0.9"
 tokenizers = "0.21"
 text-splitter = { version = "0.16", features = ["tiktoken-rs"] }
-tiktoken-rs = "0.6"
+tiktoken-rs = { workspace = true }
 calamine = "=0.35.0"
 quick-xml = "=0.41.0"
-zip = "4.6.1"
+zip = { workspace = true }
 pdf-inspector = { git = "https://github.com/firecrawl/pdf-inspector" }
-dirs = "6.0"
-
+dirs = { workspace = true }
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
+
+# Inherit the workspace lint policy ([workspace.lints] at the root).
+[lints]
+workspace = true

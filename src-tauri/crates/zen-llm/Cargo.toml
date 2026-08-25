@@ -1,19 +1,19 @@
 [package]
 name = "zen-llm"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
 description = "LLM provider clients and streaming for the Zen backend workspace (BIG_MIGRATION.md Phase 7)"
 
 [dependencies]
 zen-core = { workspace = true }
 async-trait = { workspace = true }
 # Same version pin as the app crate; relocated usage, not a new dependency.
-base64 = "0.22"
-# Same version pins as the app crate; relocated usage, not new dependencies.
-dashmap = "6.1"
+base64 = { workspace = true }
+dashmap = { workspace = true }
 futures = { workspace = true }
-lazy_static = "1.5"
-regex = "1"
+lazy_static = { workspace = true }
+regex = { workspace = true }
 reqwest = { workspace = true, features = ["native-tls", "json", "stream"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -23,4 +23,8 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-wiremock = "0.6"
+wiremock = { workspace = true }
+
+# Inherit the workspace lint policy ([workspace.lints] at the root).
+[lints]
+workspace = true

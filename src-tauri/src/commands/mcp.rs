@@ -16,7 +16,7 @@ pub async fn mcp_get_config(state: State<'_, AppState>, scope: McpScope) -> ZenR
         .mcp_config
         .read_config(scope)
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP config read failed: {}", e)))
+        .map_err(|e| ZenError::Custom(format!("MCP config read failed: {e}")))
 }
 
 /// Persist a raw config document into `scope` (User or Workspace).
@@ -30,7 +30,7 @@ pub async fn mcp_save_config(
         .mcp_config
         .save_config(scope, config)
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP config save failed: {}", e)))
+        .map_err(|e| ZenError::Custom(format!("MCP config save failed: {e}")))
 }
 
 /// Return the authoritative, bounded MCP inventory used by agent turns.
@@ -43,7 +43,7 @@ pub async fn mcp_get_inventory(state: State<'_, AppState>) -> ZenResult<McpInven
         .mcp_discovery
         .refresh()
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP inventory refresh failed: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("MCP inventory refresh failed: {e}")))?;
     Ok(state.mcp_discovery.snapshot().await)
 }
 
@@ -57,7 +57,7 @@ pub async fn mcp_list_servers(state: State<'_, AppState>) -> ZenResult<Vec<McpSe
         .mcp_config
         .list_servers()
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP list servers failed: {}", e)))
+        .map_err(|e| ZenError::Custom(format!("MCP list servers failed: {e}")))
 }
 
 /// Upsert `mcpServers[name]` in `scope` from a raw entry object,
@@ -77,7 +77,7 @@ pub async fn mcp_upsert_server(
         .mcp_config
         .upsert_server(scope, &name, config)
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP upsert server failed: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("MCP upsert server failed: {e}")))?;
     let client = state.mcp_client.clone();
     let ui = crate::services::mcp_registrar::ui_bridge(&app);
     tokio::spawn(async move {
@@ -102,7 +102,7 @@ pub async fn mcp_set_enabled(
         .mcp_config
         .set_enabled(scope, &name, enabled)
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP set enabled failed: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("MCP set enabled failed: {e}")))?;
     if existed {
         let client = state.mcp_client.clone();
         let ui = crate::services::mcp_registrar::ui_bridge(&app);
@@ -128,7 +128,7 @@ pub async fn mcp_remove_server(
         .mcp_config
         .remove_server(scope, &name)
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP remove server failed: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("MCP remove server failed: {e}")))?;
     if removed {
         let client = state.mcp_client.clone();
         let ui = crate::services::mcp_registrar::ui_bridge(&app);
@@ -178,7 +178,7 @@ pub async fn mcp_approve_server(
         .consent()
         .approve(&name, &fingerprint)
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP consent approve failed: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("MCP consent approve failed: {e}")))?;
     let client = state.mcp_client.clone();
     let ui = crate::services::mcp_registrar::ui_bridge(&app);
     tokio::spawn(async move {
@@ -236,10 +236,10 @@ pub async fn mcp_authorize_oauth(
         scopes.as_deref(),
     )
     .await
-    .map_err(|e| ZenError::Custom(format!("MCP OAuth authorization failed: {}", e)))?;
+    .map_err(|e| ZenError::Custom(format!("MCP OAuth authorization failed: {e}")))?;
     crate::mcp::oauth::store_token(state.secret_manager.as_ref(), &name, &token)
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP OAuth token store failed: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("MCP OAuth token store failed: {e}")))?;
     let client = state.mcp_client.clone();
     let ui = crate::services::mcp_registrar::ui_bridge(&app);
     tokio::spawn(async move {
@@ -265,7 +265,7 @@ pub async fn mcp_list_resources(
         .mcp_client
         .list_resources(&server_name)
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP list resources failed: {}", e)))
+        .map_err(|e| ZenError::Custom(format!("MCP list resources failed: {e}")))
 }
 
 /// `resources/templates/list` for one connected server, safety-normalized.
@@ -278,7 +278,7 @@ pub async fn mcp_list_resource_templates(
         .mcp_client
         .list_resource_templates(&server_name)
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP list resource templates failed: {}", e)))
+        .map_err(|e| ZenError::Custom(format!("MCP list resource templates failed: {e}")))
 }
 
 /// `resources/read` for a specific URI. The URI is validated against the scheme
@@ -294,7 +294,7 @@ pub async fn mcp_read_resource(
         .mcp_client
         .read_resource(Some(&crate::services::mcp_registrar::ui_bridge(&app)), &server_name, &uri)
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP read resource failed: {}", e)))
+        .map_err(|e| ZenError::Custom(format!("MCP read resource failed: {e}")))
 }
 
 /// `prompts/list` for one connected server, safety-normalized.
@@ -307,7 +307,7 @@ pub async fn mcp_list_prompts(
         .mcp_client
         .list_prompts(&server_name)
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP list prompts failed: {}", e)))
+        .map_err(|e| ZenError::Custom(format!("MCP list prompts failed: {e}")))
 }
 
 /// `prompts/get` with user-supplied arguments. Message content is sanitized to
@@ -325,7 +325,7 @@ pub async fn mcp_get_prompt(
         .mcp_client
         .get_prompt(Some(&crate::services::mcp_registrar::ui_bridge(&app)), &server_name, &name, arguments.unwrap_or(Value::Null))
         .await
-        .map_err(|e| ZenError::Custom(format!("MCP get prompt failed: {}", e)))
+        .map_err(|e| ZenError::Custom(format!("MCP get prompt failed: {e}")))
 }
 
 /// Resolve a pending MRTR elicitation with the user's decision. `value` is the
@@ -341,7 +341,7 @@ pub async fn mcp_resolve_elicitation(
     state
         .mcp_client
         .resolve_elicitation(&request_id, value)
-        .map_err(|e| ZenError::Custom(format!("MCP resolve elicitation failed: {}", e)))
+        .map_err(|e| ZenError::Custom(format!("MCP resolve elicitation failed: {e}")))
 }
 
 /// Re-emit every in-flight elicitation. The frontend calls this once its

@@ -105,7 +105,7 @@ impl DocumentService {
 
     pub async fn ingest(&self, path: String, workspace: PathBuf) -> AppResult<Document> {
         let path = crate::workspace::resolve_workspace_path(&workspace, &path)
-            .map_err(|e| AppError::Custom(format!("Workspace violation: {}", e)))?;
+            .map_err(|e| AppError::Custom(format!("Workspace violation: {e}")))?;
 
         // 1. Read file metadata
         let metadata = tokio::fs::metadata(&path).await.map_err(|e| {
@@ -167,7 +167,7 @@ impl DocumentService {
 
         // 5. Store chunks in document_chunks table
         for (i, chunk) in chunks.iter().enumerate() {
-            let chunk_id = format!("{}-chunk-{}", doc_id, i);
+            let chunk_id = format!("{doc_id}-chunk-{i}");
             // Rough token estimate: ~4 chars per token
             let token_count = (chunk.text.len() / 4) as i64;
 
@@ -180,7 +180,7 @@ impl DocumentService {
                 token_count,
             )
             .await
-            .map_err(|e| AppError::Custom(format!("Failed to store chunk {}: {}", i, e)))?;
+            .map_err(|e| AppError::Custom(format!("Failed to store chunk {i}: {e}")))?;
         }
 
         // 6. Optional: Embed chunks and store in vector DB
@@ -201,7 +201,7 @@ impl DocumentService {
                     Ok(embeddings) => {
                         // Store in vector DB
                         if let Err(e) = rag_store.add_chunks(chunks.clone(), embeddings).await {
-                            eprintln!("Warning: Failed to store chunks in vector DB: {}", e);
+                            eprintln!("Warning: Failed to store chunks in vector DB: {e}");
                             // Don't fail the whole ingest — doc is still in SQLite
                         } else {
                             // Update status to indexed
@@ -212,7 +212,7 @@ impl DocumentService {
                         }
                     }
                     Err(e) => {
-                        eprintln!("Warning: Failed to generate embeddings: {}", e);
+                        eprintln!("Warning: Failed to generate embeddings: {e}");
                         // Chunks still stored in SQLite for text search
                     }
                 }
@@ -336,22 +336,19 @@ impl DocumentService {
             let sniffed = kind.extension();
             if !Self::is_allowed_sniffed(sniffed) {
                 return Err(AppError::Custom(format!(
-                    "Unsupported file type '{}' (detected from contents)",
-                    sniffed
+                    "Unsupported file type '{sniffed}' (detected from contents)"
                 )));
             }
             if !Self::extension_matches_sniff(&ext, sniffed) {
                 return Err(AppError::Custom(format!(
-                    "File contents ('{}') do not match the '.{}' extension",
-                    sniffed, ext
+                    "File contents ('{sniffed}') do not match the '.{ext}' extension"
                 )));
             }
         } else if !Self::is_allowed_text_ext(&ext) {
             // No magic signature and not a known text extension → reject
             // rather than sending mojibake to the model.
             return Err(AppError::Custom(format!(
-                "Unsupported or unrecognized file type '.{}'",
-                ext
+                "Unsupported or unrecognized file type '.{ext}'"
             )));
         }
 
@@ -384,8 +381,7 @@ impl DocumentService {
                 // Roll back the stored bytes so we don't orphan a blob.
                 store::delete_attachment_files(&stored.blob_path, &stored.text_path).await;
                 return Err(AppError::Custom(format!(
-                    "Could not extract text from '{}': {}",
-                    filename, e
+                    "Could not extract text from '{filename}': {e}"
                 )));
             }
         };
@@ -394,8 +390,7 @@ impl DocumentService {
         if let Err(e) = tokio::fs::write(&stored.text_path, extracted.as_bytes()).await {
             store::delete_attachment_files(&stored.blob_path, &stored.text_path).await;
             return Err(AppError::Custom(format!(
-                "Failed to persist extracted text: {}",
-                e
+                "Failed to persist extracted text: {e}"
             )));
         }
 

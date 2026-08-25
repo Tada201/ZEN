@@ -411,7 +411,7 @@ impl<A: Send + Sync + 'static> ToolManager<A> {
         for descriptor in &mut descriptors {
             if let Some((server_name, _tool_name)) = descriptor.id.strip_prefix("ext:").and_then(split_external_id) {
                 descriptor.origin = Some("mcp".to_string());
-                descriptor.server_id = Some(format!("mcp:{}", server_name));
+                descriptor.server_id = Some(format!("mcp:{server_name}"));
                 descriptor.server_name = Some(server_name.to_string());
                 descriptor.transport = Some("unknown".to_string());
                 descriptor.availability = Some("ready".to_string());
@@ -529,7 +529,7 @@ impl<A: Send + Sync + 'static> ToolManager<A> {
                 let risk = def
                     .risk_level
                     .as_ref()
-                    .map(|r| format!("{:?}", r))
+                    .map(|r| format!("{r:?}"))
                     .unwrap_or_else(|| id_to_risk_label(&def.name));
 
                 if seen.insert(def.name.clone()) {
@@ -585,7 +585,7 @@ impl<A: Send + Sync + 'static> ToolManager<A> {
                 .find(|t| t.name == id);
             drop(v2_guard);
             if let Some(def) = def {
-                let risk = def.risk_level.map(|r| format!("{:?}", r));
+                let risk = def.risk_level.map(|r| format!("{r:?}"));
                 return Some(ToolSchema {
                     id: id.to_string(),
                     description: cap_chars(&def.description, TOOL_INFO_MAX_DESCRIPTION_CHARS),

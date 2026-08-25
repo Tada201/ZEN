@@ -61,7 +61,7 @@ impl GeojsonService {
     /// Validates raw GeoJSON string, computes bounding box, features count, and geometry types.
     pub fn parse_and_validate(geojson_str: &str) -> ZenResult<GeojsonParsedMetadata> {
         let geojson = GeoJson::from_str(geojson_str)
-            .map_err(|e| ZenError::Custom(format!("Invalid GeoJSON: {}", e)))?;
+            .map_err(|e| ZenError::Custom(format!("Invalid GeoJSON: {e}")))?;
 
         let mut geometry_types = HashSet::new();
         let mut min_x = f64::INFINITY;

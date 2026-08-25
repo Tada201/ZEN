@@ -23,6 +23,36 @@ reqwest = { version = "0.12", default-features = false }
 futures = "0.3"
 async-trait = "0.1"
 anyhow = "1.0"
+
+# ── Pins previously duplicated verbatim in two or more member manifests,
+# hoisted in BIG_MIGRATION.md Phase 13 so versions skew nowhere and Security.md's
+# 30-day rule is checked in one place. Members reference these via
+# `{ workspace = true }`. ──────────────────────────────────────────────────────
+async-recursion = "1.1"
+base64 = "0.22"
+cpal = "0.15"
+dashmap = "6.1"
+dirs = "6.0"
+futures-util = "0.3"
+jsonschema = "0.42"
+lazy_static = "1.5"
+meval = "0.2"
+regex = "1"
+sha2 = "0.10"
+sysinfo = "0.38"
+tempfile = "3"
+tiktoken-rs = "0.6"
+url = "2"
+wiremock = "0.6"
+zip = "4.6.1"
+# Windows Job Object sandboxing for stdio MCP child processes (app + zen-mcp);
+# already resolved transitively in the tree (>30 days old per Security.md).
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
 zen-core = { path = "crates/zen-core" }
 zen-db = { path = "crates/zen-db" }
 zen-security = { path = "crates/zen-security" }
@@ -33,12 +63,34 @@ zen-rag = { path = "crates/zen-rag" }
 zen-media = { path = "crates/zen-media" }
 zen-agent = { path = "crates/zen-agent" }
 
+# Shared package metadata (Phase 13): members inherit via
+# `version.workspace = true` etc. instead of repeating the values.
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Lint policy (BIG_MIGRATION.md Phase 13): enforced by every `cargo clippy`
+# run via `[lints] workspace = true` in each member, not by whoever remembers
+# the `-D warnings` flag. The deny set targets this codebase's known failure
+# modes; test code is exempted from unwrap/expect via clippy.toml.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+# Would have caught the Phase 9 session_memory RwLock deadlock class
+# (Appendix F).
+await_holding_lock = "deny"
+redundant_clone = "deny"
+needless_borrow = "deny"
+uninlined_format_args = "deny"
+
 [package]
 name = "zen"
-version = "0.1.0"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
 description = "Zen - Integrated OSINT & Agentic Workbench"
 authors = ["you"]
-edition = "2021"
 
 [lib]
 name = "tauri_app_lib"
@@ -81,39 +133,39 @@ zen-mcp = { workspace = true }
 zen-rag = { workspace = true }
 zen-media = { workspace = true }
 zen-agent = { workspace = true }
-sysinfo = "0.38"
+sysinfo = { workspace = true }
 axum = { version = "0.8", features = ["default", "ws"] }
 tower-http = { version = "0.6", features = ["cors"] }
-regex = "1"
+regex = { workspace = true }
 anyhow = { workspace = true }
-dirs = "6.0"
+dirs = { workspace = true }
 portable-pty = "0.9"
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
-futures-util = "0.3"
-base64 = "0.22"
-dashmap = "6.1"
-lazy_static = "1.5"
-tempfile = "3"
-url = "2"
-tiktoken-rs = "0.6"
+futures-util = { workspace = true }
+base64 = { workspace = true }
+dashmap = { workspace = true }
+lazy_static = { workspace = true }
+tempfile = { workspace = true }
+url = { workspace = true }
+tiktoken-rs = { workspace = true }
 tokio-stream = "0.1"
 moka = { version = "0.12", features = ["future"] }
 sgp4 = "0.2"
-jsonschema = "0.42"
+jsonschema = { workspace = true }
 similar = "2.7"
-# Whisper (hound) and Piper (rodio) audio moved to the zen-media crate in
+webrtc-vad = "0.4.0"
+cpal = { workspace = true }
+# Whisper (hound) and Piper (rodio) moved to the zen-media crate in
 # Phase 10; the app reaches the media services via `zen_media::*`. `cpal`
 # stays (commands/audio.rs device enumeration) and `webrtc-vad` stays
 # (commands/voice.rs VAD gate).
-webrtc-vad = "0.4.0"
-cpal = "0.15"
-async-recursion = "1.1"
+async-recursion = { workspace = true }
 percent-encoding = "2.3"
 urlencoding = "2.1"
 scraper = "0.22.0"
 spider = "2.2"
-sha2 = "0.10"
-zip = "4.6.1"
+sha2 = { workspace = true }
+zip = { workspace = true }
 # Magic-byte file-type sniffing for chat attachment validation. Pinned to the
 # version already resolved transitively (see Cargo.lock) — no new provenance.
 infer = "=0.19.0"
@@ -121,23 +173,18 @@ infer = "=0.19.0"
 # text (pdf-inspector) moved to the zen-rag crate in Phase 9; the app crate
 # reaches them through `zen_rag::{office_extract, ingestion}`.
 ab_glyph = "0.2"
-meval = "0.2"
+meval = { workspace = true }
 keyring = { version = "3", features = ["windows-native"] }
 geojson = "0.24"
 
 [dev-dependencies]
-wiremock = "0.6"
+wiremock = { workspace = true }
 
 # Windows Job Object sandboxing for stdio MCP child processes. windows-sys 0.59
 # is already resolved transitively in the tree (>30 days old per Security.md);
 # these feature flags are additive and only enable the JobObjects/Threading FFI.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = [
-    "Win32_Foundation",
-    "Win32_Security",
-    "Win32_System_JobObjects",
-    "Win32_System_Threading",
-] }
+windows-sys = { workspace = true }
 # Embedded WebView2 preview: in-process COM + CDP (CallDevToolsProtocolMethod)
 # and CapturePreview screenshot. Both crates already resolve transitively via
 # wry 0.55.1 (>30 days old, same provenance); pinned to the exact lockfile
@@ -164,3 +211,7 @@ opt-level = "z"
 lto = true
 strip = true
 codegen-units = 1
+
+# Inherit the workspace lint policy ([workspace.lints] at the root).
+[lints]
+workspace = true

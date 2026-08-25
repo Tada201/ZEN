@@ -212,7 +212,7 @@ fn step_node_id(value: &Value, index: usize) -> String {
         .and_then(|tool| string_field(tool, &["id"]))
         .or_else(|| value.get("subagent").and_then(|agent| string_field(agent, &["spawnId"])))
         .or_else(|| string_field(value, &["eventId"]))
-        .unwrap_or_else(|| format!("step-{}", index))
+        .unwrap_or_else(|| format!("step-{index}"))
 }
 
 fn step_parent_id(value: &Value) -> Option<String> {
@@ -234,7 +234,7 @@ fn step_summary(value: &Value) -> String {
         .or_else(|| string_field(value, &["content"]))
         .or_else(|| value.get("metadata").and_then(|meta| string_field(meta, &["message", "resultSummary"])))
         .unwrap_or_else(|| kind.clone());
-    format!("{} · {}", name, status)
+    format!("{name} · {status}")
 }
 
 fn safe_payload(value: &Value) -> String {
@@ -296,7 +296,7 @@ pub async fn upsert_execution_trace(
         return Err(ZenError::Custom("No assistant message found for execution trace".to_string()));
     }
 
-    let trace_id = format!("trace:{}", message_id);
+    let trace_id = format!("trace:{message_id}");
     let status = normalized_status(status);
     let steps = parse_steps(trace_json)?;
     let now = chrono::Utc::now().to_rfc3339();
@@ -331,7 +331,7 @@ pub async fn upsert_execution_trace(
         let mut node_id = base_node_id.clone();
         let mut suffix = 1;
         while !used_node_ids.insert(node_id.clone()) {
-            node_id = format!("{}:{}", base_node_id, suffix);
+            node_id = format!("{base_node_id}:{suffix}");
             suffix += 1;
         }
         let payload_json = safe_payload(step);
@@ -371,7 +371,7 @@ pub async fn upsert_execution_trace(
         sqlx::query(
             "INSERT INTO execution_trace_events (id, trace_id, node_id, run_id, sequence, parent_id, kind, phase, summary, target, result_summary, output_preview, agent_id, agent_name, safe_details_json, payload_json, started_at, completed_at, duration_ms, retry_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
-        .bind(format!("{}:{}", trace_id, node_id))
+        .bind(format!("{trace_id}:{node_id}"))
         .bind(&trace_id)
         .bind(&node_id)
         .bind(run_id)

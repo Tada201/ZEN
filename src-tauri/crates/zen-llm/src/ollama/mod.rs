@@ -67,7 +67,7 @@ impl OllamaProvider {
                 .timeout(std::time::Duration::from_secs(60))
                 .connect_timeout(std::time::Duration::from_secs(10))
                 .build()
-                .expect("Failed to build Ollama HTTP client"),
+                .unwrap_or_else(|e| panic!("Failed to build Ollama HTTP client: {e}")),
             base_url: base_url.trim_end_matches('/').to_string(),
         }
     }
@@ -84,7 +84,7 @@ impl OllamaProvider {
             Ok(resp) => resp,
             Err(_) if self.base_url.contains("localhost") => {
                 let alt_base = self.base_url.replace("localhost", "127.0.0.1");
-                let alt_url = format!("{}/api/show", alt_base);
+                let alt_url = format!("{alt_base}/api/show");
                 self.client.post(&alt_url).json(&body).send().await.ok()?
             }
             Err(_) => return None,
@@ -105,7 +105,7 @@ impl LlmProvider for OllamaProvider {
             Ok(resp) => resp,
             Err(e) if self.base_url.contains("localhost") => {
                 let alt_base = self.base_url.replace("localhost", "127.0.0.1");
-                let alt_url = format!("{}/api/tags", alt_base);
+                let alt_url = format!("{alt_base}/api/tags");
                 debug!(url = %alt_url, "Trying 127.0.0.1 fallback for Ollama model listing");
                 match self.client.get(&alt_url).send().await {
                     Ok(resp) => resp,
@@ -264,8 +264,7 @@ impl LlmProvider for OllamaProvider {
             let body = resp.text().await.unwrap_or_default();
             error!(status = %status, body = %body, "Ollama chat request failed");
             return Err(ZenError::Custom(format!(
-                "Ollama returned {}: {}",
-                status, body
+                "Ollama returned {status}: {body}"
             )));
         }
 
@@ -420,7 +419,7 @@ impl LlmProvider for OllamaProvider {
             Ok(resp) => resp.status().is_success(),
             Err(_) if self.base_url.contains("localhost") => {
                 let alt_base = self.base_url.replace("localhost", "127.0.0.1");
-                let alt_url = format!("{}/api/tags", alt_base);
+                let alt_url = format!("{alt_base}/api/tags");
                 debug!(url = %alt_url, "Trying 127.0.0.1 fallback for Ollama health check");
                 match self.client.get(&alt_url).send().await {
                     Ok(resp) => resp.status().is_success(),

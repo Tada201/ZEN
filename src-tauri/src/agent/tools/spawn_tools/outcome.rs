@@ -67,8 +67,7 @@ pub(super) fn validate_subagent_output(content: &str) -> ValidatedOutput {
     for marker in failure_markers {
         if lower.contains(marker) {
             notes.push(format!(
-                "Output mentions '{}' — verify the result actually satisfies the task.",
-                marker
+                "Output mentions '{marker}' — verify the result actually satisfies the task."
             ));
         }
     }

@@ -39,11 +39,7 @@
     ) {
         assert!(
             matcher(&actual),
-            "[{} × {:?}] expected {}, got {:?}",
-            mode,
-            risk,
-            expected,
-            actual,
+            "[{mode} × {risk:?}] expected {expected}, got {actual:?}",
         );
     }
 

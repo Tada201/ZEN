@@ -166,8 +166,7 @@ pub async fn set_complete(
         "backend" => flags.backend_ready = true,
         other => {
             return Err(AppError::Internal(format!(
-                "set_complete: unknown task '{}' (expected 'frontend' or 'backend')",
-                other
+                "set_complete: unknown task '{other}' (expected 'frontend' or 'backend')"
             )));
         }
     }
@@ -191,7 +190,7 @@ pub async fn get_hardware_info(
     state: State<'_, AppState>,
 ) -> AppResult<crate::services::HardwareInfo> {
     let hardware = state.hardware.lock().await;
-    Ok(hardware.get_info().clone())
+    Ok(hardware.get_info())
 }
 
 use serde::Serialize;
@@ -221,7 +220,7 @@ pub async fn browse_folder(path: Option<String>) -> AppResult<BrowseFolderResult
 
     let validated_path = crate::utils::validate_path(&target)?;
     let dir = std::fs::read_dir(&validated_path)
-        .map_err(|e| crate::error::ZenError::Internal(format!("Cannot read directory: {}", e)))?;
+        .map_err(|e| crate::error::ZenError::Internal(format!("Cannot read directory: {e}")))?;
 
     let mut dirs: Vec<FolderEntry> = Vec::new();
     let mut entries: Vec<FolderEntry> = Vec::new();

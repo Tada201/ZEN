@@ -70,9 +70,9 @@ pub fn parse_resource_metadata_challenge(header: &str) -> Option<String> {
 /// server URL: `https://host/.well-known/oauth-protected-resource`.
 fn default_protected_resource_url(server_url: &str) -> Result<String, String> {
     let parsed = url::Url::parse(server_url)
-        .map_err(|e| format!("invalid MCP server URL: {}", e))?;
+        .map_err(|e| format!("invalid MCP server URL: {e}"))?;
     let origin = parsed.origin().ascii_serialization();
-    Ok(format!("{}/.well-known/oauth-protected-resource", origin))
+    Ok(format!("{origin}/.well-known/oauth-protected-resource"))
 }
 
 /// Fetch and validate a JSON metadata document from `url` through the
@@ -81,7 +81,7 @@ async fn fetch_metadata<T: serde::de::DeserializeOwned>(
     url: &str,
     timeout: std::time::Duration,
 ) -> Result<T, String> {
-    let parsed = url::Url::parse(url).map_err(|e| format!("invalid metadata URL: {}", e))?;
+    let parsed = url::Url::parse(url).map_err(|e| format!("invalid metadata URL: {e}"))?;
     let client = build_pinned_http_client(&parsed, timeout).await?;
     let resp = client
         .get(url)
@@ -89,13 +89,13 @@ async fn fetch_metadata<T: serde::de::DeserializeOwned>(
         .timeout(timeout)
         .send()
         .await
-        .map_err(|e| format!("metadata fetch failed: {}", e))?;
+        .map_err(|e| format!("metadata fetch failed: {e}"))?;
     if !resp.status().is_success() {
         return Err(format!("metadata fetch returned HTTP {}", resp.status()));
     }
     resp.json::<T>()
         .await
-        .map_err(|e| format!("metadata parse failed: {}", e))
+        .map_err(|e| format!("metadata parse failed: {e}"))
 }
 
 /// Run the full discovery chain for an MCP `server_url`, optionally starting
@@ -120,12 +120,11 @@ pub async fn discover(
 
     // RFC 8414: the AS metadata lives at `<issuer>/.well-known/oauth-authorization-server`.
     let issuer = url::Url::parse(&as_url)
-        .map_err(|e| format!("invalid authorization server URL: {}", e))?;
+        .map_err(|e| format!("invalid authorization server URL: {e}"))?;
     let as_origin = issuer.origin().ascii_serialization();
     let path = issuer.path().trim_end_matches('/');
     let as_metadata_url = format!(
-        "{}/.well-known/oauth-authorization-server{}",
-        as_origin, path
+        "{as_origin}/.well-known/oauth-authorization-server{path}"
     );
     let meta: AuthorizationServerMetadata = fetch_metadata(&as_metadata_url, timeout).await?;
 

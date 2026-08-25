@@ -231,8 +231,7 @@ async fn retired_tools_are_not_discoverable() {
     ] {
         assert!(
             !tools.iter().any(|tool| tool.id == retired),
-            "retired tool '{}' must not be discoverable",
-            retired,
+            "retired tool '{retired}' must not be discoverable",
         );
     }
 
@@ -265,8 +264,7 @@ async fn generate_image_discoverable_by_art_aliases() {
             .await;
         assert!(
             tools.iter().any(|t| t.id == "generate_image"),
-            "generate_image should be discoverable via alias '{}'",
-            alias,
+            "generate_image should be discoverable via alias '{alias}'",
         );
     }
 }
@@ -284,14 +282,14 @@ async fn register_ext_tool(manager: &ToolManager<TestHost>, server: &str, name: 
     // Mirrors production `sync_external_servers`: an adapter (here a
     // stub) is registered directly under its prefixed name, so the
     // catalog sees a real executor plus a definition.
-    let ext_id = format!("ext:{}:{}", server, name);
+    let ext_id = format!("ext:{server}:{name}");
     manager
         .v2
         .write()
         .await
         .register(std::sync::Arc::new(StubCatalogTool {
             name: ext_id.clone(),
-            description: format!("External {} tool", name),
+            description: format!("External {name} tool"),
         }));
     ext_id
 }

@@ -137,8 +137,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for SpawnAgentTool {
         if let Some(agents) = input.get("agents").and_then(Value::as_array) {
             if agents.is_empty() || agents.len() > MAX_PARALLEL_SUBAGENTS {
                 return Err(anyhow::anyhow!(
-                    "agents must contain between 1 and {} entries",
-                    MAX_PARALLEL_SUBAGENTS
+                    "agents must contain between 1 and {MAX_PARALLEL_SUBAGENTS} entries"
                 ));
             }
 
@@ -149,7 +148,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for SpawnAgentTool {
                     .get("id")
                     .and_then(Value::as_str)
                     .map(str::to_string)
-                    .unwrap_or_else(|| format!("agent_{}", idx));
+                    .unwrap_or_else(|| format!("agent_{idx}"));
                 let depends_on: Vec<String> = request
                     .get("depends_on")
                     .and_then(Value::as_array)

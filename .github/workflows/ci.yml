@@ -16,6 +16,156 @@ env:
 
 jobs:
   # ──────────────────────────────────────────────────────────────
+  # Changed-crate detection: cheap path filter so a docs- or
+  # frontend-only PR skips the heavy per-crate Rust matrix.
+  # ──────────────────────────────────────────────────────────────
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      manifests: ${{ steps.filter.outputs.manifests }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Path filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'src-tauri/**'
+            manifests:
+              - 'src-tauri/**/Cargo.toml'
+              - 'src-tauri/Cargo.lock'
+              - 'src-tauri/deny.toml'
+
+  # ──────────────────────────────────────────────────────────────
+  # Crate boundary guards: run whenever a manifest changed. Cheap,
+  # ubuntu-hosted, and independent of the heavy Windows build.
+  # ──────────────────────────────────────────────────────────────
+  boundaries:
+    name: Crate boundary guards
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.manifests == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # RULES.md §3.1: library crates must never depend on tauri or keyring.
+      # Match uncommented dependency lines only.
+      - name: No tauri/keyring in crates
+        run: |
+          set -euo pipefail
+          violations=0
+          for manifest in src-tauri/crates/*/Cargo.toml; do
+            if grep -nE '^\s*(tauri|keyring)\s*(=|\{|\.)' "$manifest"; then
+              echo "::error file=$manifest::forbidden tauri/keyring dependency in a library crate"
+              violations=1
+            fi
+          done
+          if [ "$violations" -ne 0 ]; then
+            echo "Crate boundary violated: tauri/keyring must stay in the app crate."
+            exit 1
+          fi
+          echo "Boundary clean: no tauri/keyring in any crates/*/Cargo.toml."
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.1"
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: cargo-deny (advisories, licenses, bans, sources)
+        working-directory: src-tauri
+        run: cargo deny check
+
+  # ──────────────────────────────────────────────────────────────
+  # Per-crate library tests (fast, ubuntu). The tauri-linked app
+  # test binary is exercised by the Windows `backend` job below;
+  # these run the pure library crates which build anywhere.
+  # ──────────────────────────────────────────────────────────────
+  crate-tests:
+    name: Crate tests (${{ matrix.crate }})
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - zen-core
+          - zen-db
+          - zen-security
+          - zen-tools
+          - zen-llm
+          - zen-mcp
+          - zen-media
+          - zen-agent
+          - zen-rag
+          - zen-policy-tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.1"
+          components: clippy
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.crate }}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Clippy (${{ matrix.crate }})
+        working-directory: src-tauri
+        run: cargo clippy -p ${{ matrix.crate }} --all-targets
+      - name: Test (${{ matrix.crate }})
+        working-directory: src-tauri
+        run: cargo test -p ${{ matrix.crate }}
+
+  # ──────────────────────────────────────────────────────────────
+  # Coverage (privileged crates). zen-security + zen-tools hold the
+  # permission/policy and tool-execution surface (RULES.md testing
+  # gates), so their line coverage is reported every backend run.
+  # Informational for now — promote to a hard floor once a baseline
+  # has settled across a few runs (see BIG_MIGRATION.md Phase 13).
+  # ──────────────────────────────────────────────────────────────
+  coverage:
+    name: Coverage (privileged crates)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.1"
+          components: llvm-tools-preview
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: coverage
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Coverage for zen-security + zen-tools
+        working-directory: src-tauri
+        run: |
+          cargo llvm-cov --summary-only \
+            -p zen-security -p zen-tools \
+            --fail-under-lines 50
+
+  # ──────────────────────────────────────────────────────────────
   # Frontend: typecheck, build, tests, bundle size budget
   # ──────────────────────────────────────────────────────────────
   frontend:
@@ -97,15 +247,36 @@ jobs:
         shell: pwsh
         run: npm run runtime:fetch -- -Clean
 
-      # `cargo clippy --all-targets` already type-checks every target, so a
-      # separate `cargo check` only re-compiles the same crates. Dropped.
+      # Clippy is enforced via `[workspace.lints.clippy]` in the manifests
+      # (Phase 13), so a bare `cargo clippy` denies the lint set — no CLI flag
+      # needed. `--all-targets` type-checks every target across the workspace.
       - name: Cargo clippy
         working-directory: src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets
 
-      - name: Cargo test
+      # This Windows runner is the only place the tauri-linked test binaries
+      # execute (the dev box aborts them with STATUS_ENTRYPOINT_NOT_FOUND), so
+      # run the FULL workspace here — the first end-to-end test gate for the
+      # extracted crates plus the app crate.
+      - name: Cargo test (workspace)
         working-directory: src-tauri
-        run: cargo test --bin zen
+        run: cargo test --workspace
+
+      # Capture the event-contract baseline fixture (BIG_MIGRATION.md Phase 0 /
+      # R5), carried as debt since Phase 6 because it cannot be produced on the
+      # dev box. Only regenerates when missing so a committed baseline is never
+      # silently overwritten; a drift check against a committed baseline is a
+      # follow-up once this first capture lands.
+      - name: Capture event-contract baseline (if missing)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "test/fixtures/event-snapshot-baseline.jsonl")) {
+            $env:ZEN_EVENT_SNAPSHOT_PATH = "$PWD/test/fixtures/event-snapshot-baseline.jsonl"
+            cargo test --manifest-path src-tauri/Cargo.toml --test agentic_test --features event-snapshot
+            Write-Host "Captured event-contract baseline; commit test/fixtures/event-snapshot-baseline.jsonl to freeze the wire shape."
+          } else {
+            Write-Host "Event-contract baseline already present; skipping capture."
+          }
 
       - name: Backend policy tests
         shell: pwsh

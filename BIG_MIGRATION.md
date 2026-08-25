@@ -1375,16 +1375,27 @@ seams hold.
 **Goal:** the workspace's boundaries stay enforced automatically.
 
 **Tasks**
-- [ ] Per-crate test jobs in CI with path filters (changed-crates detection
+- [x] Per-crate test jobs in CI with path filters (changed-crates detection
       like codex-rs: docs/codegen only rebuild affected crates).
-- [ ] Add boundary guards to CI:
+      *Done: `changes` job (dorny/paths-filter@v3) emits `backend`/`manifests`
+      outputs; `crate-tests` runs a 10-crate matrix (`clippy -p` + `test -p`,
+      ubuntu, fail-fast off) gated on `backend`; `boundaries` and `coverage`
+      gate on their respective filters.*
+- [x] Add boundary guards to CI:
       - grep gate: `tauri` must not appear in any crates/*/Cargo.toml
       - grep gate: `keyring` must not appear in any crates/*/Cargo.toml either
         (the constraint has always been "no tauri AND no keyring"; only the
         tauri half was ever written down here)
       - `cargo deny`/audit config unified at workspace root (.cargo/audit.toml)
       - file-size scan extended to `crates/**` (see Phase 12)
-- [ ] Move clippy enforcement from a CLI flag into the manifest. Today `-D
+      *Done: `boundaries` job greps `^\s*(tauri|keyring)\s*(=|\{|\.)` across
+      `crates/*/Cargo.toml` and fails on match; same guard mirrored in
+      `quality-check.ps1` for local runs. cargo-deny config unified at
+      `src-tauri/deny.toml` (advisories ignore RUSTSEC-2023-0071, license
+      allow-list, sgp4 clarify, bans=warn) run via `cargo deny check`; the
+      pre-existing `.cargo/audit.toml`/`audit.toml` are left in place for
+      cargo-audit. File-size scan over `crates/**` was already added in Phase 12.*
+- [x] Move clippy enforcement from a CLI flag into the manifest. Today `-D
       warnings` only applies when someone remembers the flag; a bare `cargo
       clippy` enforces nothing. Adopt the codex-rs arrangement (Appendix G):
       add `[workspace.lints.clippy]` at the workspace root with an explicit deny
@@ -1396,7 +1407,14 @@ workspace = true` in all nine crate manifests plus the
       `redundant_clone`, `needless_borrow`, `uninlined_format_args`. Expect a
       one-time debt sweep; land the sweep and the lint block in the same commit
       so the tree never sits red.
-- [ ] Fix workspace manifest drift (all cosmetic today, but it compounds):
+      *Done: `[workspace.lints.clippy]` at root with the six denies above;
+      `[lints] workspace = true` in all 10 crate manifests + the app crate;
+      `clippy.toml` sets `allow-unwrap-in-tests`/`allow-expect-in-tests`. One-time
+      sweep of ~90 violations landed alongside (static-regex unwraps carry
+      `#[allow]` + justification; runtime unwraps became poison-tolerant helpers
+      or `unwrap_or_default`). Bare `cargo clippy --workspace` is now clean with
+      no CLI flag.*
+- [x] Fix workspace manifest drift (all cosmetic today, but it compounds):
       - Adopt `[workspace.package]` for shared `version`/`edition`/`license` and
         have members inherit via `version.workspace = true` etc. Currently all
         seven crate manifests repeat `version = "0.1.0"` and
@@ -1415,25 +1433,70 @@ workspace = true` in all nine crate manifests plus the
         `dashmap` 6.1 (app, zen-llm), `futures-util` 0.3 (app, zen-mcp).
         Duplicated pins are how version skew starts; a single source also means
         Security.md's 30-day rule is checked in one place.
-- [ ] Coverage ratchet for zen-security + zen-tools (privileged code) per
+      *Done: `[workspace.package]` holds `version="0.1.0"`, `edition="2021"`,
+      `publish=false`; every member (10 crates + app) inherits via
+      `version.workspace = true` etc., so `publish` is now uniform. 17 shared
+      pins hoisted into `[workspace.dependencies]` (the 12 above plus a few more
+      that had drifted identical) and their sites switched to
+      `{ workspace = true }`. `cargo metadata --no-deps` validates.*
+- [x] Coverage ratchet for zen-security + zen-tools (privileged code) per
       RULES.md testing gates.
-- [ ] CI must run `cargo test --workspace`, which no local box can do (the
+      *Done: `coverage` job runs `cargo llvm-cov --summary-only -p zen-security
+      -p zen-tools --fail-under-lines 50`. Floor set at 50 (informational
+      starting point per the comment); promote once a baseline settles.
+      cargo-llvm-cov cannot run on the dev box, so the floor is validated only
+      by the CI job definition.*
+- [x] CI must run `cargo test --workspace`, which no local box can do (the
       app-crate lib target aborts with STATUS_ENTRYPOINT_NOT_FOUND on
       tauri-linked test executables). This phase is the first point where the
       full suite is actually exercised end-to-end, so budget for latent-red
       tests surfacing here the way Phase 7 and Phase 9 each surfaced their own
       (Appendices E and F).
-- [ ] Capture the outstanding runtime event-contract baseline fixture
+      *Done: Windows `backend` job runs `cargo test --workspace`. The predicted
+      latent-red surfaced exactly as budgeted — 17 zen-agent tests failed on the
+      first full run. Confirmed pre-existing via `git stash` (all 17 fail at
+      clean HEAD too, baseline-diff protocol) and fixed each as a real bug, not
+      a test edit: `std::cmp::Reverse` priority ordering in `task.rs`; a
+      `running` map in `task_queue.rs` so `mark_failed`/`retry` reach a terminal
+      state; `camelCase` on `CompactionEvent`; separator accounting in
+      `truncate_to_budget`; marker-length in `truncate_head`; per-message
+      condense in `compact.rs`; TIER2 scoring + whole-word booster detection in
+      `router.rs`; hex `{num:#X}` in `booster.rs`; by-name dedup in
+      `skills/discovery.rs`. zen-agent now 230/230. See Appendix H.*
+- [x] Capture the outstanding runtime event-contract baseline fixture
       (`test/fixtures/event-snapshot-baseline.jsonl`) in CI. It has been carried
       as a standing debt since Phase 6 because it cannot be produced locally;
       CI is the mechanism. Procedure in `test/fixtures/README.md`.
+      *Done: `backend` job has a "Capture event-contract baseline (if missing)"
+      step that sets `ZEN_EVENT_SNAPSHOT_PATH` and runs the `agentic_test` target
+      with `--features event-snapshot`, but only when the committed baseline is
+      absent so a frozen fixture is never silently overwritten. A drift check
+      against the committed baseline is the Phase 14 follow-up.*
 - [ ] Optional: adopt cargo-nextest for speed; insta snapshot tests for any
       future TUI-visible/CLI output if introduced.
+      *Skipped (optional): no TUI/CLI output surface exists; nextest is a speed
+      nicety, not a boundary guard. Revisit if a CLI is introduced.*
 - [ ] Nightly full-matrix job (all crates, all targets) mirroring fast-PR path.
+      *Deferred: the workflow is manual-only for now (see the Zen CI notes), so a
+      nightly schedule would not fire. The `crate-tests` matrix already covers
+      all crates/all targets on demand; wire a `schedule:` trigger when CI is
+      promoted off manual dispatch.*
 
 **Verification gates**
 - CI green including new guard jobs; intentionally-break experiment (add tauri
   dep to zen-core on a branch) is caught by CI.
+  *Done locally to the extent this box allows: bare `cargo clippy --workspace`
+  clean (manifest-enforced); per-crate tests all green (zen-agent 230/230,
+  zen-security 53, zen-tools 30, zen-llm 82, zen-mcp 55, zen-db 5, zen-media 13,
+  zen-core 0); `tsc` clean; `lint:tokens` 439 files clean; `cargo metadata`
+  valid; full `quality-check.ps1` passes (two stale gates repaired first — the
+  `tool.run(`/`execute_authorized` boundary excludes and the `default_tool_risk`
+  source location both still pointed at the pre-split monolith paths). The
+  intentionally-break experiment passed: injecting `tauri = "2"` into
+  `zen-core/Cargo.toml` was caught by the boundary grep, then reverted.
+  `cargo test --workspace`, `cargo deny`, and `cargo llvm-cov` run only in CI
+  (STATUS_ENTRYPOINT_NOT_FOUND / tools not installed on the dev box), validated
+  by job definition.*
 
 **Risk:** Low.
 
@@ -1643,6 +1706,56 @@ abort on this box).
    site constructs a `SessionMemoryManager` with a hybrid backend, and the sole
    `write_memory` caller (`agent/tools/session_memory_tools.rs`) would have hit
    the same hang had a backend ever been wired.
+
+
+## Appendix H — Latent pre-existing defects fixed forward (Phase 13)
+
+Phase 13 wired the workspace lint denies and the first `cargo test --workspace`
+gate. As Appendices E and F predicted, the first full run of the zen-agent
+suite surfaced latent-red tests that no CI had ever executed. 17 zen-agent tests
+failed; each was confirmed pre-existing via `git stash` (all 17 also fail at
+clean HEAD — baseline-diff protocol) and fixed forward as a real defect, not a
+test edit:
+
+1. `task.rs` PriorityTask ordering — `BinaryHeap` popped lowest priority first
+   because `TaskPriority` ordinals run Critical=0..Low=3 (natural order pops the
+   largest = Low). Fix: wrap the heap key in `std::cmp::Reverse(..)` at both push
+   sites so Critical pops first.
+2. `task_queue.rs` failed/retry lifecycle — a popped task left the pending map
+   with no home, so `mark_failed`/`retry_failed_tasks` could not find it and it
+   never reached a terminal `Failed` state (`can_retry()` returned false). Fix:
+   added a `running: HashMap<String, QueuedTask>` field; `pop_next` inserts,
+   `mark_completed` removes, and `mark_failed`'s else-branch uses `get_mut` +
+   `task.task.fail(error)` so status becomes terminal; `retry_failed_tasks`
+   falls back to `running.remove`.
+3. `context_breakdown.rs` `CompactionEvent` missing `#[serde(rename_all =
+   "camelCase")]` — the wire payload broke the frontend camelCase contract (R5).
+4. `budget.rs` `truncate_to_budget` — did not count the `"\n\n"` separator
+   against `max_tokens` in its binary search, overshooting the budget.
+5. `prompt_safety.rs` `truncate_head` — omitted the marker length from the byte
+   target, so truncated output exceeded `max_bytes`. Fix:
+   `target = max_bytes.saturating_sub(MARKER.len())`.
+6. `compact.rs` — after the removal loop, message content was not condensed;
+   fixed to condense each surviving message to `target_tokens/conversation.len()`
+   via `truncate_to_budget`.
+7. `router.rs` — TIER2 scoring was under-weighted (`score += 15`) and
+   `detect_agent_booster` matched substrings, so a booster keyword inside a long
+   prompt misrouted. Fix: whole-word token matching + a short-prompt
+   `has_task_keyword` guard.
+8. `booster.rs` — hex formatting used the wrong specifier; fixed to
+   `format!("{num:#X}")`.
+9. `skills/discovery.rs` — dedup keyed by path allowed duplicate skill names;
+   changed to a by-name `HashMap<String, SkillMetadata>`.
+
+None were regressions from the Phase 13 changes. zen-agent is now 230/230.
+
+Two stale quality gates were also repaired (drift from the Phase 11/12 file
+splits, not this phase's work): `quality-check.ps1`'s `tool.run(` /
+`execute_authorized` / `.execute(app` boundary excludes still named the
+pre-split monolith `services/tool.rs`, missing the new `services/tool/*.rs`
+submodules; and the `default_tool_risk` risk-coverage cross-check still read
+`src/tools/mod.rs` after the function moved to `crates/zen-tools/src/registry.rs`.
+Both now point at the current paths and the full gate passes.
 
 
 ## Appendix G — Reference-implementation survey (2026-08-24, pre-Phase 10)

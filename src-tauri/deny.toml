@@ -1,0 +1,57 @@
+# cargo-deny configuration for the Zen workspace (BIG_MIGRATION.md Phase 13).
+# Run: `cargo deny --manifest-path src-tauri/Cargo.toml check`
+#
+# `advisories` mirrors the existing .cargo/audit.toml ignore list so the audit
+# story lives in one place. `licenses` is an allow-list built from the licenses
+# actually present in the tree (measured 2026-08-25); a new dependency carrying
+# anything outside it fails the check and forces a conscious decision.
+
+[advisories]
+version = 2
+# RSA Marvin attack — no fixed upgrade is available (pulled in transitively).
+# Same rationale as .cargo/audit.toml.
+ignore = ["RUSTSEC-2023-0071"]
+
+[licenses]
+version = 2
+# Permissive + weak-copyleft (file-scoped) licenses present in the tree.
+# MPL-2.0 (cssparser/selectors/symphonia) and CDLA-Permissive-2.0
+# (webpki-roots) are file-level copyleft and safe to link.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "0BSD",
+    "BSL-1.0",
+    "Zlib",
+    "CC0-1.0",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
+    "Unlicense",
+]
+confidence-threshold = 0.9
+
+# First-party workspace crates carry no license field (publish = false); the
+# `sgp4` dep ships its license only as a file. Clarify both so the check does
+# not trip on a missing SPDX expression.
+[[licenses.clarify]]
+name = "sgp4"
+expression = "Apache-2.0"
+license-files = [{ path = "LICENSE", hash = 0 }]
+
+[bans]
+# Warn (do not fail) on duplicate versions: a large native tree legitimately
+# carries several. Fail only on explicitly denied crates (none yet).
+multiple-versions = "warn"
+wildcards = "warn"
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "allow"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -72,13 +72,13 @@ pub fn run() {
                 let app_dir = match critical_handle.path().app_data_dir() {
                     Ok(dir) => dir,
                     Err(e) => {
-                        eprintln!("FATAL: Failed to get app data directory: {}. Application cannot start.", e);
+                        eprintln!("FATAL: Failed to get app data directory: {e}. Application cannot start.");
                         return;
                     }
                 };
                 if !app_dir.exists() {
                     if let Err(e) = std::fs::create_dir_all(&app_dir) {
-                        eprintln!("FATAL: Failed to create app data directory: {}. Application cannot start.", e);
+                        eprintln!("FATAL: Failed to create app data directory: {e}. Application cannot start.");
                         return;
                     }
                 }
@@ -88,7 +88,7 @@ pub fn run() {
 
                 // Backend logging (instant)
                 if let Err(e) =                        crate::services::init_backend_logging(&app_dir) {
-                    eprintln!("Warning: Backend logging initialization failed: {}", e);
+                    eprintln!("Warning: Backend logging initialization failed: {e}");
                 }
                 state.init_progress.set_status(&critical_handle, "critical.fs", "done", Some(_start_phase.elapsed().as_millis() as u64)).await;
                 tracing::info!(
@@ -107,7 +107,7 @@ pub fn run() {
                     Ok(p) => p,
                     Err(e) => {
                         tracing::error!(error = %e, "Failed to initialize database");
-                        eprintln!("FATAL: Failed to initialize database: {}. Application cannot start.", e);
+                        eprintln!("FATAL: Failed to initialize database: {e}. Application cannot start.");
                         return;
                     }
                 };
@@ -129,7 +129,7 @@ pub fn run() {
                 state.settings_manager.set_db_pool(pool.clone()).await;
                 if let Err(e) = state.settings_manager.load_all().await {
                     tracing::warn!(error = %e, "Failed to load settings from database");
-                    eprintln!("Warning: Failed to load settings from database: {}", e);
+                    eprintln!("Warning: Failed to load settings from database: {e}");
                 }
 
                 // Load skill disabled names from persisted settings
@@ -174,8 +174,7 @@ pub fn run() {
                             "Failed to apply persisted workspace root; using default workspace"
                         );
                         eprintln!(
-                            "Warning: Failed to apply persisted workspace root: {}",
-                            e
+                            "Warning: Failed to apply persisted workspace root: {e}"
                         );
                     }
                 }
@@ -277,7 +276,7 @@ pub fn run() {
                 // ── Speech service ──
                 state.init_progress.set_status(&bg_app_handle, "bg.speech", "running", None).await;
                 let _p = std::time::Instant::now();
-                let hardware_info = state.hardware.lock().await.get_info().clone();
+                let hardware_info = state.hardware.lock().await.get_info();
                 let speech_service = crate::services::SpeechService::with_process_manager(
                     &app_dir,
                     &resource_dir,
@@ -662,7 +661,7 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
-            eprintln!("FATAL: Error while running Tauri application: {}", e);
+            eprintln!("FATAL: Error while running Tauri application: {e}");
             std::process::exit(1);
         });
 }

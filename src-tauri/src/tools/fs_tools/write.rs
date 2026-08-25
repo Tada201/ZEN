@@ -72,7 +72,7 @@ impl zen_tools::Tool<tauri::AppHandle> for WriteFileTool {
     ) -> Result<ToolOutput, ToolError> {
         let args: WriteFileArgs =
             serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
-                details: format!("Invalid write_file arguments: {}", e),
+                details: format!("Invalid write_file arguments: {e}"),
             })?;
 
         let state = app.state::<AppState>();
@@ -80,13 +80,13 @@ impl zen_tools::Tool<tauri::AppHandle> for WriteFileTool {
             .workspace_for_chat(&chat_id)
             .await
             .map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Unable to resolve session workspace: {}", e),
+                message: format!("Unable to resolve session workspace: {e}"),
             })?;
         let max_file_bytes = workspace_max_file_bytes(&state).await;
         enforce_content_size(args.content.len(), max_file_bytes, "write_file content")?;
         let target_path = crate::workspace::resolve_workspace_path(&workspace, &args.file_path)
             .map_err(|e| ToolError::PermissionDenied {
-                reason: format!("Workspace violation: {}", e),
+                reason: format!("Workspace violation: {e}"),
             })?;
 
         let original_content = if target_path.exists() {
@@ -95,7 +95,7 @@ impl zen_tools::Tool<tauri::AppHandle> for WriteFileTool {
             if let Some(parent) = target_path.parent() {
                 tokio::fs::create_dir_all(parent).await.map_err(|e| {
                     ToolError::ExecutionFailed {
-                        message: format!("Failed to create parent directories: {}", e),
+                        message: format!("Failed to create parent directories: {e}"),
                     }
                 })?;
             }
@@ -105,7 +105,7 @@ impl zen_tools::Tool<tauri::AppHandle> for WriteFileTool {
         tokio::fs::write(&target_path, &args.content)
             .await
             .map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Failed to write file: {}", e),
+                message: format!("Failed to write file: {e}"),
             })?;
 
         // Post-write mtime so the runner refreshes its stale-read baseline
@@ -203,7 +203,7 @@ impl zen_tools::Tool<tauri::AppHandle> for EditFileTool {
     ) -> Result<ToolOutput, ToolError> {
         let args: EditFileArgs =
             serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
-                details: format!("Invalid edit_file arguments: {}", e),
+                details: format!("Invalid edit_file arguments: {e}"),
             })?;
 
         if args.old_text.is_empty() {
@@ -217,12 +217,12 @@ impl zen_tools::Tool<tauri::AppHandle> for EditFileTool {
             .workspace_for_chat(&chat_id)
             .await
             .map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Unable to resolve session workspace: {}", e),
+                message: format!("Unable to resolve session workspace: {e}"),
             })?;
         let max_file_bytes = workspace_max_file_bytes(&state).await;
         let target_path = crate::workspace::resolve_workspace_path(&workspace, &args.file_path)
             .map_err(|e| ToolError::PermissionDenied {
-                reason: format!("Workspace violation: {}", e),
+                reason: format!("Workspace violation: {e}"),
             })?;
 
         if !target_path.exists() {
@@ -255,7 +255,7 @@ impl zen_tools::Tool<tauri::AppHandle> for EditFileTool {
                 tokio::fs::write(&target_path, &new_content)
                     .await
                     .map_err(|e| ToolError::ExecutionFailed {
-                        message: format!("Failed to write edited file: {}", e),
+                        message: format!("Failed to write edited file: {e}"),
                     })?;
 
                 let modified_ms = super::file_mtime_ms(&target_path).await;

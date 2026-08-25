@@ -29,8 +29,7 @@ pub fn enforce_tool_allowlist(
     }
     AllowlistDecision::Deny {
         reason: format!(
-            "Tool '{}' is not in the {} allowlist",
-            requested_tool, caller
+            "Tool '{requested_tool}' is not in the {caller} allowlist"
         ),
     }
 }
@@ -60,7 +59,7 @@ mod tests {
         let list = from_agent_tool_ids(&["web_search".to_string(), "read_file".to_string()]);
         match enforce_tool_allowlist(&list, "web_search", "agent") {
             AllowlistDecision::Allow => {}
-            other => panic!("expected Allow, got {:?}", other),
+            other => panic!("expected Allow, got {other:?}"),
         }
     }
 
@@ -72,7 +71,7 @@ mod tests {
                 assert!(reason.contains("run_command"));
                 assert!(reason.contains("agent"));
             }
-            other => panic!("expected Deny, got {:?}", other),
+            other => panic!("expected Deny, got {other:?}"),
         }
     }
 
@@ -84,7 +83,7 @@ mod tests {
         };
         match enforce_tool_allowlist(&list, "web_search", "agent") {
             AllowlistDecision::Allow => {}
-            other => panic!("expected Allow under YOLO, got {:?}", other),
+            other => panic!("expected Allow under YOLO, got {other:?}"),
         }
     }
 
@@ -99,8 +98,7 @@ mod tests {
                 assert!(reason.contains("run_command"));
             }
             other => panic!(
-                "expected Deny for critical floor under YOLO, got {:?}",
-                other
+                "expected Deny for critical floor under YOLO, got {other:?}"
             ),
         }
     }
@@ -111,7 +109,7 @@ mod tests {
         list.session_allowed.insert("write_file".to_string());
         match enforce_tool_allowlist(&list, "write_file", "session") {
             AllowlistDecision::Allow => {}
-            other => panic!("expected Allow via session grant, got {:?}", other),
+            other => panic!("expected Allow via session grant, got {other:?}"),
         }
     }
 }

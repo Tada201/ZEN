@@ -170,7 +170,7 @@ impl GtsmCache {
 
     // ── Weather (keyed by lat,lon) ──
     pub async fn get_weather(&self, lat: f64, lon: f64) -> Option<super::types::WeatherPoint> {
-        let key = format!("{:.2},{:.2}", lat, lon);
+        let key = format!("{lat:.2},{lon:.2}");
         let guard = self.weather.read().await;
         guard.get(&key).and_then(|e| {
             if e.is_valid() {

@@ -66,13 +66,13 @@ impl TtsService {
         resource_dir: &std::path::Path,
     ) -> Result<Self, String> {
         let (stream, stream_handle) = OutputStream::try_default()
-            .map_err(|e| format!("Failed to open default audio stream: {}", e))?;
+            .map_err(|e| format!("Failed to open default audio stream: {e}"))?;
         let sink =
-            Sink::try_new(&stream_handle).map_err(|e| format!("Failed to create sink: {}", e))?;
+            Sink::try_new(&stream_handle).map_err(|e| format!("Failed to create sink: {e}"))?;
 
         let runtime = RuntimeResources::new(_app_data_dir, resource_dir);
         let piper_binary = runtime.piper_binary();
-        let piper_path = piper_binary.path.clone();
+        let piper_path = piper_binary.path;
 
         // Check if there's a custom model saved in settings; otherwise use default
         let model_path = runtime.default_piper_model_path();
@@ -99,13 +99,13 @@ impl TtsService {
         process_manager: Arc<crate::process_manager::ProcessManager>,
     ) -> Result<Self, String> {
         let (stream, stream_handle) = OutputStream::try_default()
-            .map_err(|e| format!("Failed to open default audio stream: {}", e))?;
+            .map_err(|e| format!("Failed to open default audio stream: {e}"))?;
         let sink =
-            Sink::try_new(&stream_handle).map_err(|e| format!("Failed to create sink: {}", e))?;
+            Sink::try_new(&stream_handle).map_err(|e| format!("Failed to create sink: {e}"))?;
 
         let runtime = RuntimeResources::new(_app_data_dir, resource_dir);
         let piper_binary = runtime.piper_binary();
-        let piper_path = piper_binary.path.clone();
+        let piper_path = piper_binary.path;
         let model_path = runtime.default_piper_model_path();
 
         if !piper_path.exists() {
@@ -230,8 +230,7 @@ impl TtsService {
                 Ok(child) => child,
                 Err(e) => {
                     let msg = format!(
-                        "Failed to spawn piper process: {}. Ensure '{}' exists and is executable.",
-                        e, piper_exe
+                        "Failed to spawn piper process: {e}. Ensure '{piper_exe}' exists and is executable."
                     );
                     error!("{}", msg);
                     events.emit("tts:error", &serde_json::json!({ "error": msg }));
@@ -247,13 +246,13 @@ impl TtsService {
                 let pm_clone = pm.clone();
                 tokio::spawn(async move {
                     pm_clone
-                        .register(&format!("piper-{}", pid), "piper-tts", pid)
+                        .register(&format!("piper-{pid}"), "piper-tts", pid)
                         .await;
                 });
             }
 
             if let Some(mut stdin) = child.stdin.take() {
-                let text_to_write = format!("{}\n", text_owned);
+                let text_to_write = format!("{text_owned}\n");
                 std::thread::spawn(move || {
                     if let Err(e) = stdin.write_all(text_to_write.as_bytes()) {
                         error!("Failed to write to piper stdin: {}", e);
@@ -273,7 +272,7 @@ impl TtsService {
             if let Some(ref pm) = process_manager_clone {
                 let pm_clone = pm.clone();
                 tokio::spawn(async move {
-                    pm_clone.unregister(&format!("piper-{}", pid)).await;
+                    pm_clone.unregister(&format!("piper-{pid}")).await;
                 });
             }
 
@@ -288,14 +287,11 @@ impl TtsService {
                     samples.push(sample_i16 as f32 / 32768.0);
                 }
 
-                let channels = std::num::NonZeroU16::new(1).unwrap();
-                let sample_rate = std::num::NonZeroU32::new(22050).unwrap();
-
                 // Calculate estimated duration before playing
                 let duration_secs = samples.len() as f32 / 22050.0;
                 let duration_ms = (duration_secs * 1000.0) as u64;
 
-                let buffer = SamplesBuffer::new(channels.get(), sample_rate.get(), samples.clone());
+                let buffer = SamplesBuffer::new(1, 22_050, samples.clone());
 
                 // Build sentence-level caption cues for the closed-caption box.
                 // Piper cannot emit word-level timestamps, so we estimate the
@@ -434,16 +430,18 @@ fn build_sentence_cues(text: &str, total_duration_ms: u64) -> Vec<TtsSentenceCue
     let mut chars = trimmed.chars().peekable();
     while let Some(c) = chars.next() {
         current.push(c);
-        if matches!(c, '.' | '!' | '?') {
-            // Consume any trailing whitespace as part of this sentence
-            // so the next cue starts on the first real character.
-            while let Some(&next) = chars.peek() {
-                if next.is_whitespace() {
-                    current.push(chars.next().unwrap());
-                } else {
-                    break;
+            if matches!(c, '.' | '!' | '?') {
+                // Consume any trailing whitespace as part of this sentence
+                // so the next cue starts on the first real character.
+                loop {
+                    match chars.peek() {
+                        Some(&next) if next.is_whitespace() => {
+                            current.push(next);
+                            chars.next();
+                        }
+                        _ => break,
+                    }
                 }
-            }
             let piece = current.trim().to_string();
             if !piece.is_empty() {
                 sentences.push(piece);

@@ -29,7 +29,7 @@ impl Orchestrator {
             .context("Failed to load orchestrator planning prompt")?;
 
         // Build user message with the goal
-        let user_content = format!("Break down this goal into tasks:\n\n{}", goal);
+        let user_content = format!("Break down this goal into tasks:\n\n{goal}");
 
         let mut task_messages = vec![ChatMessage {
             role: "system".to_string(),
@@ -92,7 +92,7 @@ impl Orchestrator {
     fn parse_task_breakdown(&self, content: &str, goal: &str) -> Result<TaskBreakdown> {
         // Try to extract JSON from the response using robust balanced-brace logic
         let json_str = crate::utils::extract_json_object(content)
-            .ok_or_else(|| anyhow::anyhow!("No JSON object found in LLM response: {}", content))?;
+            .ok_or_else(|| anyhow::anyhow!("No JSON object found in LLM response: {content}"))?;
 
         #[derive(Debug, Deserialize)]
         struct TaskPlan {
@@ -109,7 +109,7 @@ impl Orchestrator {
         }
 
         let plan: TaskPlan = serde_json::from_str(&json_str)
-            .with_context(|| format!("Failed to parse task breakdown JSON: {}", json_str))?;
+            .with_context(|| format!("Failed to parse task breakdown JSON: {json_str}"))?;
 
         // Convert task specs to actual Task objects
         let mut tasks = Vec::new();

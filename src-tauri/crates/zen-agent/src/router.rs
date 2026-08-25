@@ -415,7 +415,10 @@ impl ComplexityRouter {
 
         for keyword in TIER2_KEYWORDS {
             if prompt_lower.contains(keyword) {
-                score += 8;
+                // Moderate task verbs (write/summarize/explain/build/…) are a
+                // strong tier signal on their own; two of them should reach the
+                // "moderate" band (31–60) documented above.
+                score += 15;
             }
         }
 
@@ -433,12 +436,22 @@ impl ComplexityRouter {
     /// Returns (eligible, reason)
     pub fn detect_agent_booster(prompt: &str) -> (bool, Option<String>) {
         let prompt_lower = prompt.to_lowercase();
+        let tokens: std::collections::HashSet<&str> =
+            prompt_lower.split(|c: char| !c.is_alphanumeric()).collect();
 
         for keyword in BOOSTER_SIMPLE_KEYWORDS {
-            if prompt_lower.contains(keyword) {
+            // Multi-word phrases ("title case", "to json") match as substrings;
+            // single words match whole-word only, so "sum" no longer fires on
+            // "summary" (which is real model work, not a booster transform).
+            let matched = if keyword.contains(' ') {
+                prompt_lower.contains(keyword)
+            } else {
+                tokens.contains(keyword)
+            };
+            if matched {
                 return (
                     true,
-                    Some(format!("Detected simple transform keyword: '{}'", keyword)),
+                    Some(format!("Detected simple transform keyword: '{keyword}'")),
                 );
             }
         }
@@ -446,7 +459,7 @@ impl ComplexityRouter {
         for pattern in BOOSTER_PATTERNS {
             if let Ok(re) = regex::Regex::new(pattern) {
                 if re.is_match(prompt) {
-                    return (true, Some(format!("Detected pattern match: {}", pattern)));
+                    return (true, Some(format!("Detected pattern match: {pattern}")));
                 }
             }
         }
@@ -457,23 +470,31 @@ impl ComplexityRouter {
             ];
             for phrase in simple_phrases {
                 if prompt_lower.starts_with(phrase)
-                    || prompt_lower.contains(&format!(" {} ", phrase))
+                    || prompt_lower.contains(&format!(" {phrase} "))
                 {
                     return (
                         true,
-                        Some(format!("Simple query pattern detected: '{}'", phrase)),
+                        Some(format!("Simple query pattern detected: '{phrase}'")),
                     );
                 }
             }
         }
 
         if prompt.len() < 50 {
+            // A short prompt is only booster-eligible if it carries no
+            // generative/analytical task verb. "write a summary", "explain",
+            // "build …" are real model work even when phrased tersely, so a
+            // TIER2/TIER3 keyword disqualifies the short-prompt fast path.
+            let has_task_keyword = TIER2_KEYWORDS
+                .iter()
+                .chain(TIER3_KEYWORDS.iter())
+                .any(|k| prompt_lower.contains(k));
             let has_no_reasoning = !prompt_lower.contains("why")
                 && !prompt_lower.contains("how")
                 && !prompt_lower.contains("explain")
                 && !prompt_lower.contains("think")
                 && !prompt_lower.contains("reason");
-            if has_no_reasoning {
+            if has_no_reasoning && !has_task_keyword {
                 return (
                     true,
                     Some("Short prompt without reasoning indicators".to_string()),
@@ -690,8 +711,7 @@ mod tests {
         for (_, agent) in AGENT_KEYWORDS {
             assert!(
                 *agent == "ZEN" || *agent == "Explore",
-                "AGENT_KEYWORDS must only name profiles that ship in resources/agents/, found '{}'",
-                agent
+                "AGENT_KEYWORDS must only name profiles that ship in resources/agents/, found '{agent}'"
             );
         }
     }
@@ -701,8 +721,7 @@ mod tests {
         let score = ComplexityRouter::calculate_complexity_score("What's the weather?");
         assert!(
             score <= 30,
-            "Simple query should have score <= 30, got {}",
-            score
+            "Simple query should have score <= 30, got {score}"
         );
     }
 
@@ -713,8 +732,7 @@ mod tests {
         );
         assert!(
             score > 30 && score <= 60,
-            "Moderate query should have score 31-60, got {}",
-            score
+            "Moderate query should have score 31-60, got {score}"
         );
     }
 
@@ -725,8 +743,7 @@ mod tests {
         );
         assert!(
             score > 60,
-            "Complex query should have score > 60, got {}",
-            score
+            "Complex query should have score > 60, got {score}"
         );
     }
 

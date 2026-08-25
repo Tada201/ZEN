@@ -59,7 +59,7 @@ impl ContextualFragment for SkillsCatalogFragment {
         if !self.skill_root_lines.is_empty() {
             out.push_str("\n### Skill roots\n");
             for line in &self.skill_root_lines {
-                let _ = writeln!(out, "- {}", line);
+                let _ = writeln!(out, "- {line}");
             }
         }
 
@@ -68,7 +68,7 @@ impl ContextualFragment for SkillsCatalogFragment {
             out.push_str("(no skills detected — add SKILL.md files to `.agents/skills/` or `~/.zen/skills/`)\n");
         } else {
             for line in &self.skill_lines {
-                let _ = writeln!(out, "{}", line);
+                let _ = writeln!(out, "{line}");
             }
         }
 

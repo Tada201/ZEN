@@ -53,33 +53,33 @@ pub fn parse_patches(patch_str: &str) -> Result<Vec<PatchHunk>, String> {
         let line = raw_line.trim_end();
         let display_line_num = line_num + 1;
 
-        if line.starts_with("*** Add File: ") {
+        if let Some(rest) = line.strip_prefix("*** Add File: ") {
             // Flush current state
             flush_state(&mut hunks, &mut state)?;
-            let path = line.strip_prefix("*** Add File: ").unwrap().trim();
+            let path = rest.trim();
             if path.is_empty() {
-                return Err(format!("Empty file path in Add File marker at line {}", display_line_num));
+                return Err(format!("Empty file path in Add File marker at line {display_line_num}"));
             }
             state = ParserState::AccumulatingAdd {
                 path: PathBuf::from(path),
                 lines: Vec::new(),
             };
-        } else if line.starts_with("*** Delete File: ") {
+        } else if let Some(rest) = line.strip_prefix("*** Delete File: ") {
             // Flush current state
             flush_state(&mut hunks, &mut state)?;
-            let path = line.strip_prefix("*** Delete File: ").unwrap().trim();
+            let path = rest.trim();
             if path.is_empty() {
-                return Err(format!("Empty file path in Delete File marker at line {}", display_line_num));
+                return Err(format!("Empty file path in Delete File marker at line {display_line_num}"));
             }
             hunks.push(PatchHunk::DeleteFile {
                 path: PathBuf::from(path),
             });
-        } else if line.starts_with("*** Update File: ") {
+        } else if let Some(rest) = line.strip_prefix("*** Update File: ") {
             // Flush current state
             flush_state(&mut hunks, &mut state)?;
-            let path = line.strip_prefix("*** Update File: ").unwrap().trim();
+            let path = rest.trim();
             if path.is_empty() {
-                return Err(format!("Empty file path in Update File marker at line {}", display_line_num));
+                return Err(format!("Empty file path in Update File marker at line {display_line_num}"));
             }
             state = ParserState::AccumulatingUpdateSearch {
                 path: PathBuf::from(path),

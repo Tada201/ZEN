@@ -160,7 +160,7 @@ impl ManageBoardTool {
 
 fn validate_text(label: &str, value: Option<&str>, max_chars: usize) -> Result<()> {
     if value.is_some_and(|text| text.chars().count() > max_chars) {
-        anyhow::bail!("Board {} exceeds the {} character limit", label, max_chars);
+        anyhow::bail!("Board {label} exceeds the {max_chars} character limit");
     }
     Ok(())
 }
@@ -168,7 +168,7 @@ fn validate_text(label: &str, value: Option<&str>, max_chars: usize) -> Result<(
 fn validate_finite(label: &str, value: Option<f64>) -> Result<()> {
     if let Some(value) = value {
         if !value.is_finite() {
-            anyhow::bail!("Board {} must be a finite number", label);
+            anyhow::bail!("Board {label} must be a finite number");
         }
     }
     Ok(())
@@ -281,7 +281,7 @@ fn validate_operation(operation: &BoardOperation) -> Result<()> {
     match operation {
         BoardOperation::Set { blocks, layout, .. } => {
             if blocks.len() > MAX_BOARD_BLOCKS {
-                anyhow::bail!("Voice boards support at most {} blocks", MAX_BOARD_BLOCKS);
+                anyhow::bail!("Voice boards support at most {MAX_BOARD_BLOCKS} blocks");
             }
             if layout
                 .as_deref()
@@ -322,7 +322,7 @@ fn validate_operation(operation: &BoardOperation) -> Result<()> {
                     for x in column..column + col_span {
                         let cell = y * 4 + x;
                         if !occupied.insert(cell) {
-                            anyhow::bail!("Board widgets overlap at cell {}", cell);
+                            anyhow::bail!("Board widgets overlap at cell {cell}");
                         }
                     }
                 }
@@ -509,8 +509,8 @@ impl zen_tools::AgentTool<tauri::AppHandle> for ManageBoardTool {
         if serde_json::to_vec(&input)?.len() > MAX_BOARD_PAYLOAD_BYTES {
             anyhow::bail!("Board update exceeds the 256 KiB payload limit");
         }
-        let operation: BoardOperation = serde_json::from_value(input.clone())
-            .map_err(|e| anyhow::anyhow!("Invalid board operation: {}. Input must be valid JSON matching the manage_board schema.", e))?;
+        let operation: BoardOperation = serde_json::from_value(input)
+            .map_err(|e| anyhow::anyhow!("Invalid board operation: {e}. Input must be valid JSON matching the manage_board schema."))?;
         validate_operation(&operation)?;
 
         // Emit board update event to frontend

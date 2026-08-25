@@ -50,7 +50,7 @@ async fn download_and_validate_image(url_str: &str) -> Result<Vec<u8>, ToolError
     const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024; // 10MB limit to prevent OOM exhaustion
 
     let parsed_url = url::Url::parse(url_str).map_err(|e| ToolError::ExecutionFailed {
-        message: format!("Invalid download URL: {}", e),
+        message: format!("Invalid download URL: {e}"),
     })?;
 
     // Use the shared, no-redirect HTTP client with explicit timeout.
@@ -62,11 +62,11 @@ async fn download_and_validate_image(url_str: &str) -> Result<Vec<u8>, ToolError
     let request = crate::tools::url_safety::build_pinned_get_request(client, &parsed_url)
         .await
         .map_err(|e| ToolError::ExecutionFailed {
-            message: format!("SSRF safety check failed: {}", e),
+            message: format!("SSRF safety check failed: {e}"),
         })?;
 
     let img_res = request.send().await.map_err(|e| ToolError::ExecutionFailed {
-        message: format!("Failed to download image from {}: {}", url_str, e),
+        message: format!("Failed to download image from {url_str}: {e}"),
     })?;
 
     if img_res.status().is_redirection() {
@@ -91,7 +91,7 @@ async fn download_and_validate_image(url_str: &str) -> Result<Vec<u8>, ToolError
     }
 
     let bytes = img_res.bytes().await.map_err(|e| ToolError::ExecutionFailed {
-        message: format!("Failed to read image bytes: {}", e),
+        message: format!("Failed to read image bytes: {e}"),
     })?;
 
     if bytes.len() > MAX_IMAGE_SIZE {
@@ -153,7 +153,7 @@ Use for: drawing, painting, creating artwork, illustrations, sketches, photo-rea
     ) -> Result<ToolOutput, ToolError> {
         let parsed_args: ImageGenerationArgs =
             serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
-                details: format!("Invalid arguments: {}", e),
+                details: format!("Invalid arguments: {e}"),
             })?;
 
         let state = app.state::<AppState>();
@@ -222,9 +222,9 @@ Use for: drawing, painting, creating artwork, illustrations, sketches, photo-rea
         // Build URL
         let base = nine_router_base_url.trim_end_matches('/');
         let endpoint = if base.ends_with("/v1") {
-            format!("{}/images/generations", base)
+            format!("{base}/images/generations")
         } else {
-            format!("{}/v1/images/generations", base)
+            format!("{base}/v1/images/generations")
         };
 
         // Validate endpoint security boundary
@@ -241,20 +241,20 @@ Use for: drawing, painting, creating artwork, illustrations, sketches, photo-rea
         }
 
         let response = request.send().await.map_err(|e| ToolError::ExecutionFailed {
-            message: format!("Failed to send request to 9Router: {}", e),
+            message: format!("Failed to send request to 9Router: {e}"),
         })?;
 
         if !response.status().is_success() {
             let status = response.status();
             let err_text = response.text().await.unwrap_or_default();
             return Err(ToolError::ExecutionFailed {
-                message: format!("9Router returned error status {}: {}", status, err_text),
+                message: format!("9Router returned error status {status}: {err_text}"),
             });
         }
 
         // Parse response
         let res_val: serde_json::Value = response.json().await.map_err(|e| ToolError::ExecutionFailed {
-            message: format!("Failed to parse response JSON: {}", e),
+            message: format!("Failed to parse response JSON: {e}"),
         })?;
 
         // Extract image url or base64
@@ -282,7 +282,7 @@ Use for: drawing, painting, creating artwork, illustrations, sketches, photo-rea
             }
             use base64::{Engine as _, engine::general_purpose};
             image_data = general_purpose::STANDARD.decode(b64).map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Failed to decode base64 image: {}", e),
+                message: format!("Failed to decode base64 image: {e}"),
             })?;
         } else if let Some(url_str) = first_item.get("url").and_then(|u| u.as_str()) {
             image_data = download_and_validate_image(url_str).await?;
@@ -310,26 +310,26 @@ Use for: drawing, painting, creating artwork, illustrations, sketches, photo-rea
 
         // Save the image in the app data directory (persists across workspace switches)
         let app_data_dir = app.path().app_data_dir().map_err(|e| ToolError::ExecutionFailed {
-            message: format!("Failed to resolve AppData directory: {}", e),
+            message: format!("Failed to resolve AppData directory: {e}"),
         })?;
         let images_dir = app_data_dir.join("generated_images");
         fs::create_dir_all(&images_dir).await.map_err(|e| ToolError::ExecutionFailed {
-            message: format!("Failed to create AppData generated_images directory: {}", e),
+            message: format!("Failed to create AppData generated_images directory: {e}"),
         })?;
 
         // Collision-resistant unique filename generation using UUID to prevent overwriting
         let uuid_str = uuid::Uuid::new_v4().to_string();
-        let filename = format!("image_{}.png", uuid_str);
+        let filename = format!("image_{uuid_str}.png");
         let file_path = images_dir.join(&filename);
 
         fs::write(&file_path, &image_data).await.map_err(|e| ToolError::ExecutionFailed {
-            message: format!("Failed to write image file: {}", e),
+            message: format!("Failed to write image file: {e}"),
         })?;
 
         // Convert to absolute path and construct the trusted asset://localhost/ URI
         let abs_path_str = file_path.to_string_lossy().to_string();
         let normalized_path = abs_path_str.replace('\\', "/");
-        let image_uri = format!("asset://localhost/{}", normalized_path);
+        let image_uri = format!("asset://localhost/{normalized_path}");
 
         Ok(ToolOutput {
             content: json!({

@@ -83,7 +83,7 @@ impl GraphSession {
                 self.commit(
                     snapshot,
                     author,
-                    format!("Add expression {} = {}", id, expr),
+                    format!("Add expression {id} = {expr}"),
                 );
             }
 
@@ -93,11 +93,11 @@ impl GraphSession {
                     .expressions
                     .iter_mut()
                     .find(|e| e.id == id)
-                    .ok_or_else(|| anyhow::anyhow!("Expression '{}' not found", id))?;
+                    .ok_or_else(|| anyhow::anyhow!("Expression '{id}' not found"))?;
                 ex.expr = expr.clone();
                 ex.error = None;
                 ex.dependencies = extract_dependencies(&expr, &self.variables);
-                self.commit(snapshot, author, format!("Update {} = {}", id, expr));
+                self.commit(snapshot, author, format!("Update {id} = {expr}"));
             }
 
             SessionAction::UpdateExpressionStyle {
@@ -111,7 +111,7 @@ impl GraphSession {
                     .expressions
                     .iter_mut()
                     .find(|e| e.id == id)
-                    .ok_or_else(|| anyhow::anyhow!("Expression '{}' not found", id))?;
+                    .ok_or_else(|| anyhow::anyhow!("Expression '{id}' not found"))?;
                 if let Some(c) = color {
                     ex.color = c;
                 }
@@ -124,7 +124,7 @@ impl GraphSession {
                 if let Some(s) = style {
                     ex.style = Some(s);
                 }
-                self.commit(snapshot, author, format!("Update style for {}", id));
+                self.commit(snapshot, author, format!("Update style for {id}"));
             }
 
             SessionAction::DeleteExpression { id } => {
@@ -132,9 +132,9 @@ impl GraphSession {
                     .expressions
                     .iter()
                     .position(|e| e.id == id)
-                    .ok_or_else(|| anyhow::anyhow!("Expression '{}' not found", id))?;
+                    .ok_or_else(|| anyhow::anyhow!("Expression '{id}' not found"))?;
                 self.expressions.remove(pos);
-                self.commit(snapshot, author, format!("Delete expression {}", id));
+                self.commit(snapshot, author, format!("Delete expression {id}"));
             }
 
             SessionAction::SetVisible { id, visible } => {
@@ -142,19 +142,19 @@ impl GraphSession {
                     .expressions
                     .iter_mut()
                     .find(|e| e.id == id)
-                    .ok_or_else(|| anyhow::anyhow!("Expression '{}' not found", id))?;
+                    .ok_or_else(|| anyhow::anyhow!("Expression '{id}' not found"))?;
                 ex.visible = visible;
                 self.commit(
                     snapshot,
                     author,
-                    format!("Set {}.visible = {}", id, visible),
+                    format!("Set {id}.visible = {visible}"),
                 );
             }
 
             SessionAction::SetVariable { name, value } => {
                 // Validate name is simple identifier
                 if name.chars().any(|c| !c.is_alphanumeric() && c != '_') {
-                    bail!("Invalid variable name: '{}'", name);
+                    bail!("Invalid variable name: '{name}'");
                 }
                 if self.variables.len() >= self.limits.max_variables
                     && !self.variables.contains_key(&name)
@@ -162,12 +162,12 @@ impl GraphSession {
                     bail!("Maximum variables ({}) reached", self.limits.max_variables);
                 }
                 self.variables.insert(name.clone(), value);
-                self.commit(snapshot, author, format!("Set {} = {}", name, value));
+                self.commit(snapshot, author, format!("Set {name} = {value}"));
             }
 
             SessionAction::DeleteVariable { name } => {
                 self.variables.remove(&name);
-                self.commit(snapshot, author, format!("Delete variable {}", name));
+                self.commit(snapshot, author, format!("Delete variable {name}"));
             }
 
             SessionAction::SetViewport {
@@ -216,7 +216,7 @@ impl GraphSession {
                 self.commit(
                     snapshot,
                     author,
-                    format!("Add annotation at ({}, {})", x, y),
+                    format!("Add annotation at ({x}, {y})"),
                 );
             }
 
@@ -225,9 +225,9 @@ impl GraphSession {
                     .annotations
                     .iter()
                     .position(|a| a.id == id)
-                    .ok_or_else(|| anyhow::anyhow!("Annotation '{}' not found", id))?;
+                    .ok_or_else(|| anyhow::anyhow!("Annotation '{id}' not found"))?;
                 self.annotations.remove(pos);
-                self.commit(snapshot, author, format!("Delete annotation {}", id));
+                self.commit(snapshot, author, format!("Delete annotation {id}"));
             }
 
             SessionAction::SetAnnotationVisible { id, visible } => {
@@ -235,12 +235,12 @@ impl GraphSession {
                     .annotations
                     .iter_mut()
                     .find(|a| a.id == id)
-                    .ok_or_else(|| anyhow::anyhow!("Annotation '{}' not found", id))?;
+                    .ok_or_else(|| anyhow::anyhow!("Annotation '{id}' not found"))?;
                 ann.visible = visible;
                 self.commit(
                     snapshot,
                     author,
-                    format!("Set annotation {}.visible = {}", id, visible),
+                    format!("Set annotation {id}.visible = {visible}"),
                 );
             }
 
@@ -283,7 +283,7 @@ impl GraphSession {
         let commit = self
             .history
             .get(version)
-            .ok_or_else(|| anyhow::anyhow!("Version {} not found", version))?
+            .ok_or_else(|| anyhow::anyhow!("Version {version} not found"))?
             .clone();
 
         self.expressions = commit.snapshot.expressions;
@@ -492,7 +492,7 @@ impl GraphSession {
                                 dep, expr.id
                             ),
                             affected_expression: Some(expr.id.clone()),
-                            suggestion: format!("Add variable: set_variable({}, 1.0)", dep),
+                            suggestion: format!("Add variable: set_variable({dep}, 1.0)"),
                         });
                     }
                 }

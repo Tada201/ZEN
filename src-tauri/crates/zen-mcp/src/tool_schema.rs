@@ -38,25 +38,25 @@ pub fn validate_tool_schema(label: &str, schema: &Value) -> Result<(), String> {
         return Ok(());
     }
     if !schema.is_object() {
-        return Err(format!("{} must be a JSON object", label));
+        return Err(format!("{label} must be a JSON object"));
     }
     let mut nodes = 0usize;
     check_bounds(schema, 0, &mut nodes)
-        .map_err(|reason| format!("{} rejected: {}", label, reason))?;
+        .map_err(|reason| format!("{label} rejected: {reason}"))?;
     // Pin to 2020-12: compilation is the meta-validation. A schema the crate
     // can't build is unusable at call time, so refuse it now.
     jsonschema::draft202012::new(schema)
         .map(|_| ())
-        .map_err(|error| format!("{} is not a valid JSON Schema 2020-12: {}", label, error))
+        .map_err(|error| format!("{label} is not a valid JSON Schema 2020-12: {error}"))
 }
 
 fn check_bounds(value: &Value, depth: usize, nodes: &mut usize) -> Result<(), String> {
     if depth > MAX_SCHEMA_DEPTH {
-        return Err(format!("nesting exceeds {} levels", MAX_SCHEMA_DEPTH));
+        return Err(format!("nesting exceeds {MAX_SCHEMA_DEPTH} levels"));
     }
     *nodes += 1;
     if *nodes > MAX_SCHEMA_NODES {
-        return Err(format!("exceeds {} nodes", MAX_SCHEMA_NODES));
+        return Err(format!("exceeds {MAX_SCHEMA_NODES} nodes"));
     }
     match value {
         Value::Object(map) => {
@@ -93,12 +93,11 @@ pub fn tool_header_extension_is_safe(tool_json: &Value) -> Result<(), String> {
             return Err("x-mcp-header contains an empty or control-character header name".to_string());
         }
         if is_reserved_mcp_header(name) {
-            return Err(format!("x-mcp-header '{}' is controlled by the MCP client", name));
+            return Err(format!("x-mcp-header '{name}' is controlled by the MCP client"));
         }
         if is_sensitive_header(name) {
             return Err(format!(
-                "x-mcp-header '{}' would inject a credential header; not allowed",
-                name
+                "x-mcp-header '{name}' would inject a credential header; not allowed"
             ));
         }
     }

@@ -1,7 +1,8 @@
 [package]
 name = "zen-tools"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
 description = "Canonical tool architecture: Tool/AgentTool traits, registries, discovery manager, capability metadata (BIG_MIGRATION.md Phase 5)"
 
 [dependencies]
@@ -14,9 +15,10 @@ anyhow = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tokio-util = { workspace = true }
 chrono = { workspace = true }
-# Same version pin as the app crate (src-tauri Cargo.toml); not a new
-# dependency, only relocated usage for argument validation.
-jsonschema = "0.42"
-
+jsonschema = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
+
+# Inherit the workspace lint policy ([workspace.lints] at the root).
+[lints]
+workspace = true

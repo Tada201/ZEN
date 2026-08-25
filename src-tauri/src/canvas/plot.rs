@@ -103,7 +103,7 @@ pub fn eval_expr(expr: &str, vars: &std::collections::HashMap<String, f64>) -> R
     ctx.var("e", std::f64::consts::E);
 
     let result = meval::eval_str_with_context(&normalized, ctx)
-        .map_err(|e| anyhow::anyhow!("Expression error in '{}': {}", expr, e))?;
+        .map_err(|e| anyhow::anyhow!("Expression error in '{expr}': {e}"))?;
     Ok(result)
 }
 
@@ -285,7 +285,7 @@ pub fn validate_expression_safety(expr: &str) -> Result<()> {
     ];
     for f in &forbidden {
         if expr.contains(f) {
-            bail!("Expression contains forbidden pattern: '{}'", f);
+            bail!("Expression contains forbidden pattern: '{f}'");
         }
     }
 
@@ -294,7 +294,7 @@ pub fn validate_expression_safety(expr: &str) -> Result<()> {
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-*/^().,= _πθ~";
     for ch in expr.chars() {
         if !allowed.contains(ch) {
-            bail!("Expression contains disallowed character: '{}'", ch);
+            bail!("Expression contains disallowed character: '{ch}'");
         }
     }
 

@@ -187,7 +187,7 @@ impl CheckpointService {
         let mut conflicts = Vec::new();
         for record in &records {
             crate::workspace::validate_workspace_path(workspace_root, &record.path)
-                .map_err(|error| format!("Checkpoint path is outside the workspace: {}", error))?;
+                .map_err(|error| format!("Checkpoint path is outside the workspace: {error}"))?;
             let current = tokio::fs::read(&record.path).await.ok();
             if Some(current) != record.expected_after {
                 conflicts.push(record.path.display().to_string());

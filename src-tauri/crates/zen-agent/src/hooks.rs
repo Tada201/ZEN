@@ -99,7 +99,7 @@ impl ToolHook for SecurityHook {
                 for p in &dangerous {
                     if cmd.contains(p) {
                         return HookDecision::Deny {
-                            reason: format!("Blocked: {}", p),
+                            reason: format!("Blocked: {p}"),
                         };
                     }
                 }
@@ -131,9 +131,9 @@ impl ToolHook for SecurityHook {
                 ];
                 // Add resolved tilde paths
                 if let Some(ref home) = home_dir {
-                    protected_unix.push(format!("{}/.ssh/", home));
-                    protected_unix.push(format!("{}/.config/", home));
-                    protected_unix.push(format!("{}/.gnupg/", home));
+                    protected_unix.push(format!("{home}/.ssh/"));
+                    protected_unix.push(format!("{home}/.config/"));
+                    protected_unix.push(format!("{home}/.gnupg/"));
                 }
 
                 // Windows: specific sensitive paths instead of broad C:/Users
@@ -147,26 +147,25 @@ impl ToolHook for SecurityHook {
                 // Add specific sensitive user paths
                 if let Some(ref profile) = user_profile {
                     protected_win
-                        .push(format!("{}/AppData/Roaming/Microsoft/Credentials", profile));
+                        .push(format!("{profile}/AppData/Roaming/Microsoft/Credentials"));
                     protected_win.push(format!(
-                        "{}/AppData/Roaming/Microsoft/Windows/Network Shortcuts",
-                        profile
+                        "{profile}/AppData/Roaming/Microsoft/Windows/Network Shortcuts"
                     ));
-                    protected_win.push(format!("{}/.ssh", profile));
+                    protected_win.push(format!("{profile}/.ssh"));
                 }
 
                 let path_lower = path.to_lowercase();
                 for p in &protected_unix {
                     if path_lower.starts_with(&p.to_lowercase()) {
                         return HookDecision::Deny {
-                            reason: format!("Protected: {}", path),
+                            reason: format!("Protected: {path}"),
                         };
                     }
                 }
                 for p in &protected_win {
                     if path_lower.starts_with(&p.to_lowercase()) {
                         return HookDecision::Deny {
-                            reason: format!("Protected: {}", path),
+                            reason: format!("Protected: {path}"),
                         };
                     }
                 }

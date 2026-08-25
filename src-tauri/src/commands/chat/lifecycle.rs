@@ -149,7 +149,7 @@ pub async fn export_image_to_workspace(
     let workspace_path = state.workspace_folder.read().await.clone();
     let workspace_images_dir = workspace_path.join("generated_images");
     std::fs::create_dir_all(&workspace_images_dir).map_err(|e| {
-        ZenError::Custom(format!("Failed to create workspace directory: {}", e))
+        ZenError::Custom(format!("Failed to create workspace directory: {e}"))
     })?;
 
     let destination_path = workspace_images_dir.join(
@@ -158,7 +158,7 @@ pub async fn export_image_to_workspace(
             .ok_or_else(|| ZenError::Custom("Invalid filename".to_string()))?,
     );
     std::fs::copy(&resolved_source, &destination_path).map_err(|e| {
-        ZenError::Custom(format!("Failed to copy image to workspace: {}", e))
+        ZenError::Custom(format!("Failed to copy image to workspace: {e}"))
     })?;
 
     Ok(destination_path.to_string_lossy().to_string())
@@ -169,10 +169,10 @@ pub async fn import_chat(state: State<'_, AppState>, source_path: String) -> Zen
     let db = state.db().await?;
     let validated_path = crate::utils::validate_path(&source_path)?;
     let content = std::fs::read_to_string(&validated_path).map_err(|e| {
-        ZenError::Custom(format!("Failed to read export file: {}", e))
+        ZenError::Custom(format!("Failed to read export file: {e}"))
     })?;
     let export: ChatExport = serde_json::from_str(&content)
-        .map_err(|e| ZenError::Custom(format!("Invalid export format: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Invalid export format: {e}")))?;
 
     // Workspace roots are machine-local capabilities, not portable chat data.
     // Preserve the imported conversation, but require the user to explicitly

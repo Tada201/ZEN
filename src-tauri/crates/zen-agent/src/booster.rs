@@ -169,7 +169,7 @@ impl AgentBooster {
                     Some(format!("{}", result as i64))
                 } else {
                     Some(
-                        format!("{:.6}", result)
+                        format!("{result:.6}")
                             .trim_end_matches('0')
                             .trim_end_matches('.')
                             .to_string(),
@@ -244,22 +244,20 @@ impl AgentBooster {
 
     fn try_word_count(&self, lower: &str, original: &str) -> Option<String> {
         let word_regex =
-            Regex::new(r"(?i)^(?:count\s+)?(?:words?|tokens?)\s+(?:in\s+)?(?:the\s+)?(.+)$")
-                .ok()?;
+            Regex::new(r"(?i)^(?:count\s+)?(?:words?|tokens?)\s+(.+)$").ok()?;
 
         if let Some(caps) = word_regex.captures(original) {
             let text = caps.get(1)?.as_str();
             let count = text.split_whitespace().count();
-            return Some(format!("{}", count));
+            return Some(format!("{count}"));
         }
 
         if lower.contains("word count") || lower.contains("count words") {
-            let pattern =
-                Regex::new(r"(?i)(?:word count|count words)\s+(?:in\s+)?(?:the\s+)?(.+)$").ok()?;
+            let pattern = Regex::new(r"(?i)(?:word count|count words)\s+(.+)$").ok()?;
             if let Some(caps) = pattern.captures(original) {
                 let text = caps.get(1)?.as_str();
                 let count = text.split_whitespace().count();
-                return Some(format!("{}", count));
+                return Some(format!("{count}"));
             }
         }
 
@@ -271,7 +269,7 @@ impl AgentBooster {
             let pattern = Regex::new(r"(?i)^(?:to\s+)?binary\s+(\d+)$").ok()?;
             if let Some(caps) = pattern.captures(original) {
                 let num: u64 = caps.get(1)?.as_str().parse().ok()?;
-                return Some(format!("{:b}", num));
+                return Some(format!("{num:b}"));
             }
         }
 
@@ -279,7 +277,10 @@ impl AgentBooster {
             let pattern = Regex::new(r"(?i)^(?:to\s+)?hex\s+(\d+)$").ok()?;
             if let Some(caps) = pattern.captures(original) {
                 let num: u64 = caps.get(1)?.as_str().parse().ok()?;
-                return Some(format!("{:#x}", num).to_uppercase());
+                // `{:#X}` keeps the `0x` prefix lowercase but uppercases the
+                // digits ("0xFF"); a blanket `.to_uppercase()` would also
+                // uppercase the `x` ("0XFF").
+                return Some(format!("{num:#X}"));
             }
         }
 
@@ -287,7 +288,7 @@ impl AgentBooster {
             let pattern = Regex::new(r"(?i)^(?:to\s+)?octal\s+(\d+)$").ok()?;
             if let Some(caps) = pattern.captures(original) {
                 let num: u64 = caps.get(1)?.as_str().parse().ok()?;
-                return Some(format!("{:o}", num));
+                return Some(format!("{num:o}"));
             }
         }
 
@@ -318,7 +319,7 @@ impl AgentBooster {
             if let Some(caps) = pattern.captures(original) {
                 let bin = caps.get(1)?.as_str();
                 match u64::from_str_radix(bin, 2) {
-                    Ok(num) => return Some(format!("{}", num)),
+                    Ok(num) => return Some(format!("{num}")),
                     Err(_) => return Some("Invalid binary number".to_string()),
                 }
             }
@@ -329,7 +330,7 @@ impl AgentBooster {
             if let Some(caps) = pattern.captures(original) {
                 let hex = caps.get(1)?.as_str();
                 match u64::from_str_radix(hex, 16) {
-                    Ok(num) => return Some(format!("{}", num)),
+                    Ok(num) => return Some(format!("{num}")),
                     Err(_) => return Some("Invalid hex number".to_string()),
                 }
             }
@@ -359,7 +360,7 @@ impl AgentBooster {
     fn validate_url(&self, url_str: &str) -> String {
         let test_urls = ["http://", "https://", "ftp://", "file://"];
         for prefix in &test_urls {
-            if let Ok(url) = url::Url::parse(&format!("{}{}", prefix, url_str)) {
+            if let Ok(url) = url::Url::parse(&format!("{prefix}{url_str}")) {
                 if url.has_host() {
                     return format!("Valid URL (scheme: {})", url.scheme());
                 }
@@ -384,7 +385,8 @@ impl AgentBooster {
 
     fn validate_email(&self, email: &str) -> String {
         let email_pattern =
-            Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
+            Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+            .unwrap_or_else(|e| panic!("static booster email regex failed to compile: {e}"));
         if email_pattern.is_match(email) {
             "Valid email address".to_string()
         } else {
@@ -429,14 +431,14 @@ impl AgentBooster {
         if let Some(caps) = def_regex.captures(original) {
             let term = caps.get(1)?.as_str().trim().to_lowercase();
             if let Some(definition) = self.definitions.get(term.as_str()) {
-                return Some(format!("{}: {}", term, definition));
+                return Some(format!("{term}: {definition}"));
             }
             for (key, val) in &self.definitions {
                 if term.contains(key) || key.contains(&term) {
-                    return Some(format!("{}: {}", key, val));
+                    return Some(format!("{key}: {val}"));
                 }
             }
-            return Some(format!("No definition found for '{}'. Try a common tech term like: API, HTTP, JSON, SQL, Git, Docker, AI, LLM, RAG, etc.", term));
+            return Some(format!("No definition found for '{term}'. Try a common tech term like: API, HTTP, JSON, SQL, Git, Docker, AI, LLM, RAG, etc."));
         }
 
         if lower.starts_with("what is ") && !lower.contains("?") {
@@ -444,14 +446,14 @@ impl AgentBooster {
             if let Some(caps) = pattern.captures(original) {
                 let term = caps.get(1)?.as_str().trim().to_lowercase();
                 if let Some(definition) = self.definitions.get(term.as_str()) {
-                    return Some(format!("{}: {}", term, definition));
+                    return Some(format!("{term}: {definition}"));
                 }
             }
         }
 
         for (key, val) in &self.definitions {
             if lower == *key || lower.contains(key) {
-                return Some(format!("{}: {}", key, val));
+                return Some(format!("{key}: {val}"));
             }
         }
 

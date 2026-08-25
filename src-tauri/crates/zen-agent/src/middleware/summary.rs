@@ -77,7 +77,7 @@ impl ContextMiddleware for SummaryMiddleware {
         if let Ok(prev_summaries) = queries::get_previous_summaries(&db, &ctx.chat_id).await {
             prev_summaries_list.extend(prev_summaries.into_iter().map(|s| s.summary));
             for summary in &prev_summaries_list {
-                summary_blocks.push(format!("[Previous conversation summary]: {}", summary));
+                summary_blocks.push(format!("[Previous conversation summary]: {summary}"));
             }
         }
 
@@ -110,7 +110,7 @@ impl ContextMiddleware for SummaryMiddleware {
         for s in prev_summaries_list.iter() {
             ctx.record_section(
                 ContextSectionId::PreviousSummary,
-                format!("[Previous conversation summary]: {}", s),
+                format!("[Previous conversation summary]: {s}"),
                 if was_truncated {
                     SectionStatus::Truncated
                 } else {
@@ -121,7 +121,7 @@ impl ContextMiddleware for SummaryMiddleware {
         if let Some(ref current) = current_summary_text {
             ctx.record_section(
                 ContextSectionId::CurrentSummary,
-                format!("[Current conversation summary]: {}", current),
+                format!("[Current conversation summary]: {current}"),
                 if was_truncated {
                     SectionStatus::Truncated
                 } else {

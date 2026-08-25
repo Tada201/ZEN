@@ -13,8 +13,7 @@ pub async fn set_wallpaper_from_path(
     let source = Path::new(&source_path);
     if !source.is_file() {
         return Err(ZenError::Internal(format!(
-            "Wallpaper source is not a file: {}",
-            source_path
+            "Wallpaper source is not a file: {source_path}"
         )));
     }
     let abs = state.media.set_wallpaper(source).await?;
@@ -53,9 +52,9 @@ pub async fn reprocess_video(
 
     // Validate both paths resolve inside the workspace
     let abs_input = validate_workspace_path(&workspace_root, Path::new(&input_path))
-        .map_err(|e| ZenError::Internal(format!("Input path rejected: {}", e)))?;
+        .map_err(|e| ZenError::Internal(format!("Input path rejected: {e}")))?;
     let abs_output = validate_workspace_path(&workspace_root, Path::new(&output_path))
-        .map_err(|e| ZenError::Internal(format!("Output path rejected: {}", e)))?;
+        .map_err(|e| ZenError::Internal(format!("Output path rejected: {e}")))?;
 
     if !abs_input.is_file() {
         return Err(ZenError::Custom("Input video file not found".into()));
@@ -76,7 +75,7 @@ pub async fn reprocess_video(
             &out_str,
         ])
         .status()
-        .map_err(|e| ZenError::Custom(format!("Failed to execute ffmpeg: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Failed to execute ffmpeg: {e}")))?;
 
     if !status.success() {
         return Err(ZenError::Custom("Video processing failed".into()));

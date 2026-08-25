@@ -140,7 +140,7 @@ impl Runner {
                                 let suffix = if args.is_empty() {
                                     String::new()
                                 } else {
-                                    format!(": {}", args)
+                                    format!(": {args}")
                                 };
                                 let expanded = body
                                     .replace("$ARGUMENTS_SUFFIX", &suffix)
@@ -271,8 +271,7 @@ impl Runner {
     ) -> AgentResponse {
         tracing::warn!("Agent loop reached max iterations ({})", max_iterations);
         let final_msg = format!(
-            "Completed {} steps. Here's what I found so far based on the tools I used.",
-            max_iterations
+            "Completed {max_iterations} steps. Here's what I found so far based on the tools I used."
         );
 
         // Emit chunk for UI awareness
@@ -294,7 +293,7 @@ impl Runner {
         let generated_uris = extract_generated_image_uris(conversation, current_run_gen_image_ids);
         for uri in &generated_uris {
             if !accumulated_commentary.contains(uri) {
-                accumulated_commentary.push_str(&format!("\n\n![Generated Image]({})\n\n", uri));
+                accumulated_commentary.push_str(&format!("\n\n![Generated Image]({uri})\n\n"));
             }
         }
 
@@ -370,8 +369,7 @@ impl Runner {
     ) -> AgentResponse {
         tracing::warn!("Agent loop exceeded token budget ({} > {})", total, budget);
         let final_msg = format!(
-                        "Token budget exceeded ({} tokens used > {} budget). Stopping with the information gathered so far.",
-                        total, budget
+                        "Token budget exceeded ({total} tokens used > {budget} budget). Stopping with the information gathered so far."
                     );
 
         self.emit(AgentEvent::ChatChunk(ChatChunkPayload {
@@ -532,7 +530,7 @@ impl Runner {
         let generated_uris = extract_generated_image_uris(conversation, current_run_gen_image_ids);
         for uri in &generated_uris {
             if !accumulated_commentary.contains(uri) {
-                accumulated_commentary.push_str(&format!("\n\n![Generated Image]({})\n\n", uri));
+                accumulated_commentary.push_str(&format!("\n\n![Generated Image]({uri})\n\n"));
             }
         }
 
@@ -638,7 +636,7 @@ impl Runner {
                             _ => formatted_result.to_string(),
                         }
                     } else if let Some(error) = obj.get("error") {
-                        format!("Error: {}", error)
+                        format!("Error: {error}")
                     } else {
                         // Fall back to stringifying the whole object
                         result.content.to_string()

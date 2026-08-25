@@ -285,14 +285,12 @@ mod tests {
                 .unwrap_or_default();
             assert_eq!(
                 serde_str, *expected,
-                "serde kebab-case drift for {:?}",
-                variant
+                "serde kebab-case drift for {variant:?}"
             );
             assert_eq!(
                 id_str(*variant),
                 *expected,
-                "id_str drift vs serde for {:?}",
-                variant
+                "id_str drift vs serde for {variant:?}"
             );
         }
     }
@@ -315,14 +313,12 @@ mod tests {
                 .unwrap_or_default();
             assert_eq!(
                 serde_str, *expected,
-                "serde kebab-case drift for {:?}",
-                variant
+                "serde kebab-case drift for {variant:?}"
             );
             assert_eq!(
                 category_str(*variant),
                 *expected,
-                "category_str drift vs serde for {:?}",
-                variant
+                "category_str drift vs serde for {variant:?}"
             );
         }
     }

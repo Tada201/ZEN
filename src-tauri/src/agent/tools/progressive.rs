@@ -415,7 +415,7 @@ impl ProgressiveToolRegistry {
         // Delegated work uses only `spawn_agent`; handoff is not exposed as a
         // second agent tool.
 
-        let mut guard = self.loaded_tools.lock().unwrap();
+        let mut guard = self.loaded_tools.lock().unwrap_or_else(|err| err.into_inner());
         // tools_search and list_tools will be loaded on-demand via get_or_load_tool when registry_arc is set
         guard.insert(
             "web_search".to_string(),
@@ -466,8 +466,8 @@ impl ProgressiveToolRegistry {
             }),
         );
 
-        let ar = agent_registry.clone();
-        let hr = hook_registry.clone();
+        let ar = agent_registry;
+        let hr = hook_registry;
         self.tool_factory.insert(
             "spawn_agent".to_string(),
             Box::new(move || {
@@ -478,7 +478,7 @@ impl ProgressiveToolRegistry {
             }),
         );
 
-        let sm = skills_manager.clone();
+        let sm = skills_manager;
         self.tool_factory.insert(
             "skill".to_string(),
             Box::new(move || {

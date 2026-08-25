@@ -30,7 +30,8 @@ impl SpeechService {
             "Resolved whisper-server path"
         );
 
-        let path_str = self.model_path.read().await.to_str().unwrap().to_string();
+        // Lossy is fine here: the path only feeds a log line.
+        let path_str = self.model_path.read().await.to_string_lossy().to_string();
         info!(
             path = %path_str,
             cuda_driver = self.hardware.has_cuda,
@@ -189,9 +190,9 @@ impl SpeechService {
                             configure_tokio_command_for_binary(&mut command, &resolved_binary.path);
                             let model = model_path.read().await;
                             let port_str = respawn_port.to_string();
+                            // Pass the PathBuf directly — no UTF-8 assumption.
+                            command.arg("-m").arg(&*model);
                             command.args([
-                                "-m",
-                                model.to_str().unwrap(),
                                 "--port",
                                 &port_str,
                                 "--host",

@@ -203,7 +203,7 @@ impl McpConfigService {
         }
         let new_obj = entry.as_object().ok_or_else(|| {
             McpConfigError::Parse(
-                format!("<server '{}'>", name),
+                format!("<server '{name}'>"),
                 "MCP server entry must be a JSON object".to_string(),
             )
         })?;
@@ -280,7 +280,7 @@ impl McpConfigService {
         for (name, body) in servers {
             let Some(obj) = body.as_object() else {
                 return Err(McpConfigError::Parse(
-                    format!("<server '{}'>", name),
+                    format!("<server '{name}'>"),
                     "MCP server entry must be a JSON object".to_string(),
                 ));
             };
@@ -298,7 +298,7 @@ impl McpConfigService {
         if let Some(kind) = declared {
             if kind != "http" && kind != "stdio" {
                 return Err(McpConfigError::Parse(
-                    format!("<server '{}'>", name),
+                    format!("<server '{name}'>"),
                     "entry type must be 'http' or 'stdio'".to_string(),
                 ));
             }
@@ -313,7 +313,7 @@ impl McpConfigService {
             .is_some_and(|s| !s.trim().is_empty());
         if has_url && has_cmd {
             return Err(McpConfigError::Parse(
-                format!("<server '{}'>", name),
+                format!("<server '{name}'>"),
                 "entry must not contain both 'url' and 'command'".to_string(),
             ));
         }
@@ -324,7 +324,7 @@ impl McpConfigService {
         };
         if !ok {
             return Err(McpConfigError::Parse(
-                format!("<server '{}'>", name),
+                format!("<server '{name}'>"),
                 "entry needs a non-empty 'url' (http) or 'command' (stdio)".to_string(),
             ));
         }
@@ -345,27 +345,27 @@ impl McpConfigService {
     ) -> Result<(), McpConfigError> {
         let Some(map) = value.as_object() else {
             return Err(McpConfigError::Parse(
-                format!("<server '{}'>", name),
-                format!("{} must be an object of string values", field),
+                format!("<server '{name}'>"),
+                format!("{field} must be an object of string values"),
             ));
         };
         for (key, value) in map {
             let Some(value) = value.as_str() else {
                 return Err(McpConfigError::Parse(
-                    format!("<server '{}'>", name),
-                    format!("{} values must be strings", field),
+                    format!("<server '{name}'>"),
+                    format!("{field} values must be strings"),
                 ));
             };
             if key.chars().any(|c| c.is_control()) || value.chars().any(|c| c.is_control()) {
                 return Err(McpConfigError::Parse(
-                    format!("<server '{}'>", name),
-                    format!("{} contains a control character", field),
+                    format!("<server '{name}'>"),
+                    format!("{field} contains a control character"),
                 ));
             }
             if header_mode && is_reserved_mcp_header(key) {
                 return Err(McpConfigError::Parse(
-                    format!("<server '{}'>", name),
-                    format!("{}['{}'] is controlled by the MCP client", field, key),
+                    format!("<server '{name}'>"),
+                    format!("{field}['{key}'] is controlled by the MCP client"),
                 ));
             }
             let sensitive = if header_mode {
@@ -375,8 +375,8 @@ impl McpConfigService {
             };
             if sensitive && !contains_secret_reference(value) {
                 return Err(McpConfigError::Parse(
-                    format!("<server '{}'>", name),
-                    format!("{}['{}'] must use an environment reference; raw secrets are not persisted", field, key),
+                    format!("<server '{name}'>"),
+                    format!("{field}['{key}'] must use an environment reference; raw secrets are not persisted"),
                 ));
             }
         }

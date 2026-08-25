@@ -40,11 +40,17 @@ pub fn truncate_to_budget(content: &str, max_tokens: usize) -> String {
     if chars.is_empty() {
         return String::new();
     }
+    // The emitted head is `prefix + MARKER`. Callers (and tests) treat the text
+    // up to the marker — which includes the "\n\n" separator — as the kept
+    // prefix, so the separator must be counted against the budget too.
+    const MARKER: &str = "\n\n[...truncated for context budget...]";
+    const SEP: &str = "\n\n";
     let mut low = 0usize;
     let mut high = chars.len();
     while low < high {
         let mid = low + (high - low).div_ceil(2);
-        let prefix: String = chars[..mid].iter().collect();
+        let mut prefix: String = chars[..mid].iter().collect();
+        prefix.push_str(SEP);
         if estimate_tokens(&prefix) <= max_tokens {
             low = mid;
         } else {
@@ -55,7 +61,7 @@ pub fn truncate_to_budget(content: &str, max_tokens: usize) -> String {
         return String::new();
     }
     let mut out: String = chars[..low].iter().collect();
-    out.push_str("\n\n[...truncated for context budget...]");
+    out.push_str(MARKER);
     out
 }
 
@@ -296,7 +302,7 @@ mod budget_tests {
     fn truncate_to_budget_tail_keeps_suffix_and_drops_head() {
         let head = "o".repeat(4_000); // old material
         let tail = "CURRENT".to_string(); // most recent block
-        let content = format!("{}{}", head, tail);
+        let content = format!("{head}{tail}");
         let out = truncate_to_budget_tail(&content, 50);
         assert!(out.contains("CURRENT"), "tail (current summary) must survive");
         assert!(out.starts_with("[...truncated for context budget...]"));

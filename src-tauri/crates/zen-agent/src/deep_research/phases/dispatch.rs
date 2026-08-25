@@ -62,13 +62,6 @@ Generate {num_queries} focused search queries that will help answer the question
 
 Return ONLY a JSON array of query strings, nothing else.
 Example: ["query one", "query two", "query three"]"#,
-            question = question,
-            scope_context = scope_context,
-            plan_str = plan_str,
-            report_str = report_str,
-            round_num = round_num,
-            num_queries = num_queries,
-            round_instruction = round_instruction,
         );
 
         let response = match self.call_llm(&prompt, 0.5, 4096, 60).await {
@@ -161,10 +154,6 @@ impl<'a> IterativeDeepResearcher<'a> {
 Generate exactly ONE focused search query that will help answer your assigned sub-question. Make it specific and targeted — avoid generic queries.
 
 Return ONLY the query string, nothing else."#,
-            question = question,
-            scope_context = scope_context,
-            sub_question_hint = sub_question_hint,
-            report_str = report_str,
         );
 
         match self.call_llm(&prompt, 0.5, 256, 30).await {
@@ -212,8 +201,7 @@ Return ONLY the query string, nothing else."#,
         self.emit_phase(
             "searching",
             &format!(
-                "Round {}: Dispatching {} parallel sub-agents...",
-                round_num, count
+                "Round {round_num}: Dispatching {count} parallel sub-agents..."
             ),
             "running",
         );

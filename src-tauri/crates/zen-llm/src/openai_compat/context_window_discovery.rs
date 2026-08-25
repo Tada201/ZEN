@@ -22,55 +22,55 @@ lazy_static! {
     // "This model's maximum context length is 128000 tokens. You requested 142837 tokens."
     static ref RE_OPENAI: Regex = Regex::new(
         r"(?i)maximum\s+(?:context|prompt)\s+length\s+is\s+([0-9]+)\s*tokens?"
-    ).unwrap();
+    ).unwrap_or_else(|e| panic!("static context-window regex failed to compile: {e}"));
 
     // Anthropic:
     // "input length and max_tokens exceed context limit: 188240 + 21333 > 200000"
     // "Your input has 41 tokens that exceed the context window limit of 200,000 tokens."
     static ref RE_ANTHROPIC: Regex = Regex::new(
         r"(?i)(?:exceed[s]?\s+(?:the\s+)?(?:context|prompt)\s+(?:limit|window)|context\s+limit\s+exceeded)[^\d]*?(\d[\d,]*)"
-    ).unwrap();
+    ).unwrap_or_else(|e| panic!("static context-window regex failed to compile: {e}"));
 
     // Anthropic alt: "> 200000" at end of inequality
     static ref RE_ANTHROPIC_ALT: Regex = Regex::new(
         r"(?i)>\s*([0-9]+)\s*\)?$"
-    ).unwrap();
+    ).unwrap_or_else(|e| panic!("static context-window regex failed to compile: {e}"));
 
     // Google / Gemini:
     // "input token count (1048602) exceeds the maximum number of tokens allowed (1048576)"
     // "Request payload size exceeds the limit: 1049061 tokens > 1048576 maximum"
     static ref RE_GEMINI: Regex = Regex::new(
         r"(?i)(?:exceeds?\s+(?:the\s+)?(?:maximum|limit)|>\s*)\s*(?:of\s+)?(\d[\d,]*)\s*(?:maximum|tokens?\s*$)"
-    ).unwrap();
+    ).unwrap_or_else(|e| panic!("static context-window regex failed to compile: {e}"));
 
     // Gemini alt: "maximum ... (Y)"
     static ref RE_GEMINI_ALT: Regex = Regex::new(
         r"(?i)allowed\s*\((\d[\d,]*)\)"
-    ).unwrap();
+    ).unwrap_or_else(|e| panic!("static context-window regex failed to compile: {e}"));
 
     // xAI / Grok:
     // "maximum prompt length is 131072 but the request contains 537812 tokens"
     // "context length of 131072 tokens"
     static ref RE_XAI: Regex = Regex::new(
         r"(?i)(?:maximum\s+(?:prompt|context)\s+length|context\s+length\s+of)\s+(?:is\s+)?(\d[\d,]+)"
-    ).unwrap();
+    ).unwrap_or_else(|e| panic!("static context-window regex failed to compile: {e}"));
 
     // Mistral:
     // Response body contains "max_tokens" or "max_input_tokens" fields
     static ref RE_MISTRAL: Regex = Regex::new(
         r#"(?i)(?:max_input_tokens|max_tokens)["']?\s*[:=]\s*(\d+)"#
-    ).unwrap();
+    ).unwrap_or_else(|e| panic!("static context-window regex failed to compile: {e}"));
 
     // Cohere:
     // "input too long, max token count is 128000"
     static ref RE_COHERE: Regex = Regex::new(
         r"(?i)max\s+token\s+count\s+is\s+(\d+)"
-    ).unwrap();
+    ).unwrap_or_else(|e| panic!("static context-window regex failed to compile: {e}"));
 
     // Generic fallback: "context window of N" or "context limit of N"
     static ref RE_GENERIC: Regex = Regex::new(
         r"(?i)(?:context\s+(?:window|limit)\s+of|window\s+size\s+of)\s+(\d[\d,]*)"
-    ).unwrap();
+    ).unwrap_or_else(|e| panic!("static context-window regex failed to compile: {e}"));
 }
 
 /// Returns `true` if the error message indicates a context-length overflow.

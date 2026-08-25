@@ -71,12 +71,12 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
     ) -> Result<ToolOutput, ToolError> {
         let args: ApplyPatchArgs =
             serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments {
-                details: format!("Invalid apply_patch arguments: {}", e),
+                details: format!("Invalid apply_patch arguments: {e}"),
             })?;
 
         let hunks = super::super::patch_parser::parse_patches(&args.patch).map_err(|e| {
             ToolError::InvalidArguments {
-                details: format!("Failed to parse patch: {}", e),
+                details: format!("Failed to parse patch: {e}"),
             }
         })?;
 
@@ -85,7 +85,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
             .workspace_for_chat(&chat_id)
             .await
             .map_err(|e| ToolError::ExecutionFailed {
-                message: format!("Unable to resolve session workspace: {}", e),
+                message: format!("Unable to resolve session workspace: {e}"),
             })?;
         let max_file_bytes = workspace_max_file_bytes(&state).await;
 
@@ -109,13 +109,13 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
                         path.to_str().unwrap_or(""),
                     )
                     .map_err(|e| ToolError::PermissionDenied {
-                        reason: format!("Workspace violation: {}", e),
+                        reason: format!("Workspace violation: {e}"),
                     })?;
 
                     if let Some(parent) = target_path.parent() {
                         tokio::fs::create_dir_all(parent).await.map_err(|e| {
                             ToolError::ExecutionFailed {
-                                message: format!("Failed to create directories: {}", e),
+                                message: format!("Failed to create directories: {e}"),
                             }
                         })?;
                     }
@@ -123,7 +123,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
                     enforce_content_size(content.len(), max_file_bytes, "new file content")?;
                     tokio::fs::write(&target_path, &content).await.map_err(|e| {
                         ToolError::ExecutionFailed {
-                            message: format!("Failed to write file: {}", e),
+                            message: format!("Failed to write file: {e}"),
                         }
                     })?;
                     let (diff, lines_added, lines_removed) =
@@ -144,7 +144,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
                         path.to_str().unwrap_or(""),
                     )
                     .map_err(|e| ToolError::PermissionDenied {
-                        reason: format!("Workspace violation: {}", e),
+                        reason: format!("Workspace violation: {e}"),
                     })?;
 
                     let original_content = if target_path.exists() {
@@ -155,7 +155,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
                     if target_path.exists() {
                         tokio::fs::remove_file(&target_path).await.map_err(|e| {
                             ToolError::ExecutionFailed {
-                                message: format!("Failed to delete file: {}", e),
+                                message: format!("Failed to delete file: {e}"),
                             }
                         })?;
                     }
@@ -184,7 +184,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
                         path.to_str().unwrap_or(""),
                     )
                     .map_err(|e| ToolError::PermissionDenied {
-                        reason: format!("Workspace violation: {}", e),
+                        reason: format!("Workspace violation: {e}"),
                     })?;
 
                     if !target_path.exists() {
@@ -215,7 +215,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
                         tokio::fs::write(&target_path, &new_content)
                             .await
                             .map_err(|e| ToolError::ExecutionFailed {
-                                message: format!("Failed to write updated file: {}", e),
+                                message: format!("Failed to write updated file: {e}"),
                             })?;
 
                         let (diff, lines_added, lines_removed) =
@@ -299,7 +299,7 @@ async fn enforce_plan_mode_for_hunks(
             decl.to_str().unwrap_or(""),
         )
         .map_err(|e| ToolError::PermissionDenied {
-            reason: format!("Workspace violation: {}", e),
+            reason: format!("Workspace violation: {e}"),
         })?;
         let resolved_str = resolved.to_string_lossy();
         if !is_within_plans_root(&resolved_str, &plans_root) {

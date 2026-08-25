@@ -9,8 +9,7 @@ use super::*;
 pub(super) async fn ensure_chat_exists(db: &SqlitePool, chat_id: &str) -> ZenResult<()> {
     if queries::get_chat(db, chat_id).await.is_err() {
         return Err(crate::error::ZenError::Custom(format!(
-            "Chat session {} no longer exists.",
-            chat_id
+            "Chat session {chat_id} no longer exists."
         )));
     }
     Ok(())
@@ -36,8 +35,7 @@ pub(super) async fn resolve_turn_content(
                 .filter(|m| m.role == "user")
                 .ok_or_else(|| {
                     crate::error::ZenError::Custom(format!(
-                        "Cannot regenerate: message {} is not a user turn in chat {}.",
-                        anchor_id, chat_id
+                        "Cannot regenerate: message {anchor_id} is not a user turn in chat {chat_id}."
                     ))
                 })?;
             // Refuse stale anchors: regenerating a turn with newer user turns

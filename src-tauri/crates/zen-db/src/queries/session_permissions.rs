@@ -100,7 +100,7 @@ pub async fn load_session_permission_map(
         if tool_name.is_empty() || args_hash.is_empty() {
             continue;
         }
-        let key = format!("{}:{}", tool_name, args_hash);
+        let key = format!("{tool_name}:{args_hash}");
         map.insert(key, true);
     }
     Ok(map)

@@ -14,7 +14,7 @@ use tauri::State;
 #[tauri::command]
 pub async fn get_canvas_summary(canvas_json: String) -> Result<CanvasSummary, ZenError> {
     let canvas: serde_json::Value = serde_json::from_str(&canvas_json)
-        .map_err(|e| ZenError::Custom(format!("Invalid canvas JSON: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Invalid canvas JSON: {e}")))?;
 
     let width = canvas
         .get("width")
@@ -62,7 +62,7 @@ pub async fn validate_canvas_layout(
     canvas_height: u32,
 ) -> Result<serde_json::Value, ZenError> {
     let objects: Vec<(String, [f64; 4])> = serde_json::from_str(&objects_json)
-        .map_err(|e| ZenError::Custom(format!("Invalid objects JSON: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Invalid objects JSON: {e}")))?;
 
     let constraints = LayoutConstraints {
         margin: 10.0,
@@ -83,7 +83,7 @@ pub async fn auto_fix_canvas_layout(
     canvas_height: u32,
 ) -> Result<serde_json::Value, ZenError> {
     let mut objects: Vec<(String, [f64; 4])> = serde_json::from_str(&objects_json)
-        .map_err(|e| ZenError::Custom(format!("Invalid objects JSON: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Invalid objects JSON: {e}")))?;
 
     let fixes = auto_fix_layout(&mut objects, [canvas_width, canvas_height]);
 
@@ -101,7 +101,7 @@ pub async fn get_geometry_context(
     canvas_height: u32,
 ) -> Result<serde_json::Value, ZenError> {
     let objects: Vec<(String, [f64; 4])> = serde_json::from_str(&objects_json)
-        .map_err(|e| ZenError::Custom(format!("Invalid objects JSON: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Invalid objects JSON: {e}")))?;
 
     let mut ctx = GeometryContext::new(canvas_width as f64, canvas_height as f64);
     ctx.objects = objects;
@@ -120,7 +120,7 @@ pub async fn resolve_anchor(
     offset: Option<[f64; 2]>,
 ) -> Result<[f64; 2], ZenError> {
     let objects: Vec<(String, [f64; 4])> = serde_json::from_str(&objects_json)
-        .map_err(|e| ZenError::Custom(format!("Invalid objects JSON: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Invalid objects JSON: {e}")))?;
 
     let mut resolver = AnchorResolver::new(canvas_width as f64, canvas_height as f64);
     for (id, bbox) in objects {
@@ -144,10 +144,10 @@ pub async fn compile_anchor_draw_command(
     canvas_height: u32,
 ) -> Result<serde_json::Value, ZenError> {
     let cmd: AnchorDrawCommand = serde_json::from_str(&command_json)
-        .map_err(|e| ZenError::Custom(format!("Invalid command JSON: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Invalid command JSON: {e}")))?;
 
     let objects: Vec<(String, [f64; 4])> = serde_json::from_str(&objects_json)
-        .map_err(|e| ZenError::Custom(format!("Invalid objects JSON: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Invalid objects JSON: {e}")))?;
 
     let mut resolver = AnchorResolver::new(canvas_width as f64, canvas_height as f64);
     for (id, bbox) in objects {
@@ -165,7 +165,7 @@ pub async fn compile_anchor_draw_command(
 #[tauri::command]
 pub async fn plot_mathematical(request_json: String) -> Result<serde_json::Value, ZenError> {
     let request: PlotRequest = serde_json::from_str(&request_json)
-        .map_err(|e| ZenError::Custom(format!("Invalid plot request JSON: {}", e)))?;
+        .map_err(|e| ZenError::Custom(format!("Invalid plot request JSON: {e}")))?;
 
     let output = generate_plot(&request).map_err(|e| ZenError::Custom(e.to_string()))?;
 
@@ -255,7 +255,7 @@ pub async fn get_session_state(
     let sessions = state.graph_sessions.lock().await;
     let session = sessions
         .get(&session_id)
-        .ok_or_else(|| ZenError::Custom(format!("Session '{}' not found", session_id)))?;
+        .ok_or_else(|| ZenError::Custom(format!("Session '{session_id}' not found")))?;
     Ok(session.export_state())
 }
 
@@ -269,7 +269,7 @@ pub async fn rollback_session(
     let mut sessions = state.graph_sessions.lock().await;
     let session = sessions
         .get_mut(&session_id)
-        .ok_or_else(|| ZenError::Custom(format!("Session '{}' not found", session_id)))?;
+        .ok_or_else(|| ZenError::Custom(format!("Session '{session_id}' not found")))?;
 
     session
         .rollback_to_version(version)
@@ -300,7 +300,7 @@ pub async fn rollback_session(
 
     Ok(generate_feedback(
         session,
-        format!("Rolled back to version {}", version),
+        format!("Rolled back to version {version}"),
     ))
 }
 
@@ -314,7 +314,7 @@ pub async fn load_graph_sessions_from_db(
     use std::collections::HashMap;
 
     let db_session =
-        crate::db::queries::get_graph_session(&state.db().await?, &format!("chat_{}", chat_id))
+        crate::db::queries::get_graph_session(&state.db().await?, &format!("chat_{chat_id}"))
             .await
             .map_err(|e| ZenError::Custom(e.to_string()))?;
 

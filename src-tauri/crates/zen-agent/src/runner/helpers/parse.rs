@@ -44,7 +44,7 @@ pub fn generate_handoff_summary(
         summary_parts.push(format!("Used: {}", tools_used.join(", ")));
     }
     if !last_content.is_empty() {
-        summary_parts.push(format!("Found: {}", last_content));
+        summary_parts.push(format!("Found: {last_content}"));
     }
     if summary_parts.is_empty() {
         summary_parts.push("No actions taken".to_string());
@@ -224,8 +224,7 @@ pub fn prune_stale_reads(conversation: &mut [zen_db::models::ChatMessage]) {
         if let Some(ref path) = target_file_path {
             if mutated_paths.contains(path) {
                 conversation[i].content = format!(
-                    "[stale read output for '{}' elided — file has been subsequently modified by agent]",
-                    path
+                    "[stale read output for '{path}' elided — file has been subsequently modified by agent]"
                 );
             }
         }

@@ -309,8 +309,7 @@ mod tests {
         for (i, ov) in overrides.iter().enumerate() {
             assert!(
                 ov.contains("citations inline") || ov.contains("cite sources"),
-                "Override {} missing citation instruction",
-                i
+                "Override {i} missing citation instruction"
             );
         }
     }
@@ -319,7 +318,7 @@ mod tests {
     fn category_enum_is_debug_and_clone() {
         let cat = ResearchCategory::HowTo;
         let _cloned = cat.clone();
-        let _debug = format!("{:?}", cat);
+        let _debug = format!("{cat:?}");
     }
 
     // ── Finding ───────────────────────────────────────────────────────────
@@ -346,6 +345,6 @@ mod tests {
             evidence: String::new(),
         };
         let _cloned = f.clone();
-        let _debug = format!("{:?}", f);
+        let _debug = format!("{f:?}");
     }
 }

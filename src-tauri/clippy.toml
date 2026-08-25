@@ -1,0 +1,8 @@
+# Clippy configuration for the Zen workspace (BIG_MIGRATION.md Phase 13).
+#
+# Test code may unwrap/expect freely — the deny set in
+# [workspace.lints.clippy] targets production failure handling, and every
+# #[cfg(test)] block, #[test] fn, and tests/ directory is exempt below.
+
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

@@ -72,7 +72,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for MapTool {
         _token: tokio_util::sync::CancellationToken,
     ) -> Result<Value> {
         let args: MapArgs =
-            serde_json::from_value(input).map_err(|e| anyhow!("Invalid map arguments: {}", e))?;
+            serde_json::from_value(input).map_err(|e| anyhow!("Invalid map arguments: {e}"))?;
 
         let mut final_lat = args.lat;
         let mut final_lon = args.lon;
@@ -82,7 +82,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for MapTool {
             if let Some(name) = &args.location_name {
                 let results = crate::services::gtsm::geocoding::search(name, 1)
                     .await
-                    .map_err(|e| anyhow!("Geocoding failed: {}", e))?;
+                    .map_err(|e| anyhow!("Geocoding failed: {e}"))?;
 
                 if let Some(first) = results.first() {
                     final_lat = Some(first.lat);
@@ -91,7 +91,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for MapTool {
                         resolved_name = Some(first.display_name.clone());
                     }
                 } else {
-                    return Err(anyhow!("Location '{}' could not be resolved. Please be more specific or provide direct coordinates.", name));
+                    return Err(anyhow!("Location '{name}' could not be resolved. Please be more specific or provide direct coordinates."));
                 }
             } else {
                 return Err(anyhow!(
@@ -105,7 +105,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for MapTool {
         let zoom_val = args.zoom.unwrap_or(10.0) as u8;
 
         let (lat, lon, zoom) = self.apply_guardrails(lat, lon, zoom_val);
-        let label = resolved_name.unwrap_or_else(|| format!("{:.4}, {:.4}", lat, lon));
+        let label = resolved_name.unwrap_or_else(|| format!("{lat:.4}, {lon:.4}"));
         let altitude_meters = 40_000_000.0 / (2.0_f64.powi(zoom as i32));
 
         tracing::info!(

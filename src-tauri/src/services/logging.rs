@@ -51,7 +51,7 @@ pub fn init_backend_logging(app_dir: &Path) -> Result<PathBuf, String> {
         .with_thread_ids(true)
         .with_line_number(true)
         .try_init()
-        .map_err(|e| format!("failed to initialize tracing subscriber: {}", e))?;
+        .map_err(|e| format!("failed to initialize tracing subscriber: {e}"))?;
 
     let _ = LOG_GUARD.set(guard);
     Ok(log_dir)

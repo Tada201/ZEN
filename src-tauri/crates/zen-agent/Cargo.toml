@@ -1,7 +1,8 @@
 [package]
 name = "zen-agent"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
 description = "Agent runtime: runner loop, orchestrator, deep research, middleware, skills, swarm (BIG_MIGRATION.md Phase 11)"
 
 [features]
@@ -36,12 +37,16 @@ thiserror = { workspace = true }
 
 # ── Relocated pins (same versions as the app crate; usage moved, not new
 # dependencies — Security.md provenance unchanged) ───────────────────────────
-sha2 = "0.10"
-regex = "1"
-base64 = "0.22"
-url = "2"
-meval = "0.2"
-dirs = "6.0"
-tiktoken-rs = "0.6"
-lazy_static = "1.5"
-async-recursion = "1.1"
+sha2 = { workspace = true }
+regex = { workspace = true }
+base64 = { workspace = true }
+url = { workspace = true }
+meval = { workspace = true }
+dirs = { workspace = true }
+tiktoken-rs = { workspace = true }
+lazy_static = { workspace = true }
+async-recursion = { workspace = true }
+
+# Inherit the workspace lint policy ([workspace.lints] at the root).
+[lints]
+workspace = true

@@ -76,7 +76,7 @@ pub fn resolve_agent(
         )
     })?;
     if !profile.model_invocable {
-        anyhow::bail!("Agent '{}' is not available for model invocation", agent_id);
+        anyhow::bail!("Agent '{agent_id}' is not available for model invocation");
     }
     let explicit = selected_model(explicit_model);
     // A profile's paired provider only applies to the profile's own model. When
@@ -94,9 +94,8 @@ pub fn resolve_agent(
         .or_else(|| selected_model(fallback_model))
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "No model configured for agent '{}'. Select a model in Settings → Models, \
-                 set the agent's model override, or pass 'model' in the spawn request.",
-                agent_id
+                "No model configured for agent '{agent_id}'. Select a model in Settings → Models, \
+                 set the agent's model override, or pass 'model' in the spawn request."
             )
         })?;
 
@@ -150,7 +149,7 @@ pub fn resolve_adhoc_agent(
     let ceiling: Vec<String> = if caller_tool_ids.is_empty() {
         agent_registry
             .get("generalist")
-            .map(|a| a.tool_ids.clone())
+            .map(|a| a.tool_ids)
             .unwrap_or_default()
     } else {
         caller_tool_ids.to_vec()
@@ -323,7 +322,7 @@ pub fn subagent_memory_scope(agent_id: &str, task: &str) -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    format!("subagent:{}:{}:{}", agent_id, timestamp, task_hash)
+    format!("subagent:{agent_id}:{timestamp}:{task_hash}")
 }
 
 #[cfg(test)]
@@ -357,7 +356,7 @@ mod tests {
         let reg = registry_with_generalist();
         let caller_tools: Vec<String> = reg
             .get("generalist")
-            .map(|a| a.tool_ids.clone())
+            .map(|a| a.tool_ids)
             .unwrap_or_default();
         let resolved =
             resolve_adhoc_agent(&reg, None, "do a thing", &[], &caller_tools, None, Some("parent-model"), None).unwrap();
@@ -373,7 +372,7 @@ mod tests {
         let reg = registry_with_generalist();
         let caller_tools: Vec<String> = reg
             .get("generalist")
-            .map(|a| a.tool_ids.clone())
+            .map(|a| a.tool_ids)
             .unwrap_or_default();
         let requested = vec![
             "web_search".to_string(),
@@ -394,7 +393,7 @@ mod tests {
         let reg = registry_with_generalist();
         let caller_tools: Vec<String> = reg
             .get("generalist")
-            .map(|a| a.tool_ids.clone())
+            .map(|a| a.tool_ids)
             .unwrap_or_default();
         assert!(resolve_adhoc_agent(&reg, None, "   ", &[], &caller_tools, None, Some("parent-model"), None).is_err());
     }
@@ -422,7 +421,7 @@ mod tests {
         assert!(resolve_agent(&reg, "generalist", None, None, None).is_err());
         let caller_tools: Vec<String> = reg
             .get("generalist")
-            .map(|a| a.tool_ids.clone())
+            .map(|a| a.tool_ids)
             .unwrap_or_default();
         assert!(resolve_adhoc_agent(&reg, None, "scout", &[], &caller_tools, None, None, None).is_err());
     }

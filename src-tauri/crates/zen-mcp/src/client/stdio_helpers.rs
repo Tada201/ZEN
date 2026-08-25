@@ -61,7 +61,7 @@ impl McpClient {
             Err(error) if is_legacy_probe_error(&error) => {
                 warn!(error = %error, "stdio server/discover unsupported; using legacy initialize");
             }
-            Err(error) => return Err(format!("stdio server/discover failed: {}", error)),
+            Err(error) => return Err(format!("stdio server/discover failed: {error}")),
         }
 
         let init_params = serde_json::to_value(InitializeParams {
@@ -72,7 +72,7 @@ impl McpClient {
                 version: env!("CARGO_PKG_VERSION").to_string(),
             },
         })
-        .map_err(|e| format!("stdio initialize: serialize failed: {}", e))?;
+        .map_err(|e| format!("stdio initialize: serialize failed: {e}"))?;
 
         // Step 1: initialize request
         let resp = transport
@@ -84,7 +84,7 @@ impl McpClient {
                 .cloned()
                 .ok_or_else(|| "stdio initialize: missing result".to_string())?,
         )
-        .map_err(|e| format!("stdio initialize: deserialize failed: {}", e))?;
+        .map_err(|e| format!("stdio initialize: deserialize failed: {e}"))?;
 
         if init.protocol_version != PROTOCOL_VERSION {
             warn!(

@@ -139,7 +139,7 @@ impl BrowserManager {
             if let Some(u) = &target {
                 webview.navigate(u.clone()).map_err(|e| e.to_string())?;
             }
-            let mut st = self.state.lock().unwrap();
+            let mut st = self.state.lock().unwrap_or_else(|err| err.into_inner());
             st.attached = true;
             if let Some(u) = &target {
                 st.url = u.to_string();
@@ -168,7 +168,7 @@ impl BrowserManager {
 
         self.install_console_bridge(app, &webview);
 
-        let mut st = self.state.lock().unwrap();
+        let mut st = self.state.lock().unwrap_or_else(|err| err.into_inner());
         st.attached = true;
         st.url = target.map(|u| u.to_string()).unwrap_or_default();
         Ok(st.url.clone())
@@ -251,7 +251,7 @@ impl BrowserManager {
             .get_webview(PREVIEW_LABEL)
             .ok_or_else(|| "preview not attached".to_string())?;
         webview.navigate(parsed.clone()).map_err(|e| e.to_string())?;
-        let mut st = self.state.lock().unwrap();
+        let mut st = self.state.lock().unwrap_or_else(|err| err.into_inner());
         st.url = parsed.to_string();
         Ok(st.url.clone())
     }
@@ -270,7 +270,7 @@ impl BrowserManager {
         if let Some(webview) = app.get_webview(PREVIEW_LABEL) {
             webview.hide().map_err(|e| e.to_string())?;
         }
-        self.state.lock().unwrap().attached = false;
+        self.state.lock().unwrap_or_else(|err| err.into_inner()).attached = false;
         Ok(())
     }
 
@@ -279,7 +279,7 @@ impl BrowserManager {
         if let Some(webview) = app.get_webview(PREVIEW_LABEL) {
             webview.close().map_err(|e| e.to_string())?;
         }
-        let mut st = self.state.lock().unwrap();
+        let mut st = self.state.lock().unwrap_or_else(|err| err.into_inner());
         st.attached = false;
         st.url.clear();
         st.console.clear();
@@ -287,7 +287,7 @@ impl BrowserManager {
     }
 
     pub fn current_url(&self) -> String {
-        self.state.lock().unwrap().url.clone()
+        self.state.lock().unwrap_or_else(|err| err.into_inner()).url.clone()
     }
 
     /// Capture the current preview as a PNG, persist it to appdata, and return

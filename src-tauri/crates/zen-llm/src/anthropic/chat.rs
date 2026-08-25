@@ -413,8 +413,7 @@ pub(crate) async fn chat_stream(
             let body = resp.text().await.unwrap_or_default();
             error!(status = %status, body = %body, "Anthropic chat request failed");
             return Err(ZenError::Custom(format!(
-                "Anthropic returned {}: {}",
-                status, body
+                "Anthropic returned {status}: {body}"
             )));
         }
 

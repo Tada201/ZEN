@@ -198,7 +198,7 @@ impl OpenAiCompatProvider {
             if let Some((jwt, exp)) = &*cache {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_default()
                     .as_secs();
                 if now < *exp - 300 {
                     return Ok(jwt.clone());
@@ -230,7 +230,7 @@ impl OpenAiCompatProvider {
 
         let mut exp_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs()
             + 3000;
         let parts: Vec<&str> = jwt.split('.').collect();
@@ -452,7 +452,7 @@ impl OpenAiCompatProvider {
         if self.provider_key() == "mimo" || self.provider_key() == "mimo-free" {
             let jwt = self.get_mimo_jwt().await?;
             req_builder = req_builder
-                .header("Authorization", format!("Bearer {}", jwt))
+                .header("Authorization", format!("Bearer {jwt}"))
                 .header("X-Mimo-Source", "mimocode-cli-free")
                 .header("x-session-affinity", "ses_zen_session_001");
         }

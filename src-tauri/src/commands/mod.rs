@@ -136,7 +136,7 @@ impl InitProgress {
         let mut critical_complete = true;
         let mut background_complete = true;
         let mut orchestrator_terminal = false;
-        let phases: Vec<InitPhase> = guard.iter().map(|m| m.lock().unwrap().clone()).collect();
+        let phases: Vec<InitPhase> = guard.iter().map(|m| m.lock().unwrap_or_else(|err| err.into_inner()).clone()).collect();
         for p in &phases {
             if p.id.starts_with("critical.") && p.status != "done" && p.status != "skipped" {
                 critical_complete = false;
@@ -166,8 +166,8 @@ impl InitProgress {
     pub async fn set_status(&self, app: &tauri::AppHandle, id: &str, status: &'static str, elapsed_ms: Option<u64>) {
         {
             let guard = self.phases.read().await;
-            if let Some(mutex) = guard.iter().find(|m| m.lock().unwrap().id == id) {
-                let mut phase = mutex.lock().unwrap();
+            if let Some(mutex) = guard.iter().find(|m| m.lock().unwrap_or_else(|err| err.into_inner()).id == id) {
+                let mut phase = mutex.lock().unwrap_or_else(|err| err.into_inner());
                 phase.status = status;
                 if let Some(ms) = elapsed_ms {
                     phase.elapsed_ms = Some(ms);
@@ -423,7 +423,7 @@ impl AppState {
         let default_workspace = crate::workspace::get_default_workspace();
         let workspace_folder_arc = Arc::new(RwLock::new(default_workspace.clone()));
         let shared_session_memory = Arc::new(
-            crate::rag::session_memory::SessionMemoryManager::new(default_workspace.clone()),
+            crate::rag::session_memory::SessionMemoryManager::new(default_workspace),
         );
         let process_manager = Arc::new(ProcessManager::new());
         let event_bus = Arc::new(EventBus::default());
@@ -460,11 +460,11 @@ impl AppState {
             llm: InitState::new(),
             tools: tool_registry_v2.clone(),
             tool_registry_v1: tool_registry_v1.clone(),
-            skills_manager: skills_manager.clone(),
-            agent_registry: agent_registry.clone(),
-            hook_registry: hook_registry.clone(),
+            skills_manager,
+            agent_registry,
+            hook_registry,
             agent: AgentState {
-                event_bus: event_bus.clone(),
+                event_bus,
             },
             settings: Arc::new(RwLock::new(HashMap::new())),
             hardware: Arc::new(Mutex::new(HardwareService::new())),
@@ -480,16 +480,16 @@ impl AppState {
             chat_pause_controls: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             rag: InitState::new(),
             conversation_store: Arc::new(InitState::new()),
-            workspace_folder: workspace_folder_arc.clone(),
+            workspace_folder: workspace_folder_arc,
             graph_sessions: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             session_memory: Arc::new(RwLock::new(shared_session_memory)),
             mcp_config: mcp_config.clone(),
             mcp_client: {
                 let client = Arc::new(crate::mcp::McpClient::new(
                     mcp_registrar.clone(),
-                    mcp_config.clone(),
+                    mcp_config,
                     mcp_discovery.clone(),
-                    security.clone(),
+                    security,
                     secret_manager.clone(),
                     mcp_consent.clone(),
                 ));
@@ -509,10 +509,10 @@ impl AppState {
             )),
             process_manager,
             tool_manager: Arc::new(ToolManager::new(
-                tool_registry_v1.clone(),
-                tool_registry_v2.clone(),
+                tool_registry_v1,
+                tool_registry_v2,
             )),
-            tool_service: tool_service.clone(),
+            tool_service,
             checkpoints,
             swarm: Arc::new(SwarmCoordinator::new()),
             orchestrator: InitState::new(),
@@ -556,7 +556,7 @@ impl AppState {
         match chat.workspace_root {
             Some(root) if !root.trim().is_empty() =>
                 crate::workspace::canonicalize_workspace_root(std::path::Path::new(&root))
-                    .map_err(|e| ZenError::Custom(format!("Invalid session workspace root: {}", e))),
+                    .map_err(|e| ZenError::Custom(format!("Invalid session workspace root: {e}"))),
             _ => Ok(global_workspace),
         }
     }
@@ -590,7 +590,7 @@ impl AppState {
 
     pub async fn set_workspace_folder(&self, path: impl AsRef<std::path::Path>) -> ZenResult<()> {
         let canonical = crate::workspace::canonicalize_workspace_root(path.as_ref())
-            .map_err(|e| ZenError::Custom(format!("Invalid workspace root: {}", e)))?;
+            .map_err(|e| ZenError::Custom(format!("Invalid workspace root: {e}")))?;
 
         {
             let mut workspace = self.workspace_folder.write().await;
@@ -616,6 +616,6 @@ impl AppState {
         let rag = self.rag.get().await?;
         rag.search(query_vec, limit)
             .await
-            .map_err(|e| ZenError::Custom(format!("RAG search failed: {}", e)))
+            .map_err(|e| ZenError::Custom(format!("RAG search failed: {e}")))
     }
 }

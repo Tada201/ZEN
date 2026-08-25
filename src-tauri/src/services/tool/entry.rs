@@ -69,7 +69,7 @@ impl ToolService {
                     let mut registry = self.registry.write().await;
                     registry.record_execution(&tool_call, false, "deny");
                 }
-                Err(format!("Permission denied: {}", reason))
+                Err(format!("Permission denied: {reason}"))
             }
             Err(e) => Err(e.to_string()),
         }
@@ -156,8 +156,7 @@ impl ToolService {
 
         if security_decision != SecurityDecision::Allow {
             return Err(format!(
-                "Tool execution requires {:?}; caller is non-interactive",
-                security_decision
+                "Tool execution requires {security_decision:?}; caller is non-interactive"
             ));
         }
 
@@ -186,7 +185,7 @@ impl ToolService {
                     "tool registry denied execution",
                 )
                 .await;
-                Err(format!("Permission denied: {}", reason))
+                Err(format!("Permission denied: {reason}"))
             }
             Ok(crate::tools::permission::PermissionDecision::Confirm { .. }) => {
                 self.audit(
@@ -198,7 +197,7 @@ impl ToolService {
                 .await;
                 Err("User confirmation required for this tool call. Non-interactive callers cannot approve it.".to_string())
             }
-            Err(e) => Err(format!("Security check failed: {}", e)),
+            Err(e) => Err(format!("Security check failed: {e}")),
         }
     }
 }

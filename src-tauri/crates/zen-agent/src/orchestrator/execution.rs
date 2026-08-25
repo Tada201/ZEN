@@ -99,7 +99,7 @@ impl Orchestrator {
                 // Fallback to generalist if agent not found
                 self.agent_registry.get("generalist")
             })
-            .ok_or_else(|| anyhow::anyhow!("Agent '{}' not found", agent_id))?;
+            .ok_or_else(|| anyhow::anyhow!("Agent '{agent_id}' not found"))?;
 
         // Merge per-turn tool overrides into the agent's tool_ids
         for tool_id in &extra_tool_ids {
@@ -464,15 +464,14 @@ Be thorough but organized. Use formatting (headers, lists, code blocks) to make 
 
         let task_results_str = task_results
             .iter()
-            .map(|(id, result)| format!("- **Task {}**: {}", id, result))
+            .map(|(id, result)| format!("- **Task {id}**: {result}"))
             .collect::<Vec<_>>()
             .join("\n");
 
         let user_content = format!(
-            "Original Goal: {}\n\n\
-             Task Results:\n{}\n\n\
-             Synthesize these results into a comprehensive final answer.",
-            original_goal, task_results_str
+            "Original Goal: {original_goal}\n\n\
+             Task Results:\n{task_results_str}\n\n\
+             Synthesize these results into a comprehensive final answer."
         );
 
         let mut synth_messages = vec![

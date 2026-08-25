@@ -307,7 +307,7 @@ pub async fn bulk_delete_chats(pool: &SqlitePool, ids: &[String]) -> ZenResult<(
     }
     let mut tx = pool.begin().await.map_err(crate::db_err)?;
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let query = format!("DELETE FROM chats WHERE id IN ({})", placeholders);
+    let query = format!("DELETE FROM chats WHERE id IN ({placeholders})");
     let mut q = sqlx::query(&query);
     for id in ids {
         q = q.bind(id);
@@ -323,7 +323,7 @@ pub async fn bulk_archive_chats(pool: &SqlitePool, ids: &[String]) -> ZenResult<
     }
     let mut tx = pool.begin().await.map_err(crate::db_err)?;
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let query = format!("UPDATE chats SET is_archived = 1, archived_at = datetime('now'), updated_at = datetime('now') WHERE id IN ({})", placeholders);
+    let query = format!("UPDATE chats SET is_archived = 1, archived_at = datetime('now'), updated_at = datetime('now') WHERE id IN ({placeholders})");
     let mut q = sqlx::query(&query);
     for id in ids {
         q = q.bind(id);
