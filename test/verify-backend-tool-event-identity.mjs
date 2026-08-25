@@ -1,10 +1,13 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
-const eventBus = readFileSync(new URL("../src-tauri/src/agent/event_bus.rs", import.meta.url), "utf8");
+const eventBus = readFileSync(new URL("../src-tauri/crates/zen-agent/src/event_bus.rs", import.meta.url), "utf8");
 const toolDispatch = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
-  .map((f) => readFileSync(new URL(`../src-tauri/src/agent/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
+  .map((f) => readFileSync(new URL(`../src-tauri/crates/zen-agent/src/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
 const toolService = readFileSync(new URL("../src-tauri/src/services/tool.rs", import.meta.url), "utf8");
+// Phase 11: the approval identity context type moved to the zen-agent port
+// layer; the emit that stamps those keys onto the event stays in the app.
+const approvalPorts = readFileSync(new URL("../src-tauri/crates/zen-agent/src/ports.rs", import.meta.url), "utf8");
 
 function structBlock(source, name) {
   const match = source.match(new RegExp(`pub struct ${name} \\{([\\s\\S]*?)\\n\\}`));
@@ -52,7 +55,7 @@ for (const assignment of [
   assert(toolDispatch.includes(assignment), `tool:complete should include ${assignment}`);
 }
 
-assert(toolService.includes("pub struct ToolApprovalExecutionContext"), "approval requests should accept execution identity context");
+assert(approvalPorts.includes("pub struct ToolApprovalExecutionContext"), "approval requests should accept execution identity context");
 for (const key of [
   '"run_id": run_id',
   '"parent_agent_id": parent_agent_id',

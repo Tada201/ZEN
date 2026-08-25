@@ -7,10 +7,10 @@ const backend = [
 ].map((f) => readFileSync(new URL(`../src-tauri/src/agent/tools/spawn_tools/${f}`, import.meta.url), "utf8")).join("");
 const progressive = readFileSync(new URL("../src-tauri/src/agent/tools/progressive.rs", import.meta.url), "utf8");
 const capability = readFileSync(new URL("../src-tauri/src/tools/capability.rs", import.meta.url), "utf8");
-const systemPrompt = readFileSync(new URL("../src-tauri/src/agent/middleware/system_prompt.rs", import.meta.url), "utf8");
+const systemPrompt = readFileSync(new URL("../src-tauri/crates/zen-agent/src/middleware/system_prompt.rs", import.meta.url), "utf8");
 const runner =
-  readFileSync(new URL("../src-tauri/src/agent/runner/turn_loop.rs", import.meta.url), "utf8") +
-  readFileSync(new URL("../src-tauri/src/agent/runner/step_exec.rs", import.meta.url), "utf8");
+  readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/turn_loop.rs", import.meta.url), "utf8") +
+  readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/step_exec.rs", import.meta.url), "utf8");
 const generalist = readFileSync(new URL("../src-tauri/resources/agents/generalist.json", import.meta.url), "utf8");
 // ZEN-DOCS (researcher) and ZEN-TAC (operational_expert) were retired; the
 // shipped defaults are generalist, explore, and voice_display.
@@ -45,7 +45,7 @@ assert(!explore.includes("get_weather"), "explore must use web search instead of
 // `model_override: null`, so the resolver has to fall back to the parent turn's
 // model and fail loudly when nothing is configured anywhere.
 {
-  const childRunner = readFileSync(new URL("../src-tauri/src/agent/tools/child_runner.rs", import.meta.url), "utf8");
+  const childRunner = readFileSync(new URL("../src-tauri/crates/zen-agent/src/child_runner.rs", import.meta.url), "utf8");
   assert(
     childRunner.includes("fn selected_model(") && childRunner.includes('eq_ignore_ascii_case("inherit")'),
     "child model resolution must normalize blank and 'inherit' selections instead of passing them through",

@@ -31,6 +31,7 @@ zen-llm = { path = "crates/zen-llm" }
 zen-mcp = { path = "crates/zen-mcp" }
 zen-rag = { path = "crates/zen-rag" }
 zen-media = { path = "crates/zen-media" }
+zen-agent = { path = "crates/zen-agent" }
 
 [package]
 name = "zen"
@@ -48,7 +49,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # {event, payload-shape} JSONL lines to $ZEN_EVENT_SNAPSHOT_PATH for
 # event-contract diffing across migration phases. Never enabled in CI or
 # release builds; compiles to an inlined no-op when off.
-event-snapshot = []
+event-snapshot = ["zen-agent/event-snapshot"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -79,6 +80,7 @@ zen-llm = { workspace = true }
 zen-mcp = { workspace = true }
 zen-rag = { workspace = true }
 zen-media = { workspace = true }
+zen-agent = { workspace = true }
 sysinfo = "0.38"
 axum = { version = "0.8", features = ["default", "ws"] }
 tower-http = { version = "0.6", features = ["cors"] }

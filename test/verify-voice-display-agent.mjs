@@ -3,23 +3,26 @@ import { strict as assert } from "node:assert";
 
 const resource = JSON.parse(readFileSync(new URL("../src-tauri/resources/agents/voice_display.json", import.meta.url), "utf8"));
 const loopSource =
-  readFileSync(new URL("../src-tauri/src/agent/runner/turn_loop.rs", import.meta.url), "utf8") +
-  readFileSync(new URL("../src-tauri/src/agent/runner/step_exec.rs", import.meta.url), "utf8");
-const runnerSource = readFileSync(new URL("../src-tauri/src/agent/runner/voice_display.rs", import.meta.url), "utf8");
+  readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/turn_loop.rs", import.meta.url), "utf8") +
+  readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/step_exec.rs", import.meta.url), "utf8");
+const runnerSource = readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/voice_display.rs", import.meta.url), "utf8");
+// Phase 11: the raw `app.listen("board:update")` wiring moved to the app-side
+// BoardPort adapter; the runner now watches the board through the port seam.
+const boardAdapterSource = readFileSync(new URL("../src-tauri/src/services/agent_context.rs", import.meta.url), "utf8");
 const chatSource = readFileSync(new URL("../src-tauri/src/commands/chat/send.rs", import.meta.url), "utf8");
 const boardToolSource = readFileSync(new URL("../src-tauri/src/agent/tools/manage_board.rs", import.meta.url), "utf8");
 const boardListenerSource = readFileSync(new URL("../src/atlas/components/voice/useBoardEventListener.ts", import.meta.url), "utf8");
 const sendMessageSource = readFileSync(new URL("../src/atlas/hooks/chat/useSendMessage.ts", import.meta.url), "utf8");
 const stageStoreSource = readFileSync(new URL("../src/atlas/components/voice/voiceStageStore.ts", import.meta.url), "utf8");
 const overlaySource = readFileSync(new URL("../src/atlas/components/voice/VoiceModeOverlay.tsx", import.meta.url), "utf8");
-const middlewareSource = readFileSync(new URL("../src-tauri/src/agent/middleware/system_prompt.rs", import.meta.url), "utf8");
+const middlewareSource = readFileSync(new URL("../src-tauri/crates/zen-agent/src/middleware/system_prompt.rs", import.meta.url), "utf8");
 const spawnToolSource = [
   "child.rs", "completion.rs", "deps.rs", "failure.rs", "messaging.rs",
   "model_select.rs", "outcome.rs", "params.rs", "tool.rs",
 ].map((f) => readFileSync(new URL(`../src-tauri/src/agent/tools/spawn_tools/${f}`, import.meta.url), "utf8")).join("");
-const toolPipelineSource = readFileSync(new URL("../src-tauri/src/agent/runner/tool_pipeline.rs", import.meta.url), "utf8");
+const toolPipelineSource = readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/tool_pipeline.rs", import.meta.url), "utf8");
 const toolDispatchSource = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
-  .map((f) => readFileSync(new URL(`../src-tauri/src/agent/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
+  .map((f) => readFileSync(new URL(`../src-tauri/crates/zen-agent/src/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
 const displayContextSource = readFileSync(new URL("../src/atlas/components/voice/voiceDisplayContext.ts", import.meta.url), "utf8");
 const boardEventSource = readFileSync(new URL("../src/atlas/components/voice/useBoardEventListener.ts", import.meta.url), "utf8");
 
@@ -29,15 +32,15 @@ assert(runnerSource.includes('format!("voice-display:{}"'), "display events must
 assert(/HashSet::from\(\[\s*"manage_board"\.to_string\(\)\s*,?\s*\]\)/s.test(runnerSource), "runtime allowlist must enforce board-only tools");
 assert(runnerSource.includes("tokio::spawn"), "display rendering must not block main response completion");
 assert(runnerSource.includes("ORIGINAL USER REQUEST") && runnerSource.includes("user_request: &str"), "display agent must receive the complete original user request as its authoritative instruction");
-assert(runnerSource.includes('app.listen("board:update"') && runnerSource.includes("Voice display agent completed without executing manage_board"), "display success must require an actual scoped board update");
-assert(runnerSource.includes("extract_board_operation") && runnerSource.includes("ManageBoardTool::new()") && runnerSource.includes("with_tools_enabled(false)"), "display runner must fall back to validated structured board JSON when native tool calls are unavailable");
+assert(boardAdapterSource.includes('app.listen("board:update"') && runnerSource.includes("watch_board_updates") && runnerSource.includes("Voice display agent completed without executing manage_board"), "display success must require an actual scoped board update");
+assert(runnerSource.includes("extract_board_operation") && runnerSource.includes(".run_board_operation(") && boardAdapterSource.includes("ManageBoardTool::new()") && runnerSource.includes("with_tools_enabled(false)"), "display runner must fall back to validated structured board JSON when native tool calls are unavailable");
 assert(resource.instructions.includes("MUST execute manage_board at least once"), "display agent prompt must reject prose-only completion");
 assert(resource.instructions.includes("set requires blocks (plural array)") && resource.instructions.includes("Never use {action:set, block:...}"), "display agent must receive explicit action-specific board shapes");
 assert(boardToolSource.includes('schema["allOf"]') && boardToolSource.includes('"then": { "required": ["blocks"] }'), "manage_board schema must require blocks for set operations without over-nesting the main json macro");
 assert(runnerSource.includes("normalize_board_operation") && runnerSource.includes('object.insert("blocks".to_string()'), "structured fallback must repair set plus singular block output");
 assert(runnerSource.includes("extract_root_block") && runnerSource.includes("normalize_block_aliases") && runnerSource.includes('object.remove("svg")'), "structured fallback must normalize root-level media fields and common SVG aliases");
 // assert(runnerSource.includes('object.remove("type")') && runnerSource.includes("simple_shape_svg") && runnerSource.includes('Some("chart")'), "structured fallback must infer missing block kinds and support simple shape payloads");
-assert(toolDispatchSource.includes('current_agent.id == "voice_display"') && toolDispatchSource.includes("list_as_tool_info"), "voice display must receive manage_board directly instead of progressive meta-tools");
+assert(toolDispatchSource.includes('current_agent.id == "voice_display"') && toolDispatchSource.includes("v1_tools_info"), "voice display must receive manage_board directly instead of progressive meta-tools");
 assert(middlewareSource.includes("direct_board_agent") && middlewareSource.includes("Call `manage_board` directly"), "display middleware must teach the direct board-tool contract");
 assert(!runnerSource.includes("voiceDisplayAgentPrompt") && !runnerSource.includes("voiceDisplayAgentContextTokens"), "voice display prompt and advanced runtime controls must not be user-editable");
 assert(chatSource.includes('get("voiceDisplayAgentModel")') && chatSource.includes("display_agent_enabled = is_voice_mode"), "voice display must always run automatically and read only its selected model");

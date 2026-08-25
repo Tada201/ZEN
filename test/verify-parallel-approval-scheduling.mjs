@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const dispatchSource = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
-  .map((f) => readFileSync(new URL(`../src-tauri/src/agent/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
+  .map((f) => readFileSync(new URL(`../src-tauri/crates/zen-agent/src/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
 
 const confirmIndex = dispatchSource.indexOf("PermissionDecision::Confirm");
-const approvalIndex = dispatchSource.indexOf(".request_interactive_approval", confirmIndex);
+const approvalIndex = dispatchSource.indexOf(".request_approval", confirmIndex);
 const spawnBeforeApproval = dispatchSource.lastIndexOf("tokio::spawn(async move", approvalIndex);
 const continueAfterHandle = dispatchSource.indexOf("continue;", approvalIndex);
 const toolStartAfterApproval = dispatchSource.indexOf("AgentEvent::ToolStart", approvalIndex);

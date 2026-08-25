@@ -276,7 +276,7 @@ assert.ok(
 // can emit tool events. Otherwise a reload during execution cannot recover the
 // live tool ledger from SQLite.
 const escalationSource = readFileSync(
-  new URL("../src-tauri/src/agent/runner/escalation.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/runner/escalation.rs", import.meta.url),
   "utf8",
 );
 assert.ok(

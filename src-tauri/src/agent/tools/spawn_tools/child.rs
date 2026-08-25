@@ -11,7 +11,6 @@ use uuid::Uuid;
 
 use crate::agent::hooks::HookRegistry;
 use crate::agent::tools::child_runner;
-use crate::agent::tools::ToolRegistry;
 use crate::agent::types::AgentRegistry;
 use crate::commands::AppState;
 
@@ -34,24 +33,18 @@ static SUBAGENT_CONCURRENCY: std::sync::LazyLock<Arc<tokio::sync::Semaphore>> =
 /// The child agent runs with its own conversation context and bounded iterations,
 /// then returns its final response as a tool result.
 pub struct SpawnAgentTool {
-    tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
     agent_registry: Arc<AgentRegistry>,
     hook_registry: Arc<HookRegistry>,
-    permissions: crate::tools::GlobalToolRegistry,
 }
 
 impl SpawnAgentTool {
     pub fn new(
-        tool_registry: Arc<tokio::sync::RwLock<ToolRegistry>>,
         agent_registry: Arc<AgentRegistry>,
         hook_registry: Arc<HookRegistry>,
-        permissions: crate::tools::GlobalToolRegistry,
     ) -> Self {
         Self {
-            tool_registry,
             agent_registry,
             hook_registry,
-            permissions,
         }
     }
 
@@ -142,7 +135,10 @@ impl SpawnAgentTool {
         if let Some((Some(provider), _)) = configured_model.as_ref() {
             resolved.model_provider = Some(provider.clone());
         }
-        child_runner::inject_workspace_agents_md(&app, &mut resolved).await;
+        // Phase 11: inject_workspace_agents_md reads the workspace root off
+        // the context instead of a host handle.
+        let agent_ctx = app.state::<crate::services::agent_context::AgentContext>().inner().clone();
+        child_runner::inject_workspace_agents_md(&agent_ctx.workspace_folder, &mut resolved).await;
 
         let handoff = child_runner::build_subagent_handoff(
             &resolved,
@@ -168,11 +164,9 @@ impl SpawnAgentTool {
 
         let mut child_runner_instance =
             child_runner::build_child_runner(child_runner::ChildRunnerParams {
-                app: &app,
-                tool_registry: self.tool_registry.clone(),
+                ctx: &agent_ctx,
                 agent_registry: self.agent_registry.clone(),
                 hook_registry: self.hook_registry.clone(),
-                permissions: self.permissions.clone(),
                 parent_depth: depth,
                 resolved: &resolved,
                 allowed_tools,

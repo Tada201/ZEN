@@ -714,7 +714,7 @@ Always use these specialized code blocks for visual scenarios:
         tokio::spawn(async move {
             crate::agent::deep_research::run_deep_research(
                 crate::agent::deep_research::DeepResearchParams {
-                    app: app.clone(),
+                    ctx: app.state::<crate::services::agent_context::AgentContext>().inner().clone(),
                     db: db_clone,
                     llm_provider: &*provider_clone,
                     chat_id: chat_id_inner.clone(),
@@ -826,13 +826,9 @@ Always use these specialized code blocks for visual scenarios:
     );
     let runner = {
         let mut r = Runner::new(
-            app.clone(),
             app.state::<crate::services::agent_context::AgentContext>().inner().clone(),
-            state.tool_registry_v1.clone(),
             state.agent_registry.clone(),
             state.hook_registry.clone(),
-            state.tools.clone(),
-            state.tool_manager.clone(),
         )
         .with_db_pool(db.clone())
         .with_voice_mode(

@@ -2,7 +2,7 @@
 //
 // Static-source verifier for the Indirect Prompt Injection (IPI) mitigation.
 // The `prompt_safety` module is the single owner of the envelope format
-// (see src-tauri/src/agent/prompt_safety.rs). This script asserts:
+// (see src-tauri/crates/zen-agent/src/prompt_safety.rs). This script asserts:
 //
 //   1. The wrappers exist and produce well-formed XML envelopes with
 //      `<system_reminder>` blocks.
@@ -33,16 +33,16 @@ import { strict as assert } from "node:assert";
 const read = (rel) =>
   readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
-const safety = read("src-tauri/src/agent/prompt_safety.rs");
-const loop = read("src-tauri/src/agent/runner/turn_loop.rs") +
-  read("src-tauri/src/agent/runner/step_exec.rs");
-const fragment = read("src-tauri/src/agent/skills/fragment.rs");
+const safety = read("src-tauri/crates/zen-agent/src/prompt_safety.rs");
+const loop = read("src-tauri/crates/zen-agent/src/runner/turn_loop.rs") +
+  read("src-tauri/crates/zen-agent/src/runner/step_exec.rs");
+const fragment = read("src-tauri/crates/zen-agent/src/skills/fragment.rs");
 const middleware = [
   "mod.rs", "core.rs", "system_prompt.rs", "compaction.rs", "summary.rs", "recall.rs", "skills.rs",
-].map((f) => read(`src-tauri/src/agent/middleware/${f}`)).join("");
+].map((f) => read(`src-tauri/crates/zen-agent/src/middleware/${f}`)).join("");
 const toolDispatch = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
-  .map((f) => read(`src-tauri/src/agent/runner/dispatch/${f}`)).join("");
-const agentMod = read("src-tauri/src/agent/mod.rs");
+  .map((f) => read(`src-tauri/crates/zen-agent/src/runner/dispatch/${f}`)).join("");
+const agentMod = read("src-tauri/crates/zen-agent/src/lib.rs");
 
 let failed = 0;
 const pass = (name) => console.log(`PASS ${name}`);
@@ -55,7 +55,7 @@ const fail = (name, detail) => {
 {
   const name = "agent module declares prompt_safety";
   if (agentMod.includes("pub mod prompt_safety")) pass(name);
-  else fail(name, "src-tauri/src/agent/mod.rs must `pub mod prompt_safety;`");
+  else fail(name, "src-tauri/crates/zen-agent/src/lib.rs must `pub mod prompt_safety;`");
 }
 
 // ── 2. Wrapper function exports ─────────────────────────────────────────

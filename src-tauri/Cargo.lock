@@ -13108,6 +13108,7 @@ dependencies = [
  "windows 0.61.3",
  "windows-sys 0.59.0",
  "wiremock",
+ "zen-agent",
  "zen-core",
  "zen-db",
  "zen-llm",
@@ -13117,6 +13118,40 @@ dependencies = [
  "zen-security",
  "zen-tools",
  "zip 4.6.1",
+]
+
+[[package]]
+name = "zen-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-recursion",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "dirs",
+ "futures",
+ "lazy_static",
+ "meval",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "thiserror 2.0.20",
+ "tiktoken-rs 0.6.0",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+ "zen-core",
+ "zen-db",
+ "zen-llm",
+ "zen-mcp",
+ "zen-rag",
+ "zen-security",
+ "zen-tools",
 ]
 
 [[package]]

@@ -56,10 +56,10 @@ assert.deepEqual(
   "canonical nodes should sort by explicit sequence before timestamps",
 );
 
-const eventBus = readFileSync(new URL("../src-tauri/src/agent/event_bus.rs", import.meta.url), "utf8");
-const runner = readFileSync(new URL("../src-tauri/src/agent/runner/lifecycle.rs", import.meta.url), "utf8");
+const eventBus = readFileSync(new URL("../src-tauri/crates/zen-agent/src/event_bus.rs", import.meta.url), "utf8");
+const runner = readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/lifecycle.rs", import.meta.url), "utf8");
 const dispatch = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
-  .map((f) => readFileSync(new URL(`../src-tauri/src/agent/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
+  .map((f) => readFileSync(new URL(`../src-tauri/crates/zen-agent/src/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
 const spawn = [
   "child.rs", "completion.rs", "deps.rs", "failure.rs", "messaging.rs",
   "model_select.rs", "outcome.rs", "params.rs", "tool.rs",

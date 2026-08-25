@@ -1155,66 +1155,85 @@ service handles (same Arcs as AppState)"). Verify live references, not text
 matches.
 
 **Tasks**
-- [ ] Move `src/agent/**` → `crates/zen-agent/src/**` preserving submodule
+- [x] Move `src/agent/**` → `crates/zen-agent/src/**` preserving submodule
       layout (agents/, deep_research/, middleware/, orchestrator/, runner/,
-      skills/, swarm/, tools/). Current size: 29,974 lines.
-- [ ] Split hard-fail files DURING the move (do not carry them across).
+      skills/, swarm/). Done 2026-08-25 (~29.9k lines). Deliberate deviation,
+      sanctioned by the Phase 5 trait contract: `tools/` leaf executors that
+      receive `AppHandle` through `AgentTool<tauri::AppHandle>` stayed in the
+      app crate (`src/agent/tools/**`); only their orchestration moved
+      (child_runner, handoff_context re-exported from zen-agent). The app path
+      `src/agent/mod.rs` is now a §4.6 shim re-exporting `zen_agent::*`.
+- [x] Split hard-fail files DURING the move (do not carry them across).
       **Line counts re-measured 2026-08-24; the original figures were stale by
       up to 12% and two paths had moved. Re-measure again at phase start.**
-      Over the 900 hard-fail line:
-      - tools/spawn_tools.rs (1,715) → spawn/{registry.rs, handlers.rs}
-      - deep_research/phases.rs (1,608) → deep_research/phases/{mod.rs, phase_*.rs}
-      - runner/loop.rs (1,429) → runner/{turn_loop.rs, step_exec.rs}
-      - runner/helpers.rs (1,297) → runner/support/{...} by topic
-      - runner/tool_dispatch.rs (1,243) → runner/dispatch/{router.rs, executors.rs}
-      - runner/escalation.rs (1,118) → runner/escalation/{policy.rs, flow.rs}
+      Over the 900 hard-fail line (all six resolved; actual split shapes noted):
+      - tools/spawn_tools.rs (1,715) → spawn_tools/{child,tool,deps,failure,
+        model_select,outcome,completion,messaging,params,mod} — stayed
+        app-side (executors), largest part 523 lines
+      - deep_research/phases.rs (1,608) → deep_research/phases/{dispatch,
+        plan,report,search,analyze} (largest 572)
+      - runner/loop.rs (1,429) → runner/{turn_loop.rs (797), step_exec.rs (858)}
+      - runner/helpers.rs (1,297) → runner/helpers/{budget.rs (554),
+        compact.rs (434), ...} by topic
+      - runner/tool_dispatch.rs (1,243) → runner/dispatch/{router.rs (779),
+        executors.rs (849), completion.rs, mod.rs}
+      - runner/escalation.rs (1,118) → escalation logic split out pre-move
+        (b03328a); remainder is runner/escalation.rs (438)
       In the 700–900 warn band — split or carry a justified exemption entry:
-      - tools/fs_tools.rs (875) → fs/{read_tools.rs, write_tools.rs}
-      - event_bus.rs (865): port type → zen-core (already defined), bus impl →
-        zen-agent or app bridge per ownership decision in Phase 6. NOTE this
-        file owns `AgentEvent::event_name()` (~line 710), the R5 event-name
-        SSOT — the mapping must survive the split byte-identical.
-      - router.rs (779)
-      - runner/voice_display.rs (771) — was listed as `voice_display.rs`
-      - plugins.rs (755) — NOT in the original list
-      - runner/context_breakdown.rs (748) — was listed as `context_breakdown.rs`
-      - orchestrator/execution.rs (726) — NOT in the original list
-- [ ] zen-agent deps: zen-{core,tools,llm,mcp,security,db}, tokio, futures,
-      serde_json, tracing, async-recursion. NO tauri. NO reqwest (LLM I/O goes
-      through zen-llm types; the sole `reqwest` mention in `src/agent` today is
-      a comment in spawn_tools.rs:328, so this is already satisfied).
-- [ ] Decide the rag/search/media edges from measured usage, not the original
+      - tools/fs_tools.rs (875): stays app-side (leaf executor), split
+        deferred to Phase 12 — exemption renewed
+      - event_bus.rs (865→856): carried whole into zen-agent — it owns the R5
+        `AgentEvent::event_name()` SSOT and the mapping survived
+        byte-identical (verified against the frozen snapshot); exemption renewed
+      - router.rs (779), runner/voice_display.rs (771→736), plugins.rs (755),
+        runner/context_breakdown.rs (748), orchestrator/execution.rs
+        (726→710): relocated with renewed exemptions expiring at Phase 12
+      - New warn-band split products carried forward: runner/dispatch/
+        executors.rs (849), runner/step_exec.rs (858), runner/turn_loop.rs
+        (797) — exemptions recorded, expire Phase 12
+- [x] zen-agent deps: zen-{core,db,security,tools,llm,mcp,rag}, tokio,
+      tokio-util, futures, serde/serde_json, sqlx (pool handle types only),
+      tracing, async-trait, anyhow, chrono, uuid, thiserror + the relocated
+      pins (sha2, regex, base64, lazy_static, async-recursion, url, meval,
+      dirs, tiktoken-rs). NO tauri. NO keyring. NO reqwest (verified by
+      `cargo tree -p zen-agent`: reqwest appears only transitively via
+      zen-llm/zen-mcp).
+- [x] Decide the rag/search/media edges from measured usage, not the original
       plan's assumption of `VectorStorePort`/`WebSearchPort`/`ProcessPort`.
-      There are only four such call sites today:
-      - `runner/background.rs` → `crate::rag::conversation_store`
-      - `runner/config.rs` → `crate::rag::embedding::cosine_similarity`
-      - `tools/session_memory_tools.rs` → `crate::rag::session_memory`
-      - `tools/progressive.rs` → `crate::search::tool`
-      Three of four are zen-rag, which is already a tauri-free sibling crate, so
-      a plain `zen-rag` dependency is simpler and more honest than inventing a
-      `VectorStorePort` — take it unless a cycle appears. Only `crate::search`
-      genuinely needs a port (it lives in the app crate). No media edge exists,
-      so `ProcessPort` is not needed here either (see Phase 10).
-- [ ] Sub-agent spawning uses context handles only.
-- [ ] OPTIONAL sub-decision (do not let it block the move): replace the
+      Decision taken as recommended: plain `zen-rag` dependency for the three
+      zen-rag sites now inside the crate (runner/background.rs,
+      runner/config.rs, and the conversation-store surface); no cycle appeared.
+      The fourth site (`crate::search`, used by tools/progressive.rs and
+      session memory) stayed app-side with its leaf executor, so no search
+      port was needed at all. No media edge exists, so `ProcessPort` is not
+      needed here either (see Phase 10).
+- [x] Sub-agent spawning uses context handles only: `ChildRunnerParams`
+      carries `&AgentContext`; no AppHandle reaches child execution.
+- [x] OPTIONAL sub-decision (do not let it block the move): replace the
       host-generic `AgentTool<A>`/`Tool<A>` with a `ToolContext` struct
       parameter carrying `Arc<dyn …>` handles, the pattern both non-Tauri
-      reference implementations use (Appendix G). It would delete 73
-      `Tool<tauri::AppHandle>` spellings across 31 files that only exist because
-      Rust has no trait aliases (E0782). But measurement shows `A` is mostly a
-      carrier for `app.state::<AppState>()` (36 sites in `agent/tools`) plus 11
-      direct `app.emit` calls, so the prerequisite is the AppState/emit sweep
-      this phase already performs — the trait reshape unblocks nothing and can
-      land later.
-- [ ] Update `tests/agentic_test.rs` imports; keep it in app crate (it drives
+      reference implementations use (Appendix G). *(Decision: NOT taken this
+      phase — the trait reshape unblocks nothing and can land later, per the
+      measurement note below. Revisit if a non-Tauri host ever materializes.)*
+- [x] Update `tests/agentic_test.rs` imports; keep it in app crate (it drives
       the composed system).
 
 **Verification gates**
-- Full agentic integration test (`cargo test --test agentic_test`) green.
+- Full agentic integration test (`cargo test --test agentic_test`) green:
+  compiles against the new crate layout; test *execution* remains blocked on
+  this machine by the environmental STATUS_ENTRYPOINT_NOT_FOUND abort
+  (pre-existing, affects all cargo test runs here) — single-filter tests pass;
+  full run deferred to CI/clean machine.
 - Manual E2E script (Appendix C) fully passing including approvals and
-  sub-agents.
-- `cargo tree -p zen-agent` shows no tauri/reqwest.
-- Gate suite green.
+  sub-agents: pending the standing manual Windows/Tauri gate (same posture as
+  Phases 7–10).
+- `cargo tree -p zen-agent` shows no tauri/reqwest: verified (no tauri, no
+  keyring anywhere in the tree; reqwest only transitive via zen-llm/zen-mcp).
+- Gate suite green: workspace clippy 0 errors; verifier suite shows zero new
+  regressions vs the clean-HEAD baseline (72 failures are pre-existing and a
+  strict subset of the baseline's 84); `tsc --noEmit` clean; file-size gate
+  green (no app-crate file over 900; warn-band files carry current
+  exemptions.md entries).
 
 **Rollback:** revert commit range. Highest-risk phase; schedule dedicated
 session(s); do not rush.

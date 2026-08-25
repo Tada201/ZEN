@@ -1,4 +1,3 @@
-pub mod prompt_loader;
 
 use crate::error::{AppResult, ZenError};
 use std::path::{Component, Path};

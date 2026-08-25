@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
-use tokio::sync::{Mutex, Notify, RwLock};
+use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tauri::Emitter;
 
@@ -50,45 +50,9 @@ use crate::services::{
 };
 use crate::tools::manager::ToolManager;
 
-/// Wrapper for lazy-initialized services with validation
-pub struct InitState<T> {
-    inner: RwLock<Option<T>>,
-}
-
-impl<T> InitState<T> {
-    pub fn new() -> Self {
-        Self {
-            inner: RwLock::new(None),
-        }
-    }
-
-    pub async fn get(&self) -> ZenResult<T>
-    where
-        T: Clone,
-    {
-        let guard = self.inner.read().await;
-        guard.as_ref().cloned().ok_or_else(|| {
-            ZenError::Internal(
-                "Service not initialized. Ensure initialization completed before use.".into(),
-            )
-        })
-    }
-
-    pub async fn set(&self, value: T) {
-        let mut guard = self.inner.write().await;
-        *guard = Some(value);
-    }
-
-    pub async fn is_initialized(&self) -> bool {
-        self.inner.read().await.is_some()
-    }
-}
-
-impl<T> Default for InitState<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Moved to zen-agent in BIG_MIGRATION.md Phase 11; re-export keeps app call
+// sites compiling (relocation doctrine §4.6).
+pub use zen_agent::init_state::InitState;
 
 pub struct AgentState {
     pub event_bus: Arc<EventBus>,
@@ -272,64 +236,9 @@ impl Default for SetupFlags {
         Self::new()
     }
 }
-
-/// Cooperative pause gate for one active chat execution.
-///
-/// Pausing never cancels the request or discards approvals/checkpoints. Runners
-/// observe this gate at safe iteration/tool boundaries and wait until the
-/// matching continue command releases them.
-pub struct ChatPauseControl {
-    paused: std::sync::atomic::AtomicBool,
-    notify: Notify,
-}
-
-impl ChatPauseControl {
-    pub fn new() -> Self {
-        Self {
-            paused: std::sync::atomic::AtomicBool::new(false),
-            notify: Notify::new(),
-        }
-    }
-
-    pub fn pause(&self) {
-        self.paused.store(true, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    pub fn resume(&self) {
-        self.paused.store(false, std::sync::atomic::Ordering::SeqCst);
-        self.notify.notify_waiters();
-    }
-
-    pub fn is_paused(&self) -> bool {
-        self.paused.load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    /// Phase 6: shared pause-wait core, extracted verbatim from the
-    /// historical `wait_for_chat_resume` loop so both the legacy AppHandle
-    /// wrapper and `AgentContext::wait_for_chat_resume` share one body.
-    /// Returns false only when cancellation wins while paused.
-    pub async fn wait_while_paused(&self, token: &CancellationToken) -> bool {
-        while self.is_paused() && !token.is_cancelled() {
-            let notified = self.notify.notified();
-            if !self.is_paused() {
-                break;
-            }
-            tokio::select! {
-                _ = notified => {}
-                _ = token.cancelled() => return false,
-            }
-        }
-
-        !token.is_cancelled()
-    }
-
-}
-
-impl Default for ChatPauseControl {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Moved to zen-agent in BIG_MIGRATION.md Phase 11; re-export keeps app call
+// sites compiling (relocation doctrine §4.6).
+pub use zen_agent::context::ChatPauseControl;
 
 // Phase 6: the former `wait_for_chat_resume` AppHandle wrapper was deleted —
 // its logic core lives on `ChatPauseControl::wait_while_paused` and every
@@ -491,10 +400,8 @@ impl AppState {
             prog.setup_tools_search(progressive.clone());
             prog.setup_list_tools(progressive.clone());
             prog.setup_agent_tools(
-                tool_registry_v1.clone(),
                 agent_registry.clone(),
                 hook_registry.clone(),
-                tool_registry_v2.clone(),
                 skills_manager.clone(),
             );
         }

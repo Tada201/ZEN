@@ -1,0 +1,47 @@
+[package]
+name = "zen-agent"
+version = "0.1.0"
+edition = "2021"
+description = "Agent runtime: runner loop, orchestrator, deep research, middleware, skills, swarm (BIG_MIGRATION.md Phase 11)"
+
+[features]
+# Diagnostic-only event-contract snapshot tap (risk R5). The app crate
+# forwards its `event-snapshot` feature here; never enabled in CI/release.
+event-snapshot = []
+
+[dependencies]
+zen-core = { workspace = true }
+zen-db = { workspace = true }
+zen-security = { workspace = true }
+zen-tools = { workspace = true }
+zen-llm = { workspace = true }
+zen-mcp = { workspace = true }
+# Plan Phase 11 decision: zen-rag as a plain dependency (3 call sites:
+# runner/background.rs, runner/config.rs, tools/session_memory_tools.rs
+# app-side); a VectorStorePort abstraction would be less honest than the
+# direct sibling-crate edge.
+zen-rag = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs", "sync", "time"] }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+thiserror = { workspace = true }
+
+# ── Relocated pins (same versions as the app crate; usage moved, not new
+# dependencies — Security.md provenance unchanged) ───────────────────────────
+sha2 = "0.10"
+regex = "1"
+base64 = "0.22"
+url = "2"
+meval = "0.2"
+dirs = "6.0"
+tiktoken-rs = "0.6"
+lazy_static = "1.5"
+async-recursion = "1.1"

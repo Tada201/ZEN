@@ -10,7 +10,7 @@ const check = (label, ok, detail = "") => {
 };
 
 const runnerLifecycle = readFileSync(
-  "src-tauri/src/agent/runner/lifecycle.rs",
+  "src-tauri/crates/zen-agent/src/runner/lifecycle.rs",
   "utf8",
 );
 check(
@@ -20,7 +20,7 @@ check(
 );
 
 const escalation = readFileSync(
-  "src-tauri/src/agent/runner/streaming.rs",
+  "src-tauri/crates/zen-agent/src/runner/streaming.rs",
   "utf8",
 );
 check(
@@ -32,15 +32,15 @@ check(
   /pub\(super\) fn should_run_partial_saver\([\s\S]*?depth == 0/.test(escalation),
 );
 
-const loop = readFileSync("src-tauri/src/agent/runner/turn_loop.rs", "utf8") +
-  readFileSync("src-tauri/src/agent/runner/step_exec.rs", "utf8");
+const loop = readFileSync("src-tauri/crates/zen-agent/src/runner/turn_loop.rs", "utf8") +
+  readFileSync("src-tauri/crates/zen-agent/src/runner/step_exec.rs", "utf8");
 check(
   "loop gates per-iteration persist on depth",
   /pub\(super\) fn should_persist_iteration_state/.test(loop),
 );
 
 const eventBus = readFileSync(
-  "src-tauri/src/agent/event_bus.rs",
+  "src-tauri/crates/zen-agent/src/event_bus.rs",
   "utf8",
 );
 check(

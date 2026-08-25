@@ -3,7 +3,7 @@
  * Verifier for the Codex-style context viewer feature.
  *
  * Pins the contract end-to-end:
- *   - Backend Rust types live in `src-tauri/src/agent/runner/context_breakdown.rs`
+ *   - Backend Rust types live in `src-tauri/crates/zen-agent/src/runner/context_breakdown.rs`
  *     and `src-tauri/src/commands/context_viewer.rs`.
  *   - Frontend TS types mirror them in `src/lib/types/contextBreakdown.ts`.
  *   - The runner emits `context:breakdown` from `event_bus.rs`.
@@ -41,7 +41,7 @@ const fail = (name, detail) => {
 // ─── Files exist ─────────────────────────────────────────────────────
 
 const required = [
-  "src-tauri/src/agent/runner/context_breakdown.rs",
+  "src-tauri/crates/zen-agent/src/runner/context_breakdown.rs",
   "src-tauri/src/commands/context_viewer.rs",
   "src/lib/types/contextBreakdown.ts",
   "src/api/contextApi.ts",
@@ -59,7 +59,7 @@ for (const rel of required) {
 
 // ─── Backend: context_breakdown.rs ───────────────────────────────────
 
-const breakdownSrc = read("src-tauri/src/agent/runner/context_breakdown.rs");
+const breakdownSrc = read("src-tauri/crates/zen-agent/src/runner/context_breakdown.rs");
 
 const backendEnumMatches = [
   ["ContextBreakdownPayload", {
@@ -144,7 +144,7 @@ if (/pub fn layer_totals\([\s\S]*?&EnrichmentContext[\s\S]*?\) -> LayerTotals/.t
 
 // ─── Backend: event_bus.rs ──────────────────────────────────────────
 
-const eventBusSrc = read("src-tauri/src/agent/event_bus.rs");
+const eventBusSrc = read("src-tauri/crates/zen-agent/src/event_bus.rs");
 
 if (/ContextBreakdown\([^)]*ContextBreakdownPayload[^)]*\)/.test(eventBusSrc)) {
   pass("event_bus has ContextBreakdown variant");
@@ -171,9 +171,9 @@ if (/AgentEvent::ContextBreakdown\(p\)[\s\S]+serde_json::to_value\(p\)/.test(eve
 // contract checks below see the whole surface.
 
 const middlewareSrc =
-  read("src-tauri/src/agent/middleware/core.rs") +
+  read("src-tauri/crates/zen-agent/src/middleware/core.rs") +
   "\n" +
-  read("src-tauri/src/agent/middleware/system_prompt.rs");
+  read("src-tauri/crates/zen-agent/src/middleware/system_prompt.rs");
 
 const instrumentationChecks = [
   ["section_log: Vec<ContextSectionEntry>", "section_log field on EnrichmentContext"],

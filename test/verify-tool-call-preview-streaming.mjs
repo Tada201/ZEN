@@ -18,7 +18,7 @@ for (const path of [
   assert.match(source, /arguments_snapshot/);
 }
 
-const runner = readFileSync(new URL("../src-tauri/src/agent/runner/escalation.rs", import.meta.url), "utf8");
+const runner = readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/escalation.rs", import.meta.url), "utf8");
 // The runner emits phases via the ChatStatusPhase named constants (not inline
 // string literals), so we match the constant form and separately pin the
 // constant→value mapping in chat_status.rs below.
@@ -29,7 +29,7 @@ assert.match(runner, /"toolCallPreview"/);
 // Pin the string→constant mapping so a backend rename of the phase value can't
 // silently desync what the frontend expects (CHAT_STATUS_PHASES.ToolCallStreaming
 // === "tool_call_streaming").
-const chatStatus = readFileSync(new URL("../src-tauri/src/agent/chat_status.rs", import.meta.url), "utf8");
+const chatStatus = readFileSync(new URL("../src-tauri/crates/zen-agent/src/chat_status.rs", import.meta.url), "utf8");
 assert.match(chatStatus, /TOOL_CALL_STREAMING:\s*&?'static str\s*=\s*"tool_call_streaming"/);
 assert.match(chatStatus, /TOOL_CALL_READY:\s*&?'static str\s*=\s*"tool_call_ready"/);
 

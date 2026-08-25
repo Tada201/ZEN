@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const loader = readFileSync(
-  new URL("../src-tauri/src/utils/prompt_loader/mod.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/utils/prompt_loader/mod.rs", import.meta.url),
   "utf8",
 );
 const plan = readFileSync(
-  new URL("../src-tauri/src/agent/orchestrator/plan.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/orchestrator/plan.rs", import.meta.url),
   "utf8",
 );
 const prompt = readFileSync(

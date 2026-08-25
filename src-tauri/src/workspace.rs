@@ -86,17 +86,8 @@ pub fn validate_workspace_path(workspace_root: &Path, requested_path: &Path) -> 
     Ok(clean_path)
 }
 
-pub fn canonicalize_workspace_root(path: &Path) -> Result<PathBuf> {
-    if !path.exists() || !path.is_dir() {
-        return Err(anyhow::anyhow!(
-            "Workspace root does not exist or is not a directory: {}",
-            path.display()
-        ));
-    }
-
-    path.canonicalize()
-        .with_context(|| format!("Failed to resolve workspace root: {}", path.display()))
-}
+// Moved to zen-agent in BIG_MIGRATION.md Phase 11; re-export keeps app call sites compiling (§4.6).
+pub use zen_agent::utils::canonicalize_workspace_root;
 
 /// Resolves a path string (absolute or relative) to an absolute path within workspace
 pub fn resolve_workspace_path(workspace_root: &Path, path_str: &str) -> Result<PathBuf> {

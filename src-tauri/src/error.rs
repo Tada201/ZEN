@@ -31,8 +31,4 @@ pub fn other_err(e: anyhow::Error) -> ZenError {
     ZenError::Other(e.to_string())
 }
 
-impl From<crate::agent::swarm::SwarmError> for ZenError {
-    fn from(e: crate::agent::swarm::SwarmError) -> Self {
-        ZenError::Swarm(e.to_string())
-    }
-}
+

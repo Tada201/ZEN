@@ -18,7 +18,7 @@ const toolEventsSource = readFileSync(
   "utf8",
 );
 const dispatchSource = ["mod.rs", "router.rs", "executors.rs", "completion.rs"]
-  .map((f) => readFileSync(new URL(`../src-tauri/src/agent/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
+  .map((f) => readFileSync(new URL(`../src-tauri/crates/zen-agent/src/runner/dispatch/${f}`, import.meta.url), "utf8")).join("");
 
 assert(serviceSource.includes("pub struct PendingToolApproval"), "pending approvals should store more than a bare boolean");
 assert(serviceSource.includes("chat_id: String") && serviceSource.includes("tool_name: String"), "pending approvals should retain chat and tool identity");

@@ -453,10 +453,8 @@ impl ProgressiveToolRegistry {
 
     pub fn setup_agent_tools(
         &mut self,
-        tool_registry: Arc<tokio::sync::RwLock<crate::agent::tools::ToolRegistry>>,
         agent_registry: Arc<crate::agent::types::AgentRegistry>,
         hook_registry: Arc<crate::agent::hooks::HookRegistry>,
-        permissions: crate::tools::GlobalToolRegistry,
         skills_manager: Arc<crate::agent::skills::SkillsManager>,
     ) {
         // Board management — lightweight UI scratch pad
@@ -468,18 +466,14 @@ impl ProgressiveToolRegistry {
             }),
         );
 
-        let tr = tool_registry.clone();
         let ar = agent_registry.clone();
         let hr = hook_registry.clone();
-        let p = permissions.clone();
         self.tool_factory.insert(
             "spawn_agent".to_string(),
             Box::new(move || {
                 Arc::new(crate::agent::tools::spawn_tools::SpawnAgentTool::new(
-                    tr.clone(),
                     ar.clone(),
                     hr.clone(),
-                    p.clone(),
                 )) as Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>
             }),
         );

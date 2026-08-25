@@ -55,19 +55,15 @@ async fn test_agentic_loop_execution() {
 
     let app_handle = app.handle().clone();
     let state = app_handle.state::<AppState>();
-    app_handle.manage(tauri_app_lib::services::agent_context::AgentContext::new(&app_handle));
+    app_handle.manage(tauri_app_lib::services::agent_context::build(&app_handle));
 
     let runner = Runner::new(
-        app_handle.clone(),
         app_handle
             .state::<tauri_app_lib::services::agent_context::AgentContext>()
             .inner()
             .clone(),
-        state.tool_registry_v1.clone(),
         state.agent_registry.clone(),
         state.hook_registry.clone(),
-        state.tools.clone(),
-        state.tool_manager.clone(),
     );
 
     let provider = MockProvider;

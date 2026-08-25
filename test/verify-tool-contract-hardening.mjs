@@ -6,7 +6,7 @@ const managerSource = readFileSync(
   "utf8",
 );
 const pipelineSource = readFileSync(
-  new URL("../src-tauri/src/agent/runner/tool_pipeline.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/runner/tool_pipeline.rs", import.meta.url),
   "utf8",
 );
 const serviceSource = readFileSync(

@@ -1,9 +1,9 @@
 // Per-layer middleware budget verifier.
 //
 // Static-source verifier for the budget enforcement contract. The
-// `MiddlewareBudgets` struct in `src-tauri/src/agent/runner/helpers.rs`
+// `MiddlewareBudgets` struct in `src-tauri/crates/zen-agent/src/runner/helpers.rs`
 // is the single owner of the budget-split math. Each built-in
-// middleware in `src-tauri/src/agent/middleware.rs` owns one layer and
+// middleware in `src-tauri/crates/zen-agent/src/middleware.rs` owns one layer and
 // must wire its `*_budget` field. The migration moved the inline
 // summary + compaction logic from `loop.rs` into the middleware
 // placeholders so the budgets actually take effect.
@@ -48,13 +48,13 @@ const read = (rel) =>
 
 const middleware = [
   "mod.rs", "core.rs", "system_prompt.rs", "compaction.rs", "summary.rs", "recall.rs", "skills.rs",
-].map((f) => read(`src-tauri/src/agent/middleware/${f}`)).join("");
+].map((f) => read(`src-tauri/crates/zen-agent/src/middleware/${f}`)).join("");
 const helpers = ["mod.rs", "budget.rs", "compact.rs", "parse.rs"]
-  .map((f) => read(`src-tauri/src/agent/runner/helpers/${f}`))
+  .map((f) => read(`src-tauri/crates/zen-agent/src/runner/helpers/${f}`))
   .join("");
-const loop = read("src-tauri/src/agent/runner/turn_loop.rs") +
-  read("src-tauri/src/agent/runner/step_exec.rs");
-const memoryBootstrap = read("src-tauri/src/agent/runner/memory_bootstrap.rs");
+const loop = read("src-tauri/crates/zen-agent/src/runner/turn_loop.rs") +
+  read("src-tauri/crates/zen-agent/src/runner/step_exec.rs");
+const memoryBootstrap = read("src-tauri/crates/zen-agent/src/runner/memory_bootstrap.rs");
 
 let failed = 0;
 const pass = (name) => console.log(`PASS ${name}`);

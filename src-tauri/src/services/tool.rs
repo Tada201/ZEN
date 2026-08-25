@@ -56,48 +56,15 @@ pub struct ToolApprovalDecision {
     pub args_hash: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ToolApprovalOutcome {
-    Approved,
-    Denied,
-    TimedOut,
-    Cancelled,
-    ArgumentMismatch,
-}
-
-impl ToolApprovalOutcome {
-    pub fn approved(&self) -> bool {
-        matches!(self, Self::Approved)
-    }
-
-    pub fn error_message(&self) -> &'static str {
-        match self {
-            Self::Approved => "",
-            Self::Denied => "Tool execution denied by user.",
-            Self::TimedOut => "Tool approval timed out.",
-            Self::Cancelled => "Tool approval was cancelled before the user responded.",
-            Self::ArgumentMismatch => {
-                "Tool approval rejected because arguments changed after approval was requested."
-            }
-        }
-    }
-}
+// Moved to zen-agent in BIG_MIGRATION.md Phase 11; re-exports keep app
+// call sites compiling (relocation doctrine §4.6).
+pub use zen_agent::ports::{ToolApprovalExecutionContext, ToolApprovalOutcome};
 
 struct MutationCapture {
     path: PathBuf,
     token: crate::services::checkpoint::MutationToken,
 }
 
-pub struct ToolApprovalExecutionContext {
-    pub run_id: Option<String>,
-    pub parent_agent_id: Option<String>,
-    pub execution_id: Option<String>,
-    pub batch_id: Option<String>,
-    pub tool_batch_id: Option<String>,
-    pub agent_id: Option<String>,
-    pub agent_name: Option<String>,
-    pub iteration: Option<usize>,
-}
 
 impl ToolService {
     pub fn new(

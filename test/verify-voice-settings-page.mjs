@@ -24,7 +24,7 @@ const voiceSettings = read("src/components/settings/Tabs/VoiceSettings.tsx");
 const agentsSettings = read("src/components/settings/Tabs/AgentsSettings.tsx");
 const agentEditor = read("src/components/settings/Tabs/AgentEditor.tsx");
 const agentsApi = read("src/api/agentsApi.ts");
-const childRunner = read("src-tauri/src/agent/tools/child_runner.rs");
+const childRunner = read("src-tauri/crates/zen-agent/src/child_runner.rs");
 const spawnTools = [
   "child.rs", "completion.rs", "deps.rs", "failure.rs", "messaging.rs",
   "model_select.rs", "outcome.rs", "params.rs", "tool.rs",

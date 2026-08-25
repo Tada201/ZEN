@@ -8,9 +8,9 @@ const expect = (condition, message) => {
   if (!condition) failures.push(message);
 };
 
-const engine = await read("src-tauri/src/agent/deep_research/engine.rs");
-const llm = await read("src-tauri/src/agent/deep_research/llm.rs");
-const moduleSource = await read("src-tauri/src/agent/deep_research/mod.rs");
+const engine = await read("src-tauri/crates/zen-agent/src/deep_research/engine.rs");
+const llm = await read("src-tauri/crates/zen-agent/src/deep_research/llm.rs");
+const moduleSource = await read("src-tauri/crates/zen-agent/src/deep_research/mod.rs");
 const events = await read("src/api/events.ts");
 const reducer = await read("src/atlas/hooks/stream/useAgentEvents.ts");
 const card = [
@@ -29,7 +29,7 @@ const chatCommand = [
 ].join("\n");
 const phases = (await Promise.all([
   "analyze.rs", "dispatch.rs", "plan.rs", "report.rs", "search.rs",
-].map((f) => read(`src-tauri/src/agent/deep_research/phases/${f}`)))).join("");
+].map((f) => read(`src-tauri/crates/zen-agent/src/deep_research/phases/${f}`)))).join("");
 
 expect(engine.includes("fn milestone_progress") && engine.includes("AtomicU8"),
   "Deep research must maintain monotonic backend milestone progress.");

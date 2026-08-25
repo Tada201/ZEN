@@ -11,7 +11,7 @@ pub mod fs_tools;
 pub mod image_tool;
 pub mod manager;
 pub mod operational_map;
-pub mod patch_parser;
+// patch_parser moved to zen-agent (Phase 11); re-exported below.
 pub mod permission;
 pub mod sys_metrics;
 pub mod terminal_tools;
@@ -21,6 +21,7 @@ pub mod web_fetch;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+pub use zen_agent::patch_parser;
 pub use zen_tools::registry::{
     ToolAnnotations, ToolCall, ToolDefinition, ToolError, ToolExecutionRecord, ToolOutput,
 };

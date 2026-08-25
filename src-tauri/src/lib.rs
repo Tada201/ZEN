@@ -33,7 +33,7 @@ pub fn run() {
             // Phase 6 seam: manage the AgentContext once, after AppState.
             // Shares every Arc instance with AppState; domain code receives
             // this instead of reaching up through `state::<AppState>()`.
-            app_handle.manage(crate::services::agent_context::AgentContext::new(&app_handle));
+            app_handle.manage(crate::services::agent_context::build(&app_handle));
 
             // Initialize MediaService with the resolved app data dir before any command runs.
             if let Err(e) = app.state::<AppState>().media.setup(&app_handle) {
@@ -398,12 +398,9 @@ pub fn run() {
                     }
                 };
                 let orchestrator = crate::agent::orchestrator::Orchestrator::new(
-                    bg_app_handle.clone(),
                     bg_app_handle.state::<crate::services::agent_context::AgentContext>().inner().clone(),
                     state.agent_registry.clone(),
-                    state.tool_registry_v1.clone(),
                     state.hook_registry.clone(),
-                    state.tools.clone(),
                 ).with_db_pool(pool);
                 state.orchestrator.set(Arc::new(orchestrator)).await;
                 state.init_progress.set_status(&bg_app_handle, "bg.orchestrator", "done", Some(_p.elapsed().as_millis() as u64)).await;

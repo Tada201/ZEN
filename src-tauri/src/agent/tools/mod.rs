@@ -5,8 +5,6 @@
 // `zen_tools::AgentTool<tauri::AppHandle>` directly. The old local
 // `ToolRegistry` is re-pointed at zen-tools' `AgentToolRegistry` — the
 // in-tree duplicate registry is gone. Delete this alias in Phase 14.
-pub mod child_runner;
-pub mod handoff_context;
 pub mod browser_tools;
 pub mod drawing_tools;
 pub mod fs_tools;
@@ -22,6 +20,11 @@ pub mod skill_tool;
 pub mod spawn_tools;
 pub mod task_tools;
 pub mod terminal_tools;
+
+// Moved to zen-agent (BIG_MIGRATION.md Phase 11); re-exports keep
+// `crate::agent::tools::{child_runner, handoff_context}` compiling.
+pub use zen_agent::child_runner;
+pub use zen_agent::handoff_context;
 
 use std::sync::Arc;
 

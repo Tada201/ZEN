@@ -7,14 +7,14 @@ const chunkBufferPath = new URL("../src/atlas/hooks/stream/chatChunkBuffer.ts", 
 const voiceEventsPath = new URL("../src/atlas/components/voice/useVoiceChatEvents.ts", import.meta.url);
 const voiceTextPath = new URL("../src/atlas/components/voice/voiceTextUtils.ts", import.meta.url);
 const runnerPath = [
-  new URL("../src-tauri/src/agent/runner/turn_loop.rs", import.meta.url),
-  new URL("../src-tauri/src/agent/runner/step_exec.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/runner/turn_loop.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/runner/step_exec.rs", import.meta.url),
 ];
 const helpersPath = [
-  new URL("../src-tauri/src/agent/runner/helpers/mod.rs", import.meta.url),
-  new URL("../src-tauri/src/agent/runner/helpers/budget.rs", import.meta.url),
-  new URL("../src-tauri/src/agent/runner/helpers/compact.rs", import.meta.url),
-  new URL("../src-tauri/src/agent/runner/helpers/parse.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/runner/helpers/mod.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/runner/helpers/budget.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/runner/helpers/compact.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/runner/helpers/parse.rs", import.meta.url),
 ];
 const chatTypesPath = new URL("../src/atlas/components/chat/types.ts", import.meta.url);
 

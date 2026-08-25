@@ -14,14 +14,14 @@ const chatCommandSource = readFileSync(
   "utf8",
 );
 const runnerSource =
-  readFileSync(new URL("../src-tauri/src/agent/runner/turn_loop.rs", import.meta.url), "utf8") +
-  readFileSync(new URL("../src-tauri/src/agent/runner/step_exec.rs", import.meta.url), "utf8");
+  readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/turn_loop.rs", import.meta.url), "utf8") +
+  readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/step_exec.rs", import.meta.url), "utf8");
 const orchestratorSource = readFileSync(
-  new URL("../src-tauri/src/agent/orchestrator/loop.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/orchestrator/loop.rs", import.meta.url),
   "utf8",
 );
 const runnerLifecycleSource = readFileSync(
-  new URL("../src-tauri/src/agent/runner/lifecycle.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-agent/src/runner/lifecycle.rs", import.meta.url),
   "utf8",
 );
 const messageTargetSource = readFileSync(
