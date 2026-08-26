@@ -259,9 +259,9 @@ Reason: Speech service owns capture, VAD pipeline wiring, and transcription orch
 Split or Fix Plan: Done — moved to zen-media and split during the move.
 Expires: resolved migration/phase-10-done (moved to crates/zen-media/src/speech_service/; split into mod.rs 565 + server.rs 230, both under the 700 warn band; the app-side re-export shim was deleted at the end of the migration).
 
-File: src-tauri/crates/zen-agent/src/router.rs (779) — successor of the Phase 11
+File: src-tauri/crates/zen-agent/src/router.rs (796) — successor of the Phase 11
 relocation from src-tauri/src/agent/router.rs. Note: the Phase 11 ledger listed
-this entry under the `runner/dispatch/` path; the 779-line file is the crate-root
+this entry under the `runner/dispatch/` path; the current file is the crate-root
 router.rs, while runner/dispatch/router.rs measures 266 and needs no exemption.
 Owner: backend/agent
 Rule Exempted: Rust warning file-size limit

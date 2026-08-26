@@ -249,10 +249,13 @@ split plans.
 - `src-tauri/crates/zen-llm/src/ollama/mod.rs`,
   `src-tauri/crates/zen-llm/src/openai_compat/stream_tests.rs`
 
-The former `src-tauri/src/db/mod.rs`, `llm/anthropic.rs`,
-`agent/tools/progressive.rs`, `tools/permission.rs` and `agent/memory.rs`
-entries were resolved by the workspace migration — each was split during its
-move into zen-db, zen-llm, zen-agent or zen-security.
+The former `src-tauri/src/db/mod.rs`, `llm/anthropic.rs`, `tools/permission.rs`
+and `agent/memory.rs` entries were resolved by the workspace migration — each
+was split during its move into zen-db, zen-llm, zen-agent or zen-security. The
+former `agent/tools/progressive.rs` entry was resolved in place instead: it was
+split into `progressive.rs` (608) + `progressive/discovery.rs` (179) but stayed
+in the app crate, since it is an `AppHandle`-bound executor list rather than a
+portable module.
 
 Remaining frontend hard-limit targets:
 

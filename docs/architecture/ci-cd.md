@@ -47,19 +47,15 @@ Tauri bundle artifacts.
 The workflow does not upload local databases, `.env` files, or secret-looking
 runtime artifacts. `npm run secret:artifacts` runs before and after packaging.
 
-Runtime binaries are not committed to Git. The release workflow downloads pinned
-archives from `scripts/runtime-binaries.json`, verifies SHA256 checksums, copies
-only the required files into `src-tauri/resources/binaries`, and then packages
-the app.
-
-Runtime voice models are handled by the same manifest. Installed builds should
-contain:
-
-- `resources/models/ggml-base.en.bin`
-- `resources/models/glados_piper_medium.onnx`
-- `resources/models/glados_piper_medium.onnx.json`
-- `resources/binaries/whisper/whisper-server.exe`
-- `resources/binaries/piper/piper.exe`
+Runtime binaries are not committed to Git and **are deliberately not part of
+the release bundle**. The release workflow performs no runtime fetch: the
+Tauri resource list in `src-tauri/tauri.conf.json` bundles only
+`resources/VISUALIZATION_GUIDE.md` and `resources/agents/*.json`. Managed
+runtimes (whisper/piper) are installed onto the machine separately via
+`npm run runtime:fetch`, which downloads the pinned archives from
+`scripts/runtime-binaries.json` and verifies SHA256 checksums. The CI
+`runtime-binaries` job validates that manifest; `.github/workflows/remote-build.yml`
+(a manual unsigned-build workflow) also fetches them.
 
 ## Secret Artifact Policy
 

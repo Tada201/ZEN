@@ -67,9 +67,11 @@ under `src-tauri/crates/`.
 Two rules keep this map honest:
 
 1. **No crate under `crates/` may depend on `tauri` or `keyring`.** Host coupling
-   and OS-keyring access stay in the app crate. This is CI-enforced (per-crate
-   manifest deny set plus a boundary grep). Crates that need a host reach it
-   through a generic parameter (`zen_tools::Tool<A>`) or a `zen-core` port.
+   and OS-keyring access stay in the app crate. This is enforced by a boundary
+   grep in two places (the CI `boundaries` job and `quality-check.ps1`) plus
+   `cargo deny check` for license/advisory policy. Crates that need a host
+   reach it through a generic parameter (`zen_tools::Tool<A>`) or a `zen-core`
+   port.
 2. **Resist adding code to the app crate.** New backend behavior defaults to an
    existing domain crate, or a new one. The app crate should only grow adapters:
    a command that deserialises and calls one service method, a service that
