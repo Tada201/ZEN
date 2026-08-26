@@ -1,5 +1,5 @@
 //! `apply_patch` tool — applies a structured multi-file patch to the
-//! workspace. Patches are parsed by `super::patch_parser` into a sequence of
+//! workspace. Patches are parsed by `zen_agent::patch_parser` into a sequence of
 //! `AddFile` / `DeleteFile` / `UpdateFile` hunks; each hunk is run through the
 //! same workspace guards the other write tools use.
 
@@ -9,8 +9,8 @@ use serde_json::json;
 use tauri::{AppHandle, Manager};
 
 use crate::commands::AppState;
-use crate::tools::permission::RiskLevel;
-use crate::tools::{ToolError, ToolOutput};
+use zen_security::RiskLevel;
+use zen_tools::registry::{ToolError, ToolOutput};
 
 use super::{
     enforce_content_size, enforce_existing_file_size, read_text_file, unified_diff,
@@ -74,7 +74,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
                 details: format!("Invalid apply_patch arguments: {e}"),
             })?;
 
-        let hunks = super::super::patch_parser::parse_patches(&args.patch).map_err(|e| {
+        let hunks = zen_agent::patch_parser::parse_patches(&args.patch).map_err(|e| {
             ToolError::InvalidArguments {
                 details: format!("Failed to parse patch: {e}"),
             }
@@ -103,7 +103,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
 
         for hunk in hunks {
             match hunk {
-                super::super::patch_parser::PatchHunk::AddFile { path, content } => {
+                zen_agent::patch_parser::PatchHunk::AddFile { path, content } => {
                     let target_path = crate::workspace::resolve_workspace_path(
                         &workspace,
                         path.to_str().unwrap_or(""),
@@ -138,7 +138,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
                         "success": true,
                     }));
                 }
-                super::super::patch_parser::PatchHunk::DeleteFile { path } => {
+                zen_agent::patch_parser::PatchHunk::DeleteFile { path } => {
                     let target_path = crate::workspace::resolve_workspace_path(
                         &workspace,
                         path.to_str().unwrap_or(""),
@@ -174,7 +174,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
                         "success": true,
                     }));
                 }
-                super::super::patch_parser::PatchHunk::UpdateFile {
+                zen_agent::patch_parser::PatchHunk::UpdateFile {
                     path,
                     search,
                     replace,
@@ -258,10 +258,10 @@ impl zen_tools::Tool<tauri::AppHandle> for ApplyPatchTool {
 /// no-op — regular ToolPermissions still apply via the runner-level check.
 async fn enforce_plan_mode_for_hunks(
     state: &AppState,
-    hunks: &[super::super::patch_parser::PatchHunk],
+    hunks: &[zen_agent::patch_parser::PatchHunk],
     workspace: &std::path::Path,
 ) -> Result<(), ToolError> {
-    use crate::tools::permission::is_within_plans_root;
+    use zen_security::is_within_plans_root;
 
     let mode = state
         .settings_manager
@@ -290,9 +290,9 @@ async fn enforce_plan_mode_for_hunks(
 
     for hunk in hunks {
         let decl = match hunk {
-            super::super::patch_parser::PatchHunk::AddFile { path, .. }
-            | super::super::patch_parser::PatchHunk::DeleteFile { path }
-            | super::super::patch_parser::PatchHunk::UpdateFile { path, .. } => path,
+            zen_agent::patch_parser::PatchHunk::AddFile { path, .. }
+            | zen_agent::patch_parser::PatchHunk::DeleteFile { path }
+            | zen_agent::patch_parser::PatchHunk::UpdateFile { path, .. } => path,
         };
         let resolved = crate::workspace::resolve_workspace_path(
             workspace,

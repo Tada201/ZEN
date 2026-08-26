@@ -11,7 +11,8 @@ use crate::services::{
     AuditEvent, PermissionDecision as SecurityDecision, PermissionRequest,
     PrivilegedOperation, RiskLevel as SecurityRiskLevel, SecurityService,
 };
-use crate::tools::{GlobalToolRegistry, ToolCall, ToolError};
+use crate::tools::GlobalToolRegistry;
+use zen_tools::registry::{ToolCall, ToolError};
 
 mod agent_exec;
 mod approval;
@@ -134,11 +135,11 @@ fn map_tool_operation(name: &str) -> PrivilegedOperation {
     PrivilegedOperation::McpToolCall
 }
 
-fn map_tool_risk(risk: crate::tools::permission::RiskLevel) -> SecurityRiskLevel {
+fn map_tool_risk(risk: zen_security::RiskLevel) -> SecurityRiskLevel {
     match risk {
-        crate::tools::permission::RiskLevel::Low => SecurityRiskLevel::Low,
-        crate::tools::permission::RiskLevel::Medium => SecurityRiskLevel::Medium,
-        crate::tools::permission::RiskLevel::High => SecurityRiskLevel::High,
-        crate::tools::permission::RiskLevel::Critical => SecurityRiskLevel::Critical,
+        zen_security::RiskLevel::Low => SecurityRiskLevel::Low,
+        zen_security::RiskLevel::Medium => SecurityRiskLevel::Medium,
+        zen_security::RiskLevel::High => SecurityRiskLevel::High,
+        zen_security::RiskLevel::Critical => SecurityRiskLevel::Critical,
     }
 }

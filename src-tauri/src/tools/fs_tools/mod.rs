@@ -12,7 +12,7 @@ use std::path::Path;
 
 use similar::{ChangeTag, TextDiff};
 
-use crate::tools::ToolError;
+use zen_tools::registry::ToolError;
 use crate::commands::AppState;
 
 mod documents;

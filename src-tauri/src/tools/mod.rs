@@ -1,41 +1,27 @@
-// Phase 5 shim (BIG_MIGRATION.md §4.6): the tool contracts, catalog
-// registry, and definitions moved to the zen-tools crate. The aliases below
-// bind the host-generic types to tauri's AppHandle so every existing type
-// position (`Arc<dyn ...>`, registry fields, call signatures) compiles
-// unchanged. `impl Tool for` / `impl AgentTool for` headers (and `dyn`
-// positions) are rewritten to the underlying generic paths — type aliases
-// can't appear in impl or dyn position. Delete this shim in Phase 14.
-pub mod calculator;
-pub mod capability;
+//! App-side tool wiring.
+//!
+//! Tool contracts, the catalog registry, and the discovery manager live in the
+//! `zen-tools` crate; consumers import them from `zen_tools::` directly. What
+//! stays here is what cannot live in a crate: leaf executors that reach
+//! `AppState` through Tauri's `AppHandle`, plus the host-binding aliases below.
+//! zen-tools is generic over the host `A` because RULES.md §3.1 forbids
+//! `tauri` in crates, and Rust has no trait aliases — so `impl`/`dyn`
+//! positions spell `zen_tools::Tool<tauri::AppHandle>` while struct and type
+//! positions use these aliases.
 pub mod fs_tools;
 pub mod image_tool;
 pub mod manager;
 pub mod operational_map;
-// patch_parser moved to zen-agent (Phase 11); re-exported below.
-pub mod permission;
 pub mod sys_metrics;
 pub mod terminal_tools;
-pub mod url_safety;
 pub mod web_fetch;
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub use zen_agent::patch_parser;
-pub use zen_tools::registry::{
-    ToolAnnotations, ToolCall, ToolDefinition, ToolError, ToolExecutionRecord, ToolOutput,
-};
-pub use zen_tools::{default_tool_risk, ToolInfo};
-pub use zen_security::approval::PermissionDecision;
-pub use zen_security::policy::ToolPermissions;
-pub use zen_security::risk::RiskLevel;
-
-/// Host bindings: every catalog tool in the app executes against Tauri's
-/// AppHandle. The `Tool` trait itself has no alias (trait aliases are not
-/// stable) — impl headers and `dyn` positions use
-/// `zen_tools::Tool<tauri::AppHandle>` directly.
 pub type ToolRegistry = zen_tools::registry::ToolRegistry<tauri::AppHandle>;
 pub type GlobalToolRegistry = Arc<RwLock<ToolRegistry>>;
+pub use manager::ToolManager;
 
 /// Register built-in tool executors. The executors themselves stay in the
 /// app crate (they reach AppState through the AppHandle); only the registry
@@ -44,7 +30,7 @@ pub type GlobalToolRegistry = Arc<RwLock<ToolRegistry>>;
 pub fn init_tool_registry(permissions: zen_security::policy::ToolPermissions) -> ToolRegistry {
     let mut registry = ToolRegistry::with_permissions(permissions);
 
-    registry.register(Arc::new(self::calculator::CalculatorTool));
+    registry.register(Arc::new(zen_tools::calculator::CalculatorTool));
     registry.register(Arc::new(self::sys_metrics::SystemMetricsTool));
     registry.register(Arc::new(self::web_fetch::WebFetchTool));
     registry.register(Arc::new(crate::search::WebSearchTool));

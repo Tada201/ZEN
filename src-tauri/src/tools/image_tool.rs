@@ -4,7 +4,8 @@ use serde_json::json;
 use tauri::{AppHandle, Manager};
 use tokio::fs;
 
-use super::{permission::RiskLevel, ToolError, ToolOutput};
+use zen_security::RiskLevel;
+use zen_tools::registry::{ToolError, ToolOutput};
 use crate::commands::AppState;
 
 pub struct ImageGenerationTool;
@@ -59,7 +60,7 @@ async fn download_and_validate_image(url_str: &str) -> Result<Vec<u8>, ToolError
     // returns a request pinned to the validated address so the
     // connection cannot silently re-resolve to a private IP.
     let client = crate::utils::public_no_redirect_http_client();
-    let request = crate::tools::url_safety::build_pinned_get_request(client, &parsed_url)
+    let request = zen_security::url_safety::build_pinned_get_request(client, &parsed_url)
         .await
         .map_err(|e| ToolError::ExecutionFailed {
             message: format!("SSRF safety check failed: {e}"),

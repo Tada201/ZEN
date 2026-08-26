@@ -3,7 +3,8 @@ use serde::Deserialize;
 use serde_json::json;
 use tauri::{AppHandle, Manager};
 
-use super::{permission::RiskLevel, ToolError, ToolOutput};
+use zen_security::RiskLevel;
+use zen_tools::registry::{ToolError, ToolOutput};
 use crate::commands::AppState;
 
 pub struct RunCommandTool;

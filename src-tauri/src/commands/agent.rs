@@ -293,7 +293,7 @@ pub async fn run_tool_command(
         })?;
 
     let tool_call_id = format!("openui-{}", uuid::Uuid::new_v4());
-    let tool_call = crate::tools::ToolCall {
+    let tool_call = zen_tools::registry::ToolCall {
         id: tool_call_id.clone(),
         name: tool_name.clone(),
         arguments: args.clone(),
@@ -304,8 +304,8 @@ pub async fn run_tool_command(
         registry.is_direct_tool(&tool_name)
             && matches!(
                 registry.direct_tool_risk(&tool_name),
-                Some(crate::tools::permission::RiskLevel::Low)
-                    | Some(crate::tools::permission::RiskLevel::Medium)
+                Some(zen_security::RiskLevel::Low)
+                    | Some(zen_security::RiskLevel::Medium)
             )
     };
     if !renderer_allowed {

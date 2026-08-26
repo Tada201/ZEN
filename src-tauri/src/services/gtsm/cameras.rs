@@ -16,7 +16,7 @@ const MAX_CAMERA_ENTRIES: usize = 250;
 const LOCAL_CATALOG_FILE: &str = "map-camera-catalog.json";
 
 fn validate_https_public_url(value: &str) -> AppResult<String> {
-    let validated = crate::tools::url_safety::validate_public_http_url(value)
+    let validated = zen_security::url_safety::validate_public_http_url(value)
         .map_err(ZenError::Custom)?;
     if !validated.as_str().to_ascii_lowercase().starts_with("https://") {
         return Err(ZenError::Custom("Camera catalog sources must use HTTPS".to_string()));

@@ -52,8 +52,8 @@ use std::sync::Weak;
 use tauri::AppHandle;
 
 use zen_mcp::McpClient;
-use crate::tools::permission::RiskLevel;
-use crate::tools::{ToolAnnotations, ToolError, ToolOutput};
+use zen_security::RiskLevel;
+use zen_tools::registry::{ToolAnnotations, ToolError, ToolOutput};
 
 /// Adapter for a single tool served by an external MCP server.
 ///

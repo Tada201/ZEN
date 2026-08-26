@@ -4,8 +4,8 @@ use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::tools::permission::RiskLevel;
-use crate::tools::{ToolError, ToolOutput};
+use zen_security::RiskLevel;
+use zen_tools::registry::{ToolError, ToolOutput};
 
 /// Real WebSearchTool that searches DuckDuckGo (free, no API key required)
 /// and returns parsed results (title, snippet, URL).

@@ -11,11 +11,12 @@ use tokio_util::sync::CancellationToken;
 use url::Url;
 
 
-use super::url_safety::{
+use zen_security::url_safety::{
     build_pinned_get_request, resolve_redirect_url, validate_public_http_url,
     validate_url_dns_safety, MAX_DIRECT_RESPONSE_BYTES, MAX_OUTPUT_CHARS, MAX_REDIRECTS,
 };
-use super::{permission::RiskLevel, ToolError, ToolOutput};
+use zen_security::RiskLevel;
+use zen_tools::registry::{ToolError, ToolOutput};
 use zen_tools::Tool;
 
 pub struct WebFetchTool;

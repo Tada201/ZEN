@@ -222,7 +222,7 @@ impl ToolCatalogPort for ToolCatalogAdapter {
 // ── Meta-tool pipeline port over `ToolManager` ──────────────────────────────
 
 pub struct ToolPipelineAdapter {
-    pub manager: Arc<crate::tools::manager::ToolManager>,
+    pub manager: Arc<crate::tools::ToolManager>,
 }
 
 #[async_trait::async_trait]

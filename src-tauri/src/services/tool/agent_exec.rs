@@ -44,8 +44,8 @@ impl ToolService {
 
             let permission_decision = self.check_permission("agent_tool", &v2_tool_call).await;
             match permission_decision {
-                Ok(crate::tools::permission::PermissionDecision::Allow) => {}
-                Ok(crate::tools::permission::PermissionDecision::Confirm { .. }) => {
+                Ok(zen_security::PermissionDecision::Allow) => {}
+                Ok(zen_security::PermissionDecision::Confirm { .. }) => {
                     let already_allowed = if let Some(allowed_tools) = &allowed_tools {
                         allowed_tools.lock().await.contains(&tool_call.name)
                     } else {
@@ -65,7 +65,7 @@ impl ToolService {
                         };
                     }
                 }
-                Ok(crate::tools::permission::PermissionDecision::Deny { reason }) => {
+                Ok(zen_security::PermissionDecision::Deny { reason }) => {
                     return crate::agent::types::ToolResult {
                         tool_call_id: tool_call.id.clone(),
                         content: serde_json::json!({
@@ -265,7 +265,7 @@ impl ToolService {
             if v2_exists {
                 let permission_decision = self.check_permission("agent_tool", &v2_tool_call).await;
                 match permission_decision {
-                    Ok(crate::tools::permission::PermissionDecision::Allow) => {
+                    Ok(zen_security::PermissionDecision::Allow) => {
                         let start = std::time::Instant::now();
                         match self
                             .execute_v2_authorized(app, chat_id, v2_tool_call, "agent_tool")
@@ -289,7 +289,7 @@ impl ToolService {
                             },
                         }
                     }
-                    Ok(crate::tools::permission::PermissionDecision::Confirm { .. }) => {
+                    Ok(zen_security::PermissionDecision::Confirm { .. }) => {
                         let already_allowed = if let Some(allowed_tools) = &allowed_tools {
                             allowed_tools.lock().await.contains(&tool_call.name)
                         } else {
@@ -332,7 +332,7 @@ impl ToolService {
                             }
                         }
                     }
-                    Ok(crate::tools::permission::PermissionDecision::Deny { reason }) => {
+                    Ok(zen_security::PermissionDecision::Deny { reason }) => {
                         crate::agent::types::ToolResult {
                             tool_call_id: tool_call.id,
                             content: serde_json::json!({

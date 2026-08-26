@@ -28,7 +28,7 @@ impl ToolService {
                     .get("patch")
                     .and_then(|value| value.as_str())
                     .ok_or_else(|| "Patch mutation is missing patch contents.".to_string())?;
-                crate::tools::patch_parser::parse_patches(patch)
+                zen_agent::patch_parser::parse_patches(patch)
                     .map_err(|error| format!("Cannot checkpoint patch: {error}"))?
                     .into_iter()
                     .map(|hunk| hunk.path().to_path_buf())

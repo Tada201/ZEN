@@ -4,8 +4,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::commands::system::get_system_metrics;
 use crate::commands::AppState;
-use crate::tools::permission::RiskLevel;
-use crate::tools::{ToolError, ToolOutput};
+use zen_security::RiskLevel;
+use zen_tools::registry::{ToolError, ToolOutput};
 
 pub struct SystemMetricsTool;
 

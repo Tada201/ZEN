@@ -12,7 +12,7 @@ impl ToolService {
         caller: &str,
         chat_id: &str,
         tool_call: &ToolCall,
-        context: crate::tools::permission::PermissionContext,
+        context: zen_security::PermissionContext,
         execution_context: Option<ToolApprovalExecutionContext>,
     ) -> ToolApprovalOutcome {
         self.audit(
@@ -105,7 +105,7 @@ impl ToolService {
         app: &AppHandle,
         chat_id: &str,
         tool_call: &ToolCall,
-        context: crate::tools::permission::PermissionContext,
+        context: zen_security::PermissionContext,
         execution_context: Option<&ToolApprovalExecutionContext>,
         args_hash: &str,
     ) {
@@ -118,7 +118,7 @@ impl ToolService {
         let agent_name = execution_context.and_then(|ctx| ctx.agent_name.as_deref());
         let iteration = execution_context.and_then(|ctx| ctx.iteration);
         let display_arguments =
-            crate::tools::permission::redacted_arguments_for_display(&tool_call.arguments);
+            zen_security::redacted_arguments_for_display(&tool_call.arguments);
         let _ = app.emit(
             "tool:authorization_request",
             serde_json::json!({
@@ -180,7 +180,7 @@ impl ToolService {
         execution_context: Option<&ToolApprovalExecutionContext>,
     ) {
         let display_arguments =
-            crate::tools::permission::redacted_arguments_for_display(&tool_call.arguments);
+            zen_security::redacted_arguments_for_display(&tool_call.arguments);
         let _ = app.emit(
             "tool:authorization_timeout",
             serde_json::json!({

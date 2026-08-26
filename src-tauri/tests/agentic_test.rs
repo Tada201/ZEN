@@ -5,9 +5,9 @@ use tokio_util::sync::CancellationToken;
 use tauri_app_lib::agent::runner::Runner;
 use tauri_app_lib::agent::types::{Agent, ModelTier};
 use tauri_app_lib::commands::AppState;
-use tauri_app_lib::db::models::{ChatMessage, ChatResponse, ModelInfo};
-use tauri_app_lib::error::ZenResult;
-use tauri_app_lib::llm::{ChatRequestConfig, LlmChunk, LlmProvider};
+use zen_db::models::{ChatMessage, ChatResponse, ModelInfo};
+use zen_core::error::ZenResult;
+use zen_llm::{ChatRequestConfig, LlmChunk, LlmProvider};
 
 struct MockProvider;
 
@@ -21,7 +21,7 @@ impl LlmProvider for MockProvider {
         &self,
         _model: &str,
         _messages: Vec<ChatMessage>,
-        _tools: Option<Vec<tauri_app_lib::tools::ToolInfo>>,
+        _tools: Option<Vec<zen_tools::ToolInfo>>,
         _config: ChatRequestConfig,
         _on_chunk: Box<dyn Fn(LlmChunk) + Send>,
         _token: CancellationToken,

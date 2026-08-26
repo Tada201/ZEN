@@ -575,14 +575,14 @@ impl ProgressiveToolRegistry {
         }
     }
 
-    pub fn list_as_tool_info(&self) -> Vec<crate::tools::ToolInfo> {
+    pub fn list_as_tool_info(&self) -> Vec<zen_tools::ToolInfo> {
         self.loaded_tools
             .lock()
             .ok()
             .map(|guard| {
                 guard
                     .values()
-                    .map(|t| crate::tools::ToolInfo {
+                    .map(|t| zen_tools::ToolInfo {
                         name: t.id().to_string(),
                         description: t.description().to_string(),
                         parameters: t.input_schema(),

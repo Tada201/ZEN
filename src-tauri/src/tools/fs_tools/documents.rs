@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 use crate::commands::AppState;
-use crate::tools::permission::RiskLevel;
-use crate::tools::{ToolError, ToolOutput};
+use zen_security::RiskLevel;
+use zen_tools::registry::{ToolError, ToolOutput};
 
 use super::{enforce_existing_file_size, workspace_max_file_bytes};
 

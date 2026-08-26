@@ -42,11 +42,11 @@ impl ToolService {
         };
 
         match permission_result {
-            Ok(crate::tools::permission::PermissionDecision::Allow) => {
+            Ok(zen_security::PermissionDecision::Allow) => {
                 self.execute_v2_authorized(app, chat_id, tool_call, "allow")
                     .await
             }
-            Ok(crate::tools::permission::PermissionDecision::Confirm { context }) => {
+            Ok(zen_security::PermissionDecision::Confirm { context }) => {
                 let approval_outcome = self
                     .request_interactive_approval(
                         app.clone(),
@@ -64,7 +64,7 @@ impl ToolService {
                     Err(approval_outcome.error_message().to_string())
                 }
             }
-            Ok(crate::tools::permission::PermissionDecision::Deny { reason }) => {
+            Ok(zen_security::PermissionDecision::Deny { reason }) => {
                 {
                     let mut registry = self.registry.write().await;
                     registry.record_execution(&tool_call, false, "deny");
@@ -79,7 +79,7 @@ impl ToolService {
         &self,
         caller: &str,
         tool_call: &ToolCall,
-    ) -> Result<crate::tools::permission::PermissionDecision, ToolError> {
+    ) -> Result<zen_security::PermissionDecision, ToolError> {
         let security_decision = self
             .evaluate_security(caller, tool_call, "tool permission check requested")
             .await;
@@ -92,7 +92,7 @@ impl ToolService {
                 "tool denied by security service",
             )
             .await;
-            return Ok(crate::tools::permission::PermissionDecision::Deny {
+            return Ok(zen_security::PermissionDecision::Deny {
                 reason: "Tool execution denied by security policy".to_string(),
             });
         }
@@ -103,13 +103,13 @@ impl ToolService {
         }?;
 
         let (decision, reason) = match &registry_decision {
-            crate::tools::permission::PermissionDecision::Allow => {
+            zen_security::PermissionDecision::Allow => {
                 (SecurityDecision::Allow, "tool registry allowed execution")
             }
-            crate::tools::permission::PermissionDecision::Confirm { .. } => {
+            zen_security::PermissionDecision::Confirm { .. } => {
                 (SecurityDecision::Ask, "tool registry requires confirmation")
             }
-            crate::tools::permission::PermissionDecision::Deny { .. } => {
+            zen_security::PermissionDecision::Deny { .. } => {
                 (SecurityDecision::Deny, "tool registry denied execution")
             }
         };
@@ -140,10 +140,10 @@ impl ToolService {
                 .get(&tool_call.name)
                 .map(|tool| tool.risk_level())
                 .or_else(|| registry.known_tool_risk(&tool_call.name))
-                .unwrap_or(crate::tools::permission::RiskLevel::Critical)
+                .unwrap_or(zen_security::RiskLevel::Critical)
         };
 
-        if matches!(tool_risk, crate::tools::permission::RiskLevel::Critical) {
+        if matches!(tool_risk, zen_security::RiskLevel::Critical) {
             self.audit(
                 SecurityDecision::Ask,
                 caller,
@@ -166,7 +166,7 @@ impl ToolService {
         };
 
         match permission_result {
-            Ok(crate::tools::permission::PermissionDecision::Allow) => {
+            Ok(zen_security::PermissionDecision::Allow) => {
                 self.audit(
                     SecurityDecision::Allow,
                     caller,
@@ -177,7 +177,7 @@ impl ToolService {
                 self.execute_v2_authorized(app, chat_id, tool_call, "allow")
                     .await
             }
-            Ok(crate::tools::permission::PermissionDecision::Deny { reason }) => {
+            Ok(zen_security::PermissionDecision::Deny { reason }) => {
                 self.audit(
                     SecurityDecision::Deny,
                     caller,
@@ -187,7 +187,7 @@ impl ToolService {
                 .await;
                 Err(format!("Permission denied: {reason}"))
             }
-            Ok(crate::tools::permission::PermissionDecision::Confirm { .. }) => {
+            Ok(zen_security::PermissionDecision::Confirm { .. }) => {
                 self.audit(
                     SecurityDecision::Ask,
                     caller,

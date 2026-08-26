@@ -48,7 +48,7 @@ use crate::services::{
     HardwareService, MediaService, SecretService, SecurityService, SettingsService,
     SpeechService, TerminalService, ToolService, TtsService, UsageService,
 };
-use crate::tools::manager::ToolManager;
+use crate::tools::ToolManager;
 
 // Moved to zen-agent in BIG_MIGRATION.md Phase 11; re-export keeps app call
 // sites compiling (relocation doctrine §4.6).
@@ -360,7 +360,7 @@ impl AppState {
             crate::agent::skills::SkillsManager::new(dirs::home_dir().unwrap_or_default()),
         );
         let tool_registry_v2 = Arc::new(RwLock::new(crate::tools::init_tool_registry(
-            crate::tools::permission::ToolPermissions::default(),
+            zen_security::ToolPermissions::default(),
         )));
         let agent_registry_inner = AgentRegistry::new();
         let mut paths_to_try = vec![

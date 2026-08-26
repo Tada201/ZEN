@@ -1,7 +1,7 @@
 // Moved verbatim from services/tool.rs during the Phase 12 split.
 
     use super::*;
-    use crate::tools::permission::{PermissionDefault, RiskLevel, ToolPermissions};
+    use zen_security::{PermissionDefault, RiskLevel, ToolPermissions};
     use sqlx::SqlitePool;
 
     async fn service_with_audit(permissions: ToolPermissions) -> (ToolService, SqlitePool) {
@@ -46,7 +46,7 @@
 
         assert!(matches!(
             decision,
-            crate::tools::permission::PermissionDecision::Allow
+            zen_security::PermissionDecision::Allow
         ));
 
         let events = zen_db::queries::list_audit_events(&pool, 10)
@@ -85,7 +85,7 @@
 
         assert!(matches!(
             decision,
-            crate::tools::permission::PermissionDecision::Deny { .. }
+            zen_security::PermissionDecision::Deny { .. }
         ));
 
         let events = zen_db::queries::list_audit_events(&pool, 10)

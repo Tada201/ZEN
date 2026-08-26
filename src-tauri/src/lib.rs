@@ -195,7 +195,7 @@ pub fn run() {
 
                 // Tool permissions sync
                 {
-                    use crate::tools::manager::ToolManager;
+                    use crate::tools::ToolManager;
                     let all_settings = match state.settings_manager.get_all().await {
                         Ok(s) => s,
                         Err(e) => {
