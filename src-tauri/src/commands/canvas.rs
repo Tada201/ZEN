@@ -5,7 +5,7 @@ use crate::canvas::{
     GraphSession, LayoutConstraints, PlotRequest,
 };
 use crate::commands::AppState;
-use crate::error::ZenError;
+use zen_core::error::ZenError;
 use serde_json::json;
 use tauri::State;
 
@@ -187,7 +187,7 @@ pub async fn create_graph_session(
 
     // Persist to database
     let _ =
-        crate::db::queries::get_or_create_graph_session(&state.db().await?, &id, "default", &name)
+        zen_db::queries::get_or_create_graph_session(&state.db().await?, &id, "default", &name)
             .await;
 
     Ok(id)
@@ -227,9 +227,9 @@ pub async fn apply_session_action(
         serde_json::to_string(&session.variables).unwrap_or_else(|_| "{}".to_string());
     let history_json = serde_json::to_string(&session.history).unwrap_or_else(|_| "[]".to_string());
 
-    let _ = crate::db::queries::save_graph_session(
+    let _ = zen_db::queries::save_graph_session(
         &state.db().await?,
-        &crate::db::queries::GraphSessionUpdate {
+        &zen_db::queries::GraphSessionUpdate {
             session_id: &session_id,
             expressions_json: &expressions_json,
             variables_json: &variables_json,
@@ -282,9 +282,9 @@ pub async fn rollback_session(
         serde_json::to_string(&session.variables).unwrap_or_else(|_| "{}".to_string());
     let history_json = serde_json::to_string(&session.history).unwrap_or_else(|_| "[]".to_string());
 
-    let _ = crate::db::queries::save_graph_session(
+    let _ = zen_db::queries::save_graph_session(
         &state.db().await?,
-        &crate::db::queries::GraphSessionUpdate {
+        &zen_db::queries::GraphSessionUpdate {
             session_id: &session_id,
             expressions_json: &expressions_json,
             variables_json: &variables_json,
@@ -314,7 +314,7 @@ pub async fn load_graph_sessions_from_db(
     use std::collections::HashMap;
 
     let db_session =
-        crate::db::queries::get_graph_session(&state.db().await?, &format!("chat_{chat_id}"))
+        zen_db::queries::get_graph_session(&state.db().await?, &format!("chat_{chat_id}"))
             .await
             .map_err(|e| ZenError::Custom(e.to_string()))?;
 
@@ -354,7 +354,7 @@ pub async fn save_drawing_canvas_to_db(
     objects_json: String,
     background: String,
 ) -> Result<(), ZenError> {
-    let _ = crate::db::queries::get_or_create_drawing_canvas(
+    let _ = zen_db::queries::get_or_create_drawing_canvas(
         &state.db().await?,
         &canvas_id,
         &chat_id,
@@ -362,7 +362,7 @@ pub async fn save_drawing_canvas_to_db(
     )
     .await;
 
-    crate::db::queries::save_drawing_canvas(
+    zen_db::queries::save_drawing_canvas(
         &state.db().await?,
         &canvas_id,
         &objects_json,
@@ -381,7 +381,7 @@ pub async fn load_drawing_canvas_from_db(
     use crate::canvas::session::Expression;
     use std::collections::HashMap;
 
-    let db_canvas = crate::db::queries::get_graph_session(&state.db().await?, &canvas_id)
+    let db_canvas = zen_db::queries::get_graph_session(&state.db().await?, &canvas_id)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))?;
 

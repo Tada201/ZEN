@@ -5,9 +5,9 @@ use tracing::info;
 
 use crate::commands::pagination::{normalize_page, page_from_fetch, Page};
 use crate::commands::AppState;
-use crate::db::models::{Chat, Message};
-use crate::db::queries;
-use crate::error::ZenResult;
+use zen_db::models::{Chat, Message};
+use zen_db::queries;
+use zen_core::error::ZenResult;
 
 #[tauri::command]
 pub async fn create_chat(
@@ -21,7 +21,7 @@ pub async fn create_chat(
     let workspace_root = match workspace_root {
         Some(root) if !root.trim().is_empty() => Some(
             crate::workspace::canonicalize_workspace_root(std::path::Path::new(&root))
-                .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {e}")))?,
+                .map_err(|e| zen_core::error::ZenError::Custom(format!("Invalid workspace root: {e}")))?,
         ),
         _ => Some(state.workspace_folder.read().await.clone()),
     };
@@ -48,7 +48,7 @@ pub async fn set_chat_workspace(
     let db = state.db().await?;
     let chat = queries::get_chat(&db, &chat_id).await?;
     if chat.workspace_root.is_some() {
-        return Err(crate::error::ZenError::Custom(
+        return Err(zen_core::error::ZenError::Custom(
             "Chat workspace is immutable after initialization".to_string(),
         ));
     }
@@ -56,9 +56,9 @@ pub async fn set_chat_workspace(
     let canonical_root = match workspace_root {
         Some(root) if !root.trim().is_empty() => Some(
             crate::workspace::canonicalize_workspace_root(std::path::Path::new(&root))
-                .map_err(|e| crate::error::ZenError::Custom(format!("Invalid workspace root: {e}")))?,
+                .map_err(|e| zen_core::error::ZenError::Custom(format!("Invalid workspace root: {e}")))?,
         ),
-        _ => return Err(crate::error::ZenError::Custom(
+        _ => return Err(zen_core::error::ZenError::Custom(
             "A workspace root is required when assigning a legacy chat".to_string(),
         )),
     };
@@ -108,10 +108,10 @@ const EXECUTION_TRACE_VERSION: u64 = 2;
 pub fn normalize_trace_checkpoint(
     steps_json: &str,
     trace_status: Option<&str>,
-) -> crate::error::ZenResult<String> {
+) -> zen_core::error::ZenResult<String> {
     validate_steps_json(steps_json)?;
     let value: serde_json::Value = serde_json::from_str(steps_json).map_err(|_| {
-        crate::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string())
+        zen_core::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string())
     })?;
     let steps = match value {
         serde_json::Value::Array(steps) => steps,
@@ -119,8 +119,8 @@ pub fn normalize_trace_checkpoint(
             .get("steps")
             .and_then(serde_json::Value::as_array)
             .cloned()
-            .ok_or_else(|| crate::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string()))?,
-        _ => return Err(crate::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string())),
+            .ok_or_else(|| zen_core::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string()))?,
+        _ => return Err(zen_core::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string())),
     };
     let status = match trace_status.unwrap_or("checkpoint") {
         "running" | "completed" | "cancelled" | "failed" | "interrupted" | "checkpoint" => {
@@ -135,9 +135,9 @@ pub fn normalize_trace_checkpoint(
         "steps": steps,
     });
     let serialized = serde_json::to_string(&envelope)
-        .map_err(|_| crate::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string()))?;
+        .map_err(|_| zen_core::error::ZenError::Custom(STEPS_JSON_INVALID_ERROR.to_string()))?;
     if serialized.len() > MAX_STEPS_JSON_SIZE {
-        return Err(crate::error::ZenError::Custom(STEPS_JSON_SIZE_ERROR.to_string()));
+        return Err(zen_core::error::ZenError::Custom(STEPS_JSON_SIZE_ERROR.to_string()));
     }
     Ok(serialized)
 }
@@ -160,16 +160,16 @@ pub fn normalize_trace_checkpoint(
 ///
 /// assert!(validate_steps_json("not json").is_err());
 /// ```
-pub fn validate_steps_json(steps_json: &str) -> crate::error::ZenResult<()> {
+pub fn validate_steps_json(steps_json: &str) -> zen_core::error::ZenResult<()> {
     if steps_json.len() > MAX_STEPS_JSON_SIZE {
-        return Err(crate::error::ZenError::Custom(
+        return Err(zen_core::error::ZenError::Custom(
             STEPS_JSON_SIZE_ERROR.to_string(),
         ));
     }
 
     // Validate JSON early so corrupt payloads never reach the database.
     if serde_json::from_str::<serde_json::Value>(steps_json).is_err() {
-        return Err(crate::error::ZenError::Custom(
+        return Err(zen_core::error::ZenError::Custom(
             STEPS_JSON_INVALID_ERROR.to_string(),
         ));
     }
@@ -215,7 +215,7 @@ pub async fn update_message_content(
     trace_status: Option<String>,
 ) -> ZenResult<()> {
     if content.trim().is_empty() {
-        return Err(crate::error::ZenError::Custom(
+        return Err(zen_core::error::ZenError::Custom(
             "Updated message content must not be empty".to_string(),
         ));
     }

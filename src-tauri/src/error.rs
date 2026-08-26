@@ -1,12 +1,10 @@
-//! App-side error boundary (BIG_MIGRATION.md Phase 2).
+//! App-side error boundary.
 //!
-//! `ZenError` now lives in zen-core and is DB/HTTP/tauri-agnostic; this
-//! module re-exports it unchanged so every `crate::error::…` call site keeps
-//! compiling, and owns the boundary conversions that keep `sqlx`, `reqwest`,
-//! and `anyhow` out of zen-core. zen-db (Phase 3) will take over the sqlx
-//! `#[from]` sugar with its own error type.
+//! `ZenError` lives in zen-core (DB/HTTP/tauri-agnostic); consumers import it
+//! from `zen_core::error` directly. This module owns the boundary conversions
+//! that keep `sqlx`, `reqwest`, and `anyhow` out of zen-core.
 
-pub use zen_core::error::{AppError, AppResult, ZenError, ZenResult};
+use zen_core::error::ZenError;
 
 /// Map a raw `sqlx::Error` into the DB-agnostic core variant (message is
 /// rendered identically to the pre-split `#[from]` shape).

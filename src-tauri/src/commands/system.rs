@@ -1,5 +1,5 @@
 use crate::commands::{AppState, InitStatus};
-use crate::error::{AppError, AppResult};
+use zen_core::error::{AppError, AppResult};
 use crate::models::SystemMetrics;
 use tauri::{AppHandle, Emitter, Manager, State};
 use std::sync::OnceLock;
@@ -13,12 +13,12 @@ pub async fn resolve_external_prompt(app: AppHandle, operation: String, confirme
     let mutex = EXTERNAL_PROMPT.get_or_init(|| tokio::sync::Mutex::new(None));
     let mut pending = mutex.lock().await;
     if let Some((expected, sender)) = pending.take() {
-        if expected != operation { return Err(crate::error::ZenError::Custom("Stale external prompt response".to_string())); }
+        if expected != operation { return Err(zen_core::error::ZenError::Custom("Stale external prompt response".to_string())); }
         let _ = sender.send(confirmed);
         if let Some(window) = app.get_webview_window("prompt") { window.close().ok(); }
         Ok(())
     } else {
-        Err(crate::error::ZenError::Custom("No external prompt is pending".to_string()))
+        Err(zen_core::error::ZenError::Custom("No external prompt is pending".to_string()))
     }
 }
 
@@ -45,11 +45,11 @@ pub async fn request_external_prompt(app: &AppHandle, operation: &str) -> bool {
 #[tauri::command]
 pub async fn relaunch_app(app: AppHandle) -> AppResult<()> {
     let executable = std::env::current_exe()
-        .map_err(|error| crate::error::ZenError::Custom(format!("Could not resolve Zen executable: {error}")))?;
+        .map_err(|error| zen_core::error::ZenError::Custom(format!("Could not resolve Zen executable: {error}")))?;
     std::process::Command::new(executable)
         .args(std::env::args_os().skip(1))
         .spawn()
-        .map_err(|error| crate::error::ZenError::Custom(format!("Could not relaunch Zen: {error}")))?;
+        .map_err(|error| zen_core::error::ZenError::Custom(format!("Could not relaunch Zen: {error}")))?;
     app.exit(0);
     Ok(())
 }
@@ -60,10 +60,10 @@ pub async fn export_diagnostics(
     state: State<'_, AppState>,
     destination: String,
 ) -> AppResult<()> {
-    let app_dir = app.path().app_data_dir().map_err(|error| crate::error::ZenError::Custom(format!("Could not resolve app data directory: {error}")))?;
+    let app_dir = app.path().app_data_dir().map_err(|error| zen_core::error::ZenError::Custom(format!("Could not resolve app data directory: {error}")))?;
     let destination = std::path::PathBuf::from(destination);
-    let parent = destination.parent().ok_or_else(|| crate::error::ZenError::Custom("Diagnostics destination has no parent directory".to_string()))?;
-    std::fs::create_dir_all(parent).map_err(|error| crate::error::ZenError::Custom(format!("Could not prepare diagnostics destination: {error}")))?;
+    let parent = destination.parent().ok_or_else(|| zen_core::error::ZenError::Custom("Diagnostics destination has no parent directory".to_string()))?;
+    std::fs::create_dir_all(parent).map_err(|error| zen_core::error::ZenError::Custom(format!("Could not prepare diagnostics destination: {error}")))?;
     let data_status = crate::services::data_cleanup::inspect(&app_dir);
     // MCP protocol status: only safe inventory metadata (transport/availability/
     // negotiated protocol era + capabilities). Commands, URLs, headers, env
@@ -96,8 +96,8 @@ pub async fn export_diagnostics(
         },
         "note": "Secrets, chats, database contents, file paths, MCP server names/URLs/commands, and raw logs are intentionally excluded.",
     });
-    let bytes = serde_json::to_vec_pretty(&payload).map_err(|error| crate::error::ZenError::Custom(format!("Could not serialize diagnostics: {error}")))?;
-    std::fs::write(destination, bytes).map_err(|error| crate::error::ZenError::Custom(format!("Could not write diagnostics: {error}")))?;
+    let bytes = serde_json::to_vec_pretty(&payload).map_err(|error| zen_core::error::ZenError::Custom(format!("Could not serialize diagnostics: {error}")))?;
+    std::fs::write(destination, bytes).map_err(|error| zen_core::error::ZenError::Custom(format!("Could not write diagnostics: {error}")))?;
     Ok(())
 }
 
@@ -220,7 +220,7 @@ pub async fn browse_folder(path: Option<String>) -> AppResult<BrowseFolderResult
 
     let validated_path = crate::utils::validate_path(&target)?;
     let dir = std::fs::read_dir(&validated_path)
-        .map_err(|e| crate::error::ZenError::Internal(format!("Cannot read directory: {e}")))?;
+        .map_err(|e| zen_core::error::ZenError::Internal(format!("Cannot read directory: {e}")))?;
 
     let mut dirs: Vec<FolderEntry> = Vec::new();
     let mut entries: Vec<FolderEntry> = Vec::new();

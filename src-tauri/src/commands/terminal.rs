@@ -1,5 +1,5 @@
 use crate::commands::AppState;
-use crate::error::ZenResult;
+use zen_core::error::ZenResult;
 use crate::services::terminal::TerminalSpawnParams;
 use tauri::{AppHandle, State};
 

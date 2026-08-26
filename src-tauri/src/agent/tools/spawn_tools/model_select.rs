@@ -17,7 +17,7 @@ pub(super) fn optional_string(value: Option<&Value>) -> Option<&str> {
 pub(super) async fn inherited_model_for_child(app: &AppHandle, chat_id: &str) -> Option<String> {
     let state = app.state::<AppState>();
     let db = state.db().await.ok()?;
-    let chat_model = crate::db::queries::get_chat(&db, chat_id)
+    let chat_model = zen_db::queries::get_chat(&db, chat_id)
         .await
         .ok()
         .and_then(|chat| chat.model)
@@ -26,7 +26,7 @@ pub(super) async fn inherited_model_for_child(app: &AppHandle, chat_id: &str) ->
     if chat_model.is_some() {
         return chat_model;
     }
-    crate::db::queries::get_setting(&db, "active_model")
+    zen_db::queries::get_setting(&db, "active_model")
         .await
         .ok()
         .flatten()

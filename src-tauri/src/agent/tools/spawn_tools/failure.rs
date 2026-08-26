@@ -1,6 +1,6 @@
 //! Structural classification of sub-agent failures.
 
-use crate::error::ZenError;
+use zen_core::error::ZenError;
 
 /// Classification for errors returned by a sub-agent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

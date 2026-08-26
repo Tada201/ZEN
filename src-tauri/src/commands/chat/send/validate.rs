@@ -8,7 +8,7 @@ use super::*;
 /// Guard: verify the chat exists before doing any work.
 pub(super) async fn ensure_chat_exists(db: &SqlitePool, chat_id: &str) -> ZenResult<()> {
     if queries::get_chat(db, chat_id).await.is_err() {
-        return Err(crate::error::ZenError::Custom(format!(
+        return Err(zen_core::error::ZenError::Custom(format!(
             "Chat session {chat_id} no longer exists."
         )));
     }
@@ -34,7 +34,7 @@ pub(super) async fn resolve_turn_content(
                 .await?
                 .filter(|m| m.role == "user")
                 .ok_or_else(|| {
-                    crate::error::ZenError::Custom(format!(
+                    zen_core::error::ZenError::Custom(format!(
                         "Cannot regenerate: message {anchor_id} is not a user turn in chat {chat_id}."
                     ))
                 })?;
@@ -43,7 +43,7 @@ pub(super) async fn resolve_turn_content(
             let later_user_turns =
                 queries::count_later_user_messages(db, chat_id, anchor_id).await?;
             if later_user_turns > 0 {
-                return Err(crate::error::ZenError::Custom(format!(
+                return Err(zen_core::error::ZenError::Custom(format!(
                     "Cannot regenerate: {later_user_turns} newer turn(s) exist after this message. Reload the chat and regenerate the latest turn."
                 )));
             }

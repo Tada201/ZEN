@@ -16,7 +16,7 @@ use super::model_select::{optional_string, optional_string_list};
 pub async fn send_message_to_subagent(
     app: &tauri::AppHandle,
     spawn_id: &str,
-    message: crate::db::models::ChatMessage,
+    message: zen_db::models::ChatMessage,
 ) -> Result<()> {
     let state = app.state::<AppState>();
     let queues = state.subagent_message_queues.lock().await;

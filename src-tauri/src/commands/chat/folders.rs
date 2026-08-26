@@ -3,9 +3,9 @@
 use tauri::State;
 
 use crate::commands::AppState;
-use crate::db::models::ChatFolder;
-use crate::db::queries;
-use crate::error::ZenResult;
+use zen_db::models::ChatFolder;
+use zen_db::queries;
+use zen_core::error::ZenResult;
 
 #[tauri::command]
 pub async fn create_chat_folder(

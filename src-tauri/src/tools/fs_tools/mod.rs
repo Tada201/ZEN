@@ -68,13 +68,13 @@ pub(crate) async fn workspace_max_file_bytes(state: &AppState) -> u64 {
         Err(_) => return 10 * 1024 * 1024,
     };
 
-    let mut raw = crate::db::queries::get_setting(&db, "workspace.max-file-size")
+    let mut raw = zen_db::queries::get_setting(&db, "workspace.max-file-size")
         .await
         .ok()
         .flatten();
 
     if raw.is_none() {
-        raw = crate::db::queries::get_setting(&db, "workspace_max_file_size")
+        raw = zen_db::queries::get_setting(&db, "workspace_max_file_size")
             .await
             .ok()
             .flatten();

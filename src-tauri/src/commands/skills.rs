@@ -11,7 +11,7 @@ use crate::agent::skills::{
     SlashSuggestionKind, AGENTS_DIR_NAME, SKILLS_DIR_NAME, SKILLS_FILENAME, ZEN_HOME_DIR,
 };
 use crate::commands::AppState;
-use crate::error::{ZenError, ZenResult};
+use zen_core::error::{ZenError, ZenResult};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
@@ -106,10 +106,10 @@ pub async fn load_skill(
     let outcome = state.skills_manager.skills_for_cwd(&cwd, false).await;
     let skill = outcome
         .find_by_name(&name)
-        .ok_or_else(|| crate::error::ZenError::Custom(format!("skill not found: {name}")))?;
+        .ok_or_else(|| zen_core::error::ZenError::Custom(format!("skill not found: {name}")))?;
     let content = tokio::fs::read_to_string(&skill.path)
         .await
-        .map_err(|e| crate::error::ZenError::Custom(format!("read {}: {}", skill.path.display(), e)))?;
+        .map_err(|e| zen_core::error::ZenError::Custom(format!("read {}: {}", skill.path.display(), e)))?;
     Ok(SkillLoadResult {
         name: skill.name.clone(),
         description: skill.description.clone(),

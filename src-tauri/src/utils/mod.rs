@@ -1,5 +1,5 @@
 
-use crate::error::{AppResult, ZenError};
+use zen_core::error::{AppResult, ZenError};
 use std::path::{Component, Path};
 use std::sync::OnceLock;
 use std::time::Duration;

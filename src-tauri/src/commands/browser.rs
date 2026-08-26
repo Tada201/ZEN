@@ -7,7 +7,7 @@ use tauri::{AppHandle, State};
 
 use crate::browser::{ConsoleEntry, PreviewBounds};
 use crate::commands::AppState;
-use crate::error::{ZenError, ZenResult};
+use zen_core::error::{ZenError, ZenResult};
 
 fn map_err(e: String) -> ZenError {
     ZenError::Custom(e)

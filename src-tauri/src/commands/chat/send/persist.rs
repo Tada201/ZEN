@@ -16,7 +16,7 @@ pub(super) struct PersistTurnParams<'a> {
     pub chat_id: &'a str,
     pub content: &'a str,
     pub model: Option<&'a str>,
-    pub attachments: Option<Vec<crate::db::models::Attachment>>,
+    pub attachments: Option<Vec<zen_db::models::Attachment>>,
     pub message_kind: Option<&'a str>,
     pub is_regenerate: bool,
 }

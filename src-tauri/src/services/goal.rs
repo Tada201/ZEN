@@ -16,9 +16,9 @@ use serde_json::json;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter};
 
-use crate::db::models::ThreadGoal;
-use crate::db::queries;
-use crate::error::{ZenError, ZenResult};
+use zen_db::models::ThreadGoal;
+use zen_db::queries;
+use zen_core::error::{ZenError, ZenResult};
 
 pub const GOAL_STATUS_ACTIVE: &str = "active";
 pub const GOAL_STATUS_PAUSED: &str = "paused";

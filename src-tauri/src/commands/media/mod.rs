@@ -1,5 +1,5 @@
 use crate::commands::AppState;
-use crate::error::{AppResult, ZenError, ZenResult};
+use zen_core::error::{AppResult, ZenError, ZenResult};
 use crate::workspace::validate_workspace_path;
 use std::path::Path;
 use tauri::State;

@@ -4,9 +4,9 @@ use tauri::State;
 
 use crate::commands::pagination::{normalize_page, page_from_fetch, Page};
 use crate::commands::AppState;
-use crate::db::models::{ChatTag, SearchResult};
-use crate::db::queries;
-use crate::error::ZenResult;
+use zen_db::models::{ChatTag, SearchResult};
+use zen_db::queries;
+use zen_core::error::ZenResult;
 
 #[tauri::command]
 pub async fn search_chats(

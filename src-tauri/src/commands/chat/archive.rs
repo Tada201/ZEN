@@ -4,9 +4,9 @@ use tauri::State;
 
 use crate::commands::pagination::{normalize_page, page_from_fetch, Page};
 use crate::commands::AppState;
-use crate::db::models::Chat;
-use crate::db::queries;
-use crate::error::ZenResult;
+use zen_db::models::Chat;
+use zen_db::queries;
+use zen_core::error::ZenResult;
 
 #[tauri::command]
 pub async fn toggle_pin_chat(state: State<'_, AppState>, chat_id: String) -> ZenResult<()> {

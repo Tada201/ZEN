@@ -5,8 +5,8 @@
 //! - Handle user responses
 //! - Resume agent execution with selected options
 
-use crate::db::queries;
-use crate::error::ZenError;
+use zen_db::queries;
+use zen_core::error::ZenError;
 use crate::services::agent_context::AgentContext;
 use serde::{Deserialize, Serialize};
 use tauri::State;

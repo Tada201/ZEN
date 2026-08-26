@@ -4,7 +4,7 @@ use tauri::State;
 use tracing::warn;
 
 use crate::commands::AppState;
-use crate::error::ZenError;
+use zen_core::error::ZenError;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AudioDevice {

@@ -9,9 +9,9 @@ use tauri::State;
 use tracing::info;
 
 use crate::commands::AppState;
-use crate::db::models::ChatMessage;
-use crate::db::queries;
-use crate::error::{ZenError, ZenResult};
+use zen_db::models::ChatMessage;
+use zen_db::queries;
+use zen_core::error::{ZenError, ZenResult};
 use zen_llm::ChatRequestConfig;
 
 /// Repair task instructions: return ONLY the corrected diagram, no prose.

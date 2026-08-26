@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
 
-use crate::error::{ZenError, ZenResult};
+use zen_core::error::{ZenError, ZenResult};
 use crate::services::{AuditEvent, PermissionDecision, PrivilegedOperation, SecurityService};
 use crate::terminal::TerminalManager;
 

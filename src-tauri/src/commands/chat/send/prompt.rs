@@ -87,7 +87,7 @@ pub(super) struct InstructionParams<'a> {
     pub custom_prompt_setting: Option<String>,
     pub system_prompt: Option<String>,
     pub replace_system_prompt: bool,
-    pub thread_goal: Option<&'a crate::db::models::ThreadGoal>,
+    pub thread_goal: Option<&'a zen_db::models::ThreadGoal>,
     pub generative_ui_enabled: bool,
     pub image_gen: bool,
     pub tool_ids: &'a [String],

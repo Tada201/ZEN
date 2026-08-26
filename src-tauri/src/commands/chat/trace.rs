@@ -1,6 +1,6 @@
 use crate::commands::AppState;
-use crate::db::queries::{self, ExecutionTraceSnapshot};
-use crate::error::ZenResult;
+use zen_db::queries::{self, ExecutionTraceSnapshot};
+use zen_core::error::ZenResult;
 use tauri::State;
 
 /// Replace the normalized event projection for one assistant run.

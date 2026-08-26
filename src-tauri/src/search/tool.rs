@@ -280,7 +280,7 @@ async fn nine_router_search_fallback(
     let mut has_explicit_search_model = false;
 
     // Load custom searchModel from settings if present
-    if let Some(params_str) = crate::db::queries::get_setting(&db_pool, "provider_params")
+    if let Some(params_str) = zen_db::queries::get_setting(&db_pool, "provider_params")
         .await
         .unwrap_or_default()
     {

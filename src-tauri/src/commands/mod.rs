@@ -33,7 +33,7 @@ use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tauri::Emitter;
 
-use crate::db::models::ChatMessage;
+use zen_db::models::ChatMessage;
 
 use crate::agent::event_bus::EventBus;
 use crate::agent::hooks::HookRegistry;
@@ -41,7 +41,7 @@ use crate::agent::orchestrator::Orchestrator;
 use crate::agent::runner::ContextBreakdownPayload;
 use crate::agent::swarm::SwarmCoordinator;
 use crate::agent::types::AgentRegistry;
-use crate::error::{ZenError, ZenResult};
+use zen_core::error::{ZenError, ZenResult};
 use zen_llm::{LlmProvider, ProviderRegistry};
 use crate::services::{
     checkpoint::CheckpointService, process_manager::ProcessManager, DocumentService,
@@ -551,7 +551,7 @@ impl AppState {
     pub async fn workspace_for_chat(&self, chat_id: &str) -> ZenResult<PathBuf> {
         let global_workspace = self.workspace_folder.read().await.clone();
         let db = self.db().await?;
-        let chat = crate::db::queries::get_chat(&db, chat_id).await?;
+        let chat = zen_db::queries::get_chat(&db, chat_id).await?;
 
         match chat.workspace_root {
             Some(root) if !root.trim().is_empty() =>

@@ -17,9 +17,9 @@ pub(crate) async fn persist_sync_send_failure(
         "recoverable": false,
     })
     .to_string();
-    let _ = crate::db::queries::add_message(
+    let _ = zen_db::queries::add_message(
         db,
-        &crate::db::queries::NewMessage {
+        &zen_db::queries::NewMessage {
             chat_id,
             role: "assistant",
             content: error,
@@ -194,7 +194,7 @@ pub(crate) async fn deep_research_warranted(
     model: &str,
     content: &str,
 ) -> bool {
-    use crate::db::models::ChatMessage;
+    use zen_db::models::ChatMessage;
 
     let messages = vec![
         ChatMessage {

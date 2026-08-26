@@ -4,9 +4,9 @@ use tauri::{AppHandle, Emitter, State};
 use tracing::info;
 
 use crate::commands::AppState;
-use crate::db::models::{Chat, Message};
-use crate::db::queries;
-use crate::error::{ZenError, ZenResult};
+use zen_db::models::{Chat, Message};
+use zen_db::queries;
+use zen_core::error::{ZenError, ZenResult};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ChatExport {

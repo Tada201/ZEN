@@ -48,7 +48,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for ListDocumentsTool {
             .map_err(|e| anyhow::anyhow!("DB init failed: {e}"))?;
         // Chat-scoped: only this chat's attachments. Falls back to nothing when
         // the chat has no uploads (rather than leaking the global library).
-        let docs = crate::db::queries::list_documents_for_chat(&pool, &chat_id).await?;
+        let docs = zen_db::queries::list_documents_for_chat(&pool, &chat_id).await?;
 
         let mut formatted_docs = Vec::new();
         for doc in docs {
@@ -369,7 +369,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for ReadDocumentTool {
         // the pre-extracted plain-text sidecar rather than the blob. Match by
         // id or exact filename within THIS chat only.
         let attachments =
-            crate::db::queries::list_documents_for_chat(&pool, &chat_id).await?;
+            zen_db::queries::list_documents_for_chat(&pool, &chat_id).await?;
         if let Some(doc) = attachments
             .into_iter()
             .find(|d| d.id == args.file_path || d.filename == args.file_path)
@@ -474,7 +474,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for GrepDocumentsTool {
             .map_err(|e| anyhow::anyhow!("DB init failed: {e}"))?;
         // Chat-scoped: search only THIS chat's uploaded attachments, over their
         // pre-extracted plain-text sidecars (originals may be binary).
-        let docs = crate::db::queries::list_documents_for_chat(&pool, &chat_id).await?;
+        let docs = zen_db::queries::list_documents_for_chat(&pool, &chat_id).await?;
 
         let mut results = Vec::new();
         let query = if args.case_sensitive.unwrap_or(false) {

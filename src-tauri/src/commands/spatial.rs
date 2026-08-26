@@ -1,6 +1,6 @@
 use super::AppState;
 use crate::commands::pagination::{normalize_page, page_from_fetch, Page};
-use crate::error::ZenError;
+use zen_core::error::ZenError;
 use tauri::{AppHandle, Manager, State};
 
 fn map_catalog_directory(app: &AppHandle) -> Result<std::path::PathBuf, ZenError> {
@@ -9,7 +9,7 @@ fn map_catalog_directory(app: &AppHandle) -> Result<std::path::PathBuf, ZenError
 }
 
 // GTSM Types
-use crate::db::models::{GtsmGeofence, GtsmMarker};
+use zen_db::models::{GtsmGeofence, GtsmMarker};
 use crate::services::gtsm::history::{TelemetrySnapshot, TrackPoint};
 use crate::services::gtsm::types::{NavigationRoute, RoutingProfile};
 use crate::services::gtsm::{
@@ -472,7 +472,7 @@ pub async fn get_telemetry_stats(
 
 #[tauri::command]
 pub async fn list_geofences_db(state: State<'_, AppState>) -> Result<Vec<GtsmGeofence>, ZenError> {
-    crate::db::queries::list_geofences(&state.db().await?)
+    zen_db::queries::list_geofences(&state.db().await?)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
@@ -484,7 +484,7 @@ pub async fn list_geofences_db_page(
     offset: Option<i64>,
 ) -> Result<Page<GtsmGeofence>, ZenError> {
     let (limit, offset) = normalize_page(limit, offset);
-    let items = crate::db::queries::list_geofences_page(&state.db().await?, limit + 1, offset)
+    let items = zen_db::queries::list_geofences_page(&state.db().await?, limit + 1, offset)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))?;
     Ok(page_from_fetch(items, limit, offset))
@@ -524,21 +524,21 @@ pub async fn save_geofence_db(
         updated_at: String::new(),
     };
 
-    crate::db::queries::save_geofence(&state.db().await?, &geofence)
+    zen_db::queries::save_geofence(&state.db().await?, &geofence)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
 
 #[tauri::command]
 pub async fn delete_geofence_db(state: State<'_, AppState>, id: String) -> Result<(), ZenError> {
-    crate::db::queries::delete_geofence(&state.db().await?, &id)
+    zen_db::queries::delete_geofence(&state.db().await?, &id)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
 
 #[tauri::command]
 pub async fn list_markers_db(state: State<'_, AppState>) -> Result<Vec<GtsmMarker>, ZenError> {
-    crate::db::queries::list_markers(&state.db().await?)
+    zen_db::queries::list_markers(&state.db().await?)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
@@ -550,7 +550,7 @@ pub async fn list_markers_db_page(
     offset: Option<i64>,
 ) -> Result<Page<GtsmMarker>, ZenError> {
     let (limit, offset) = normalize_page(limit, offset);
-    let items = crate::db::queries::list_markers_page(&state.db().await?, limit + 1, offset)
+    let items = zen_db::queries::list_markers_page(&state.db().await?, limit + 1, offset)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))?;
     Ok(page_from_fetch(items, limit, offset))
@@ -583,20 +583,20 @@ pub async fn save_marker_db(
         created_at: String::new(),
     };
 
-    crate::db::queries::save_marker(&state.db().await?, &marker)
+    zen_db::queries::save_marker(&state.db().await?, &marker)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
 
 #[tauri::command]
 pub async fn delete_marker_db(state: State<'_, AppState>, id: String) -> Result<(), ZenError> {
-    crate::db::queries::delete_marker(&state.db().await?, &id)
+    zen_db::queries::delete_marker(&state.db().await?, &id)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
 
-use crate::db::models::GtsmGeojsonLayer;
-use crate::db::queries::GtsmFavorite;
+use zen_db::models::GtsmGeojsonLayer;
+use zen_db::queries::GtsmFavorite;
 use crate::services::gtsm::GeojsonService;
 
 #[tauri::command]
@@ -606,7 +606,7 @@ pub fn extract_kmz_kml(bytes: Vec<u8>) -> Result<String, ZenError> {
 
 #[tauri::command]
 pub async fn list_geojson_layers_db(state: State<'_, AppState>) -> Result<Vec<GtsmGeojsonLayer>, ZenError> {
-    crate::db::queries::list_geojson_layers(&state.db().await?)
+    zen_db::queries::list_geojson_layers(&state.db().await?)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
@@ -618,7 +618,7 @@ pub async fn list_geojson_layers_db_page(
     offset: Option<i64>,
 ) -> Result<Page<GtsmGeojsonLayer>, ZenError> {
     let (limit, offset) = normalize_page(limit, offset);
-    let items = crate::db::queries::list_geojson_layers_page(&state.db().await?, limit + 1, offset)
+    let items = zen_db::queries::list_geojson_layers_page(&state.db().await?, limit + 1, offset)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))?;
     Ok(page_from_fetch(items, limit, offset))
@@ -662,7 +662,7 @@ pub async fn save_geojson_layer_db(
         updated_at: now_str,
     };
 
-    crate::db::queries::save_geojson_layer(&state.db().await?, &layer)
+    zen_db::queries::save_geojson_layer(&state.db().await?, &layer)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))?;
 
@@ -671,7 +671,7 @@ pub async fn save_geojson_layer_db(
 
 #[tauri::command]
 pub async fn delete_geojson_layer_db(state: State<'_, AppState>, id: String) -> Result<(), ZenError> {
-    crate::db::queries::delete_geojson_layer(&state.db().await?, &id)
+    zen_db::queries::delete_geojson_layer(&state.db().await?, &id)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
@@ -680,7 +680,7 @@ pub async fn delete_geojson_layer_db(state: State<'_, AppState>, id: String) -> 
 
 #[tauri::command]
 pub async fn list_favorites_db(state: State<'_, AppState>) -> Result<Vec<GtsmFavorite>, ZenError> {
-    crate::db::queries::list_favorites(&state.db().await?)
+    zen_db::queries::list_favorites(&state.db().await?)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
@@ -710,14 +710,14 @@ pub async fn save_favorite_db(
         created_at: String::new(),
     };
 
-    crate::db::queries::save_favorite(&state.db().await?, &favorite)
+    zen_db::queries::save_favorite(&state.db().await?, &favorite)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }
 
 #[tauri::command]
 pub async fn delete_favorite_db(state: State<'_, AppState>, id: String) -> Result<(), ZenError> {
-    crate::db::queries::delete_favorite(&state.db().await?, &id)
+    zen_db::queries::delete_favorite(&state.db().await?, &id)
         .await
         .map_err(|e| ZenError::Custom(e.to_string()))
 }

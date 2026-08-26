@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{AppResult, ZenError};
+use zen_core::error::{AppResult, ZenError};
 use crate::services::{
     AuditEvent, PermissionDecision, PrivilegedOperation, SecretService, SettingsService,
 };

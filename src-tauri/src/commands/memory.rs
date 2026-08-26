@@ -51,7 +51,7 @@ pub async fn get_conversation_memories(
 
     // Resolve embedding model
     let pool = state.db().await.map_err(|e| e.to_string())?;
-    let model_name = crate::db::queries::get_setting(&pool, "embedding_model")
+    let model_name = zen_db::queries::get_setting(&pool, "embedding_model")
         .await
         .unwrap_or_default()
         .unwrap_or_else(|| "nomic-embed-text".to_string());
@@ -131,7 +131,7 @@ pub async fn list_session_memories_page(
 ) -> Result<Page<SessionMemoryItem>, String> {
     let pool = state.db().await.map_err(|e| e.to_string())?;
     let (limit, offset) = normalize_page(limit, offset);
-    let rows = crate::db::queries::get_session_memory_rows_for_session_page(
+    let rows = zen_db::queries::get_session_memory_rows_for_session_page(
         &pool,
         &session_id,
         limit + 1,

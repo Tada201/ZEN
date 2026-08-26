@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use tauri::Manager;
 use uuid::Uuid;
 
-use crate::error::{AppResult, ZenError};
+use zen_core::error::{AppResult, ZenError};
 
 const WALLPAPERS_SUBDIR: &str = "media/wallpapers";
 

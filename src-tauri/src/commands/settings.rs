@@ -1,6 +1,6 @@
 use crate::commands::AppState;
-use crate::db::models::{ModelInfo, ProviderConfig};
-use crate::error::{AppResult, ZenResult};
+use zen_db::models::{ModelInfo, ProviderConfig};
+use zen_core::error::{AppResult, ZenResult};
 use crate::services::{is_secret_key, data_cleanup};
 use crate::tools::manager::{ToolManager, ToolMetadata};
 use serde::Serialize;
@@ -201,7 +201,7 @@ pub async fn get_setting(state: State<'_, AppState>, key: String) -> AppResult<O
 pub async fn set_setting(state: State<'_, AppState>, key: String, value: String) -> AppResult<()> {
     if is_workspace_root_key(&key) {
         crate::workspace::canonicalize_workspace_root(std::path::Path::new(&value)).map_err(
-            |e| crate::error::ZenError::Custom(format!("Invalid workspace root: {e}")),
+            |e| zen_core::error::ZenError::Custom(format!("Invalid workspace root: {e}")),
         )?;
     }
 
@@ -254,7 +254,7 @@ async fn custom_provider_ids(state: &AppState) -> Vec<String> {
 pub async fn get_data_cleanup_status(app: tauri::AppHandle) -> AppResult<data_cleanup::ZenDataStatus> {
     let app_data_dir = app.path()
         .app_data_dir()
-        .map_err(|error| crate::error::ZenError::Custom(format!("Could not resolve app data directory: {error}")))?;
+        .map_err(|error| zen_core::error::ZenError::Custom(format!("Could not resolve app data directory: {error}")))?;
     Ok(data_cleanup::inspect(&app_data_dir))
 }
 
@@ -272,11 +272,11 @@ pub async fn reset_settings_and_secrets(state: State<'_, AppState>) -> AppResult
 #[tauri::command]
 pub async fn reset_all_zen_data(app: tauri::AppHandle, state: State<'_, AppState>, confirmation: String) -> AppResult<data_cleanup::ZenCleanupResult> {
     if confirmation != "DELETE ALL ZEN DATA" {
-        return Err(crate::error::ZenError::Custom("Explicit confirmation is required".to_string()));
+        return Err(zen_core::error::ZenError::Custom("Explicit confirmation is required".to_string()));
     }
     let app_data_dir = app.path()
         .app_data_dir()
-        .map_err(|error| crate::error::ZenError::Custom(format!("Could not resolve app data directory: {error}")))?;
+        .map_err(|error| zen_core::error::ZenError::Custom(format!("Could not resolve app data directory: {error}")))?;
     let custom_provider_ids = custom_provider_ids(&state).await;
     data_cleanup::request_full_reset(
         &app_data_dir,
@@ -292,7 +292,7 @@ pub async fn reset_all_zen_data(app: tauri::AppHandle, state: State<'_, AppState
 #[tauri::command]
 pub async fn delete_secret(state: State<'_, AppState>, key: String) -> AppResult<()> {
     if !is_secret_key(&key) {
-        return Err(crate::error::ZenError::Custom(
+        return Err(zen_core::error::ZenError::Custom(
             "Only credential keys can be removed through this command".to_string(),
         ));
     }
@@ -318,7 +318,7 @@ pub async fn set_settings(
     if let Some(workspace_root) = workspace_root.as_deref() {
         crate::workspace::canonicalize_workspace_root(std::path::Path::new(workspace_root))
             .map_err(|e| {
-                crate::error::ZenError::Custom(format!("Invalid workspace root: {e}"))
+                zen_core::error::ZenError::Custom(format!("Invalid workspace root: {e}"))
             })?;
     }
     let (secret_settings, public_settings): (HashMap<_, _>, HashMap<_, _>) = settings
@@ -365,7 +365,7 @@ pub async fn discover_models(
 
     // Prevent transmitting bearer credentials over plain HTTP
     crate::utils::validate_remote_auth_safety(&target_base_url, !target_api_key.is_empty())
-        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))?;
+        .map_err(|e| zen_core::error::ZenError::Custom(e.to_string()))?;
 
     let config = ProviderConfig {
         provider_type: p_type.clone(),
@@ -513,7 +513,7 @@ pub async fn get_provider_usage(
     state: State<'_, AppState>,
     model_ids: Vec<String>,
     period_days: Option<u16>,
-) -> ZenResult<crate::db::queries::ProviderUsageSnapshot> {
+) -> ZenResult<zen_db::queries::ProviderUsageSnapshot> {
     let db = state.db().await?;
     state
         .usage
@@ -550,7 +550,7 @@ pub async fn fetch_9router_image_models(
 
     // Validate security boundary: prevent leaking API key over remote plain HTTP
     crate::utils::validate_remote_auth_safety(&endpoint, !api_key.is_empty())
-        .map_err(|e| crate::error::ZenError::Custom(e.to_string()))?;
+        .map_err(|e| zen_core::error::ZenError::Custom(e.to_string()))?;
 
     let client = crate::utils::default_http_client();
     let mut request = client.get(&endpoint);
@@ -564,25 +564,25 @@ pub async fn fetch_9router_image_models(
     )
     .await
     .map_err(|_| {
-        crate::error::ZenError::Custom("9Router image models request timed out".to_string())
+        zen_core::error::ZenError::Custom("9Router image models request timed out".to_string())
     })?
     .map_err(|e| {
-        crate::error::ZenError::Custom(format!("Failed to connect to 9Router: {e}"))
+        zen_core::error::ZenError::Custom(format!("Failed to connect to 9Router: {e}"))
     })?;
 
     if !response.status().is_success() {
-        return Err(crate::error::ZenError::Custom(format!(
+        return Err(zen_core::error::ZenError::Custom(format!(
             "9Router returned status {} for image models",
             response.status()
         )));
     }
 
     let body: serde_json::Value = response.json().await.map_err(|e| {
-        crate::error::ZenError::Custom(format!("Failed to parse 9Router response: {e}"))
+        zen_core::error::ZenError::Custom(format!("Failed to parse 9Router response: {e}"))
     })?;
 
     let data_arr = body.get("data").and_then(|d| d.as_array()).ok_or_else(|| {
-        crate::error::ZenError::Custom("No data field in 9Router models response".to_string())
+        zen_core::error::ZenError::Custom("No data field in 9Router models response".to_string())
     })?;
 
     let models: Vec<ModelInfo> = data_arr
@@ -616,7 +616,7 @@ pub async fn sync_tool_permissions(state: State<'_, AppState>) -> AppResult<()> 
         .tool_manager
         .update_permissions(permissions)
         .await
-        .map_err(crate::error::ZenError::Internal)?;
+        .map_err(zen_core::error::ZenError::Internal)?;
     Ok(())
 }
 
@@ -679,10 +679,10 @@ pub async fn test_provider_connection(
     mut config: ProviderConfig,
 ) -> ZenResult<Vec<ModelInfo>> {
     let parsed = url::Url::parse(config.base_url.trim()).map_err(|error| {
-        crate::error::ZenError::Custom(format!("Invalid provider endpoint: {error}"))
+        zen_core::error::ZenError::Custom(format!("Invalid provider endpoint: {error}"))
     })?;
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
-        return Err(crate::error::ZenError::Custom(
+        return Err(zen_core::error::ZenError::Custom(
             "Provider endpoint must use HTTP or HTTPS".to_string(),
         ));
     }
@@ -707,10 +707,10 @@ pub async fn test_provider_connection(
     )
     .await
     .map_err(|_| {
-        crate::error::ZenError::Custom("Provider connection timed out after 12 seconds".to_string())
+        zen_core::error::ZenError::Custom("Provider connection timed out after 12 seconds".to_string())
     })?;
     if !healthy {
-        return Err(crate::error::ZenError::Internal(format!(
+        return Err(zen_core::error::ZenError::Internal(format!(
             "Node {} is unreachable",
             config.display_name
         )));
@@ -722,7 +722,7 @@ pub async fn test_provider_connection(
     )
     .await
     .map_err(|_| {
-        crate::error::ZenError::Custom(
+        zen_core::error::ZenError::Custom(
             "Reading the provider model catalog timed out after 12 seconds".to_string(),
         )
     })?

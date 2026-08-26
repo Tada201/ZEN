@@ -5,9 +5,9 @@ use tauri::{AppHandle, Emitter, State};
 use tracing::info;
 
 use crate::commands::AppState;
-use crate::db::models::ChatMessage;
-use crate::db::queries;
-use crate::error::ZenResult;
+use zen_db::models::ChatMessage;
+use zen_db::queries;
+use zen_core::error::ZenResult;
 
 use super::helpers::{sanitize_title, DEFAULT_TITLE_PROMPT, TITLE_MAX_CHARS};
 
@@ -97,7 +97,7 @@ pub async fn generate_session_title(
                         .provider_by_name(&active_fallback, &db)
                         .await
                         .map_err(|e| {
-                            crate::error::ZenError::Internal(format!(
+                            zen_core::error::ZenError::Internal(format!(
                                 "Title provider resolution failed: {e}"
                             ))
                         })?
@@ -107,7 +107,7 @@ pub async fn generate_session_title(
                 .provider_by_name(&active_fallback, &db)
                 .await
                 .map_err(|e| {
-                    crate::error::ZenError::Internal(format!(
+                    zen_core::error::ZenError::Internal(format!(
                         "Title provider resolution failed: {e}"
                     ))
                 })?,
@@ -172,7 +172,7 @@ pub async fn generate_session_title(
             tokio_util::sync::CancellationToken::new(),
         )
         .await
-        .map_err(|e| crate::error::ZenError::Internal(format!("Title generation failed: {e}")))?;
+        .map_err(|e| zen_core::error::ZenError::Internal(format!("Title generation failed: {e}")))?;
 
     let raw = response.content;
     let title = sanitize_title(&raw);

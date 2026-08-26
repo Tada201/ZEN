@@ -2,7 +2,7 @@ use serde_json::Value;
 use tauri::{AppHandle, State};
 
 use crate::commands::AppState;
-use crate::error::{ZenError, ZenResult};
+use zen_core::error::{ZenError, ZenResult};
 use zen_mcp::resources::{
     McpPrompt, McpPromptMessage, McpResource, McpResourceContents, McpResourceTemplate,
 };

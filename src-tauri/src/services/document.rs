@@ -4,8 +4,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::db::models::Document;
-use crate::error::{AppError, AppResult};
+use zen_db::models::Document;
+use zen_core::error::{AppError, AppResult};
 use zen_rag::embedding::EmbeddingModel;
 use zen_rag::{ingestion::IngestionEngine, DocumentChunk, VectorStore};
 
@@ -151,9 +151,9 @@ impl DocumentService {
             .ok_or_else(|| AppError::Custom("Database not initialized".into()))?;
 
         // 4. Store document metadata in SQLite
-        let _doc = crate::db::queries::add_document(
+        let _doc = zen_db::queries::add_document(
             &pool,
-            &crate::db::queries::NewDocument {
+            &zen_db::queries::NewDocument {
                 id: &doc_id,
                 filename: &filename,
                 file_path: &path.to_string_lossy(),
@@ -171,7 +171,7 @@ impl DocumentService {
             // Rough token estimate: ~4 chars per token
             let token_count = (chunk.text.len() / 4) as i64;
 
-            crate::db::queries::add_document_chunk(
+            zen_db::queries::add_document_chunk(
                 &pool,
                 &chunk_id,
                 &doc_id,
@@ -205,7 +205,7 @@ impl DocumentService {
                             // Don't fail the whole ingest — doc is still in SQLite
                         } else {
                             // Update status to indexed
-                            let _ = crate::db::queries::update_document_status(
+                            let _ = zen_db::queries::update_document_status(
                                 &pool, &doc_id, "indexed", None,
                             )
                             .await;
@@ -220,7 +220,7 @@ impl DocumentService {
         }
 
         // 7. Return the stored document
-        let stored = crate::db::queries::get_document(&pool, &doc_id).await?;
+        let stored = zen_db::queries::get_document(&pool, &doc_id).await?;
         Ok(stored)
     }
 
@@ -231,7 +231,7 @@ impl DocumentService {
             .await
             .clone()
             .ok_or_else(|| AppError::Custom("Database not initialized".into()))?;
-        crate::db::queries::list_documents(&pool).await
+        zen_db::queries::list_documents(&pool).await
     }
 
     pub async fn list_page(&self, limit: i64, offset: i64) -> AppResult<Vec<Document>> {
@@ -241,7 +241,7 @@ impl DocumentService {
             .await
             .clone()
             .ok_or_else(|| AppError::Custom("Database not initialized".into()))?;
-        crate::db::queries::list_documents_page(&pool, limit, offset).await
+        zen_db::queries::list_documents_page(&pool, limit, offset).await
     }
 
     pub async fn get_by_id(&self, doc_id: &str) -> AppResult<Document> {
@@ -251,7 +251,7 @@ impl DocumentService {
             .await
             .clone()
             .ok_or_else(|| AppError::Custom("Database not initialized".into()))?;
-        crate::db::queries::get_document(&pool, doc_id).await
+        zen_db::queries::get_document(&pool, doc_id).await
     }
 
     pub async fn delete(&self, doc_id: &str) -> AppResult<()> {
@@ -265,7 +265,7 @@ impl DocumentService {
         // Remove from vector store if available
         if let Some(store) = self.rag_store.read().await.as_ref() {
             // Try to find the source path from the doc record
-            if let Ok(doc) = crate::db::queries::get_document(&pool, doc_id).await {
+            if let Ok(doc) = zen_db::queries::get_document(&pool, doc_id).await {
                 if let Some(ref path) = doc.file_path {
                     let _ = store.delete_by_source(path).await;
                 }
@@ -273,7 +273,7 @@ impl DocumentService {
         }
 
         // Remove from SQLite (cascades to document_chunks)
-        crate::db::queries::delete_document(&pool, doc_id).await
+        zen_db::queries::delete_document(&pool, doc_id).await
     }
 
     // ─── Per-chat attachments (Phase 1) ───
@@ -315,7 +315,7 @@ impl DocumentService {
         let pool = self.require_pool().await?;
 
         // Per-chat file-count cap.
-        let existing = crate::db::queries::count_documents_for_chat(&pool, &chat_id).await?;
+        let existing = zen_db::queries::count_documents_for_chat(&pool, &chat_id).await?;
         if existing >= store::MAX_ATTACHMENTS_PER_CHAT {
             return Err(AppError::Custom(format!(
                 "This chat already has the maximum of {} attachments",
@@ -413,9 +413,9 @@ impl DocumentService {
             None
         };
 
-        let doc = crate::db::queries::add_chat_attachment(
+        let doc = zen_db::queries::add_chat_attachment(
             &pool,
-            &crate::db::queries::NewChatAttachment {
+            &zen_db::queries::NewChatAttachment {
                 id: &doc_id,
                 chat_id: &chat_id,
                 filename: &filename,
@@ -474,7 +474,7 @@ impl DocumentService {
     /// List one chat's attachments (metadata only).
     pub async fn list_for_chat(&self, chat_id: &str) -> AppResult<Vec<Document>> {
         let pool = self.require_pool().await?;
-        crate::db::queries::list_documents_for_chat(&pool, chat_id).await
+        zen_db::queries::list_documents_for_chat(&pool, chat_id).await
     }
 
     /// Delete one chat attachment: remove the DB row and its blob + sidecar.
@@ -485,8 +485,8 @@ impl DocumentService {
     ) -> AppResult<()> {
         use crate::services::attachment_store as store;
         let pool = self.require_pool().await?;
-        let doc = crate::db::queries::get_document(&pool, doc_id).await?;
-        crate::db::queries::delete_document(&pool, doc_id).await?;
+        let doc = zen_db::queries::get_document(&pool, doc_id).await?;
+        zen_db::queries::delete_document(&pool, doc_id).await?;
         // Blob path is stored in file_path; the extracted sidecar sits next to
         // it under `<doc_id>.extracted.txt`.
         if let Some(blob) = doc.file_path.as_deref() {
@@ -520,7 +520,7 @@ impl DocumentService {
     pub async fn read_chat_attachment_text(&self, doc_id: &str) -> AppResult<String> {
         const PREVIEW_CAP: usize = 256 * 1024;
         let pool = self.require_pool().await?;
-        let doc = crate::db::queries::get_document(&pool, doc_id).await?;
+        let doc = zen_db::queries::get_document(&pool, doc_id).await?;
         let blob = doc
             .file_path
             .as_deref()

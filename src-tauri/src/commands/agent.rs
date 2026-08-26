@@ -1,5 +1,5 @@
 use crate::commands::AppState;
-use crate::error::ZenResult;
+use zen_core::error::ZenResult;
 use serde::Serialize;
 use tauri::State;
 use crate::agent::types::{AgentConfigMode, AgentProfile};
@@ -33,7 +33,7 @@ pub struct AgentInfoResponse {
 async fn validate_profile_tools(state: &AppState, profile: &AgentProfile) -> ZenResult<()> {
     for tool_id in &profile.agent.tool_ids {
         if !state.tool_manager.exists(tool_id).await {
-            return Err(crate::error::ZenError::Custom(format!(
+            return Err(zen_core::error::ZenError::Custom(format!(
                 "Unknown or unavailable tool '{tool_id}'. Refresh the tool list and try again."
             )));
         }
@@ -138,20 +138,20 @@ pub async fn set_agent_model(
     if agent_id.is_empty() || agent_id.len() > 128
         || !agent_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     {
-        return Err(crate::error::ZenError::Custom("Invalid agent id.".to_string()));
+        return Err(zen_core::error::ZenError::Custom("Invalid agent id.".to_string()));
     }
     if state.agent_registry.get(agent_id).is_none() {
-        return Err(crate::error::ZenError::Custom("Agent not found.".to_string()));
+        return Err(zen_core::error::ZenError::Custom("Agent not found.".to_string()));
     }
     let value = model.unwrap_or_default();
     if value.len() > 256 || value.chars().any(|c| c == '\n' || c == '\r') {
-        return Err(crate::error::ZenError::Custom("Invalid model selection.".to_string()));
+        return Err(zen_core::error::ZenError::Custom("Invalid model selection.".to_string()));
     }
     state
         .settings_manager
         .set(format!("agent_model.{agent_id}"), value)
         .await
-        .map_err(|error| crate::error::ZenError::Custom(error.to_string()))
+        .map_err(|error| zen_core::error::ZenError::Custom(error.to_string()))
 }
 
 /// Persist the reasoning effort a specific agent should run at, stored under
@@ -169,33 +169,33 @@ pub async fn set_agent_reasoning(
     if agent_id.is_empty() || agent_id.len() > 128
         || !agent_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     {
-        return Err(crate::error::ZenError::Custom("Invalid agent id.".to_string()));
+        return Err(zen_core::error::ZenError::Custom("Invalid agent id.".to_string()));
     }
     if state.agent_registry.get(agent_id).is_none() {
-        return Err(crate::error::ZenError::Custom("Agent not found.".to_string()));
+        return Err(zen_core::error::ZenError::Custom("Agent not found.".to_string()));
     }
     let value = effort.unwrap_or_default();
     // Bounded, single-token effort level; reject anything that isn't a plain word.
     if value.len() > 16 || !value.chars().all(|c| c.is_ascii_alphanumeric()) {
-        return Err(crate::error::ZenError::Custom("Invalid reasoning effort.".to_string()));
+        return Err(zen_core::error::ZenError::Custom("Invalid reasoning effort.".to_string()));
     }
     state
         .settings_manager
         .set(format!("agent_reasoning.{agent_id}"), value)
         .await
-        .map_err(|error| crate::error::ZenError::Custom(error.to_string()))
+        .map_err(|error| zen_core::error::ZenError::Custom(error.to_string()))
 }
 
 #[tauri::command]
 pub async fn create_agent(state: State<'_, AppState>, profile: AgentProfile) -> ZenResult<AgentInfoResponse> {
     validate_profile_tools(&state, &profile).await?;
     if state.agent_registry.get(&profile.agent.id).is_some() {
-        return Err(crate::error::ZenError::Custom("An agent with this ID already exists.".to_string()));
+        return Err(zen_core::error::ZenError::Custom("An agent with this ID already exists.".to_string()));
     }
     let saved = state
         .agent_registry
         .save_user_profile(profile)
-        .map_err(crate::error::ZenError::Custom)?;
+        .map_err(zen_core::error::ZenError::Custom)?;
     Ok(agent_response(&state, saved))
 }
 
@@ -203,12 +203,12 @@ pub async fn create_agent(state: State<'_, AppState>, profile: AgentProfile) -> 
 pub async fn update_agent(state: State<'_, AppState>, profile: AgentProfile) -> ZenResult<AgentInfoResponse> {
     validate_profile_tools(&state, &profile).await?;
     if state.agent_registry.get(&profile.agent.id).is_none() {
-        return Err(crate::error::ZenError::Custom("Agent not found.".to_string()));
+        return Err(zen_core::error::ZenError::Custom("Agent not found.".to_string()));
     }
     let saved = state
         .agent_registry
         .save_user_profile(profile)
-        .map_err(crate::error::ZenError::Custom)?;
+        .map_err(zen_core::error::ZenError::Custom)?;
     Ok(agent_response(&state, saved))
 }
 
@@ -219,13 +219,13 @@ pub async fn set_voice_display_model(
 ) -> ZenResult<()> {
     let value = model.unwrap_or_default();
     if value.len() > 256 || value.chars().any(|character| character == '\n' || character == '\r') {
-        return Err(crate::error::ZenError::Custom("Invalid voice display model selection.".to_string()));
+        return Err(zen_core::error::ZenError::Custom("Invalid voice display model selection.".to_string()));
     }
     state
         .settings_manager
         .set("voiceDisplayAgentModel".to_string(), value)
         .await
-        .map_err(|error| crate::error::ZenError::Custom(error.to_string()))
+        .map_err(|error| zen_core::error::ZenError::Custom(error.to_string()))
 }
 
 #[tauri::command]
@@ -233,7 +233,7 @@ pub async fn delete_agent(state: State<'_, AppState>, agent_id: String) -> ZenRe
     state
         .agent_registry
         .delete_user_profile(&agent_id)
-        .map_err(crate::error::ZenError::Custom)
+        .map_err(zen_core::error::ZenError::Custom)
 }
 
 #[derive(Debug, Serialize)]
@@ -250,7 +250,7 @@ pub async fn orchestrator_get_status(state: State<'_, AppState>) -> ZenResult<se
 
     // Try to get plan stats from DB
     let (active, completed) = if let Ok(db) = state.db().await {
-        crate::db::queries::get_orchestration_plan_counts(&db)
+        zen_db::queries::get_orchestration_plan_counts(&db)
             .await
             .unwrap_or((0, 0))
     } else {
@@ -350,7 +350,7 @@ pub async fn resolve_tool_approval(
                         .insert(cache_key.clone(), true);
                 }
                 if let Ok(db) = state.db().await {
-                    let perm = crate::db::queries::SessionPermission {
+                    let perm = zen_db::queries::SessionPermission {
                         id: uuid::Uuid::new_v4().to_string(),
                         chat_id: tx.chat_id.clone(),
                         tool_name: tx.tool_name.clone(),
@@ -358,7 +358,7 @@ pub async fn resolve_tool_approval(
                         pattern: Some("exact".to_string()),
                         granted_at: chrono::Utc::now().to_rfc3339(),
                     };
-                    if let Err(e) = crate::db::queries::upsert_session_permission(&db, &perm).await
+                    if let Err(e) = zen_db::queries::upsert_session_permission(&db, &perm).await
                     {
                         tracing::warn!(
                             tool_call_id = %tool_call_id,
@@ -395,7 +395,7 @@ pub async fn resolve_tool_approval(
                 tool_call_id = %tool_call_id,
                 "resolve_tool_approval: no pending approval found (already resolved or expired)"
             );
-            Err(crate::error::ZenError::Custom(
+            Err(zen_core::error::ZenError::Custom(
                 "Tool approval is missing, expired, or already resolved".to_string(),
             ))
         }

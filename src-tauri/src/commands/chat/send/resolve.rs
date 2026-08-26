@@ -6,7 +6,7 @@ use super::*;
 /// Everything the parallel fan-out returns for this turn.
 pub(super) struct TurnInputs {
     pub llm_provider: Arc<dyn zen_llm::LlmProvider>,
-    pub history: Vec<crate::db::models::Message>,
+    pub history: Vec<zen_db::models::Message>,
     pub tools_enabled_str: Option<String>,
     pub tool_yolo_mode_str: Option<String>,
     pub tools_yolo_mode_str: Option<String>,
@@ -25,7 +25,7 @@ pub(super) async fn resolve_provider_and_model(
     let resolved_provider_name = match provider {
         Some(p) if !p.is_empty() => p.to_string(),
         _ => {
-            let active_setting = crate::db::queries::get_setting(db, "active_provider")
+            let active_setting = zen_db::queries::get_setting(db, "active_provider")
                 .await
                 .unwrap_or_default();
             active_setting.unwrap_or_else(|| "ollama".to_string())
@@ -46,7 +46,7 @@ pub(super) async fn resolve_provider_and_model(
             if !is_regenerate {
                 persist_sync_send_failure(db, chat_id, None, &message).await;
             }
-            return Err(crate::error::ZenError::Custom(message));
+            return Err(zen_core::error::ZenError::Custom(message));
         }
     };
 
@@ -128,8 +128,8 @@ pub(super) async fn apply_regenerate_truncate(
     db: &SqlitePool,
     chat_id: &str,
     anchor_id: &str,
-    history: Vec<crate::db::models::Message>,
-) -> ZenResult<Vec<crate::db::models::Message>> {
+    history: Vec<zen_db::models::Message>,
+) -> ZenResult<Vec<zen_db::models::Message>> {
     let removed = queries::truncate_messages_after(db, chat_id, anchor_id).await?;
     info!(
         chat_id,

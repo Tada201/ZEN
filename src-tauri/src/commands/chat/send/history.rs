@@ -4,7 +4,7 @@ use super::*;
 
 pub(super) fn to_chat_messages(
     chat_id: &str,
-    history: Vec<crate::db::models::Message>,
+    history: Vec<zen_db::models::Message>,
 ) -> Vec<ChatMessage> {
     history
         .into_iter()
@@ -36,7 +36,7 @@ pub(super) fn to_chat_messages(
                 .unwrap_or_default();
 
             if let Some(ref att_str) = m.attachments {
-                if let Ok(atts) = serde_json::from_str::<Vec<crate::db::models::Attachment>>(att_str) {
+                if let Ok(atts) = serde_json::from_str::<Vec<zen_db::models::Attachment>>(att_str) {
                     for att in atts {
                         if att.mime_type.starts_with("image/") {
                             if !att.data.is_empty() {

@@ -1,5 +1,5 @@
-use crate::db::queries::{self, ProviderUsageSnapshot};
-use crate::error::ZenResult;
+use zen_db::queries::{self, ProviderUsageSnapshot};
+use zen_core::error::ZenResult;
 
 #[derive(Clone, Default)]
 pub struct UsageService;

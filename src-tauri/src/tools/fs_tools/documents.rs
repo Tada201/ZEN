@@ -51,7 +51,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ListDocumentsTool {
         let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
             message: format!("DB error: {e}"),
         })?;
-        let docs = crate::db::queries::list_documents(&pool)
+        let docs = zen_db::queries::list_documents(&pool)
             .await
             .map_err(|e| ToolError::ExecutionFailed {
                 message: format!("Failed to list docs: {e}"),
@@ -146,7 +146,7 @@ impl zen_tools::Tool<tauri::AppHandle> for ReadDocumentTool {
 
         // 2. If it doesn't exist, check if it's a known ingested document by filename or ID
         if !target_path.exists() {
-            if let Ok(docs) = crate::db::queries::list_documents(&pool).await {
+            if let Ok(docs) = zen_db::queries::list_documents(&pool).await {
                 if let Some(doc) = docs
                     .into_iter()
                     .find(|d| d.filename == parsed_args.file_path || d.id == parsed_args.file_path)
@@ -289,7 +289,7 @@ impl zen_tools::Tool<tauri::AppHandle> for GrepDocumentsTool {
         let pool = state.db().await.map_err(|e| ToolError::ExecutionFailed {
             message: format!("DB error: {e}"),
         })?;
-        let docs = crate::db::queries::list_documents(&pool)
+        let docs = zen_db::queries::list_documents(&pool)
             .await
             .map_err(|e| ToolError::ExecutionFailed {
                 message: e.to_string(),

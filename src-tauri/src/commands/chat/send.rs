@@ -25,9 +25,9 @@ use tracing::{error, info};
 
 use crate::agent::runner::Runner;
 use crate::commands::AppState;
-use crate::db::models::ChatMessage;
-use crate::db::queries;
-use crate::error::ZenResult;
+use zen_db::models::ChatMessage;
+use zen_db::queries;
+use zen_core::error::ZenResult;
 use zen_llm::ChatRequestConfig;
 
 use super::helpers::{
@@ -73,7 +73,7 @@ pub async fn send_message(
     generative_ui: Option<bool>,
     image_gen: Option<bool>,
     tools: Option<Vec<String>>,
-    attachments: Option<Vec<crate::db::models::Attachment>>,
+    attachments: Option<Vec<zen_db::models::Attachment>>,
     system_prompt: Option<String>,
     system_prompt_mode: Option<String>,
     voice_display_context: Option<String>,

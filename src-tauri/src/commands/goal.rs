@@ -4,8 +4,8 @@
 use tauri::{AppHandle, State};
 
 use crate::commands::AppState;
-use crate::db::models::ThreadGoal;
-use crate::error::ZenResult;
+use zen_db::models::ThreadGoal;
+use zen_core::error::ZenResult;
 use crate::services::goal as goal_service;
 
 #[tauri::command]

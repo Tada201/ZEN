@@ -4,7 +4,7 @@ use tauri::{AppHandle, Manager, State};
 use tracing::info;
 
 use crate::commands::AppState;
-use crate::error::ZenError;
+use zen_core::error::ZenError;
 use crate::services::SpeechService;
 
 const MAX_VOICE_MODEL_BYTES: u64 = 600 * 1024 * 1024;
@@ -150,7 +150,7 @@ pub async fn transcribe_audio(
 
     let requested_model = match model_name.filter(|name| !name.trim().is_empty()) {
         Some(name) => name,
-        None => crate::db::queries::get_setting(&state.db().await?, "stt_whisper_model")
+        None => zen_db::queries::get_setting(&state.db().await?, "stt_whisper_model")
             .await
             .unwrap_or_default()
             .unwrap_or_else(|| "ggml-base.en.bin".to_string()),
@@ -245,7 +245,7 @@ pub async fn transcribe_stream(
 
     let requested_model = match model_name.filter(|name| !name.trim().is_empty()) {
         Some(name) => name,
-        None => crate::db::queries::get_setting(&state.db().await?, "stt_whisper_model")
+        None => zen_db::queries::get_setting(&state.db().await?, "stt_whisper_model")
             .await
             .unwrap_or_default()
             .unwrap_or_else(|| "ggml-base.en.bin".to_string()),

@@ -1,7 +1,7 @@
 use crate::commands::pagination::{normalize_page, page_from_fetch, Page};
 use crate::commands::AppState;
-use crate::db::models::Document;
-use crate::error::{AppError, AppResult};
+use zen_db::models::Document;
+use zen_core::error::{AppError, AppResult};
 use base64::Engine;
 use tauri::{AppHandle, Manager, State};
 

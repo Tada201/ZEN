@@ -1,6 +1,6 @@
 use crate::commands::AppState;
-use crate::db::models::{Chat, Message};
-use crate::error::{ZenError, ZenResult};
+use zen_db::models::{Chat, Message};
+use zen_core::error::{ZenError, ZenResult};
 use crate::services::is_secret_key;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -78,9 +78,9 @@ struct BackupSnapshot {
 #[tauri::command]
 pub async fn get_backup_summary(state: State<'_, AppState>) -> ZenResult<BackupSummary> {
     let db = state.db().await?;
-    let chats = crate::db::queries::count_chats(&db).await?;
-    let messages = crate::db::queries::count_messages(&db).await?;
-    let settings = crate::db::queries::count_settings(&db).await?;
+    let chats = zen_db::queries::count_chats(&db).await?;
+    let messages = zen_db::queries::count_messages(&db).await?;
+    let settings = zen_db::queries::count_settings(&db).await?;
     Ok(BackupSummary { chat_count: chats, message_count: messages, setting_count: settings, secrets_excluded: true })
 }
 
@@ -91,11 +91,11 @@ pub async fn export_zen_backup(
     _options: BackupOptions,
 ) -> ZenResult<BackupInspection> {
     let db = state.db().await?;
-    let chats: Vec<Chat> = crate::db::queries::list_all_chats_for_backup(&db).await?;
+    let chats: Vec<Chat> = zen_db::queries::list_all_chats_for_backup(&db).await?;
     let chats = chats.into_iter().map(|mut chat| { chat.workspace_root = None; chat }).collect::<Vec<_>>();
     let mut messages = Vec::new();
     for chat in &chats {
-        let rows: Vec<Message> = crate::db::queries::get_all_messages_for_backup(&db, &chat.id).await?;
+        let rows: Vec<Message> = zen_db::queries::get_all_messages_for_backup(&db, &chat.id).await?;
         messages.extend(rows);
     }
     let settings = state.settings_manager.get_all_public().await?
@@ -173,9 +173,9 @@ pub async fn import_zen_backup(
     let message_count = snapshot.messages.len();
     for chat in snapshot.chats {
         let imported_id = uuid::Uuid::new_v4().to_string();
-        crate::db::queries::insert_chat_tx(&mut tx, &imported_id, &format!("{} (Imported)", chat.title), chat.model.as_deref()).await?;
+        zen_db::queries::insert_chat_tx(&mut tx, &imported_id, &format!("{} (Imported)", chat.title), chat.model.as_deref()).await?;
         for message in snapshot.messages.iter().filter(|message| message.chat_id == chat.id) {
-            crate::db::queries::add_message_tx(&mut tx, &crate::db::queries::NewMessage {
+            zen_db::queries::add_message_tx(&mut tx, &zen_db::queries::NewMessage {
                 chat_id: &imported_id, id: None, role: &message.role, content: &message.content,
                 model: message.model.as_deref(), is_complete: message.is_complete.unwrap_or(1) == 1,
                 tool_calls: message.tool_calls.as_deref(), tool_call_id: message.tool_call_id.as_deref(), images: message.images.as_deref(), attachments: message.attachments.as_deref(),

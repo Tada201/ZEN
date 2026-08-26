@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::error::{AppResult, ZenError};
+use zen_core::error::{AppResult, ZenError};
 use crate::services::{
     is_secret_key, is_secret_placeholder_write, AuditEvent, PermissionDecision,
     PrivilegedOperation, SecurityService, SettingsService, SECRET_PRESENT_SENTINEL,

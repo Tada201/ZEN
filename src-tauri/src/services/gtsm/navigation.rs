@@ -33,7 +33,7 @@ pub async fn compute_route(
             match google_route(origin, dest, &profile, &key).await {
                 Ok(route) => {
                     if let Some(p) = pool {
-                        let _ = crate::db::queries::increment_setting(p, "google_maps_usage_count")
+                        let _ = zen_db::queries::increment_setting(p, "google_maps_usage_count")
                             .await;
                     }
                     return Ok(route);

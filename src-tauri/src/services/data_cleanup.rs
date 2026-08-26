@@ -1,4 +1,4 @@
-use crate::error::AppResult;
+use zen_core::error::AppResult;
 use crate::services::SecretService;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -90,7 +90,7 @@ pub async fn request_full_reset(
 ) -> AppResult<ZenCleanupResult> {
     secrets.delete_known_secrets(custom_provider_ids).await?;
     std::fs::write(app_data_dir.join(RESET_MARKER), b"confirmed")
-        .map_err(|error| crate::error::ZenError::Custom(format!("Could not schedule Zen data cleanup: {error}")))?;
+        .map_err(|error| zen_core::error::ZenError::Custom(format!("Could not schedule Zen data cleanup: {error}")))?;
     Ok(ZenCleanupResult {
         removed_categories: vec!["keyring".to_string()],
         failed_categories: Vec::new(),

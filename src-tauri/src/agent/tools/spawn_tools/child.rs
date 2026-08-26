@@ -156,7 +156,7 @@ impl SpawnAgentTool {
 
         // Create a shared inbox so the parent/orchestrator can inject messages
         // into this sub-agent while it is running.
-        let message_inbox: Arc<tokio::sync::Mutex<VecDeque<crate::db::models::ChatMessage>>> =
+        let message_inbox: Arc<tokio::sync::Mutex<VecDeque<zen_db::models::ChatMessage>>> =
             Arc::new(tokio::sync::Mutex::new(VecDeque::new()));
         let child_tool_call_ids = Arc::new(tokio::sync::Mutex::new(Vec::new()));
         let intermediate_commentary: Arc<tokio::sync::Mutex<Vec<(u64, String)>>> =

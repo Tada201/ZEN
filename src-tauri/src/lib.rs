@@ -2,7 +2,6 @@ pub mod agent;
 pub mod browser;
 pub mod canvas;
 pub mod commands;
-pub mod db;
 pub mod error;
 pub mod models;
 pub mod search;
@@ -100,7 +99,7 @@ pub fn run() {
                 // same `novus.db` filename lives in separate `app_data_dir`s.
                 let db_name = if cfg!(debug_assertions) { "novus-dev.db" } else { "novus.db" };
                 let db_path = app_dir.join(db_name);
-                let pool = match crate::db::init_pool(&db_path).await {
+                let pool = match zen_db::init_pool(&db_path).await {
                     Ok(p) => p,
                     Err(e) => {
                         tracing::error!(error = %e, "Failed to initialize database");

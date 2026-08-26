@@ -113,7 +113,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<WsState>) {
 /// Reads the `gtsm_paused` key from the settings DB.
 async fn is_gtsm_paused(db_pool: &Option<sqlx::SqlitePool>) -> bool {
     if let Some(pool) = db_pool {
-        match crate::db::queries::get_setting(pool, "gtsm_paused").await {
+        match zen_db::queries::get_setting(pool, "gtsm_paused").await {
             Ok(Some(val)) => val != "false", // Default to paused unless explicitly set to "false"
             _ => true, // No setting = paused (don't fetch until user activates map)
         }
@@ -126,7 +126,7 @@ async fn is_gtsm_paused(db_pool: &Option<sqlx::SqlitePool>) -> bool {
 /// Reads the `gtsm_api_enabled` key from the settings DB.
 async fn is_gtsm_api_enabled(db_pool: &Option<sqlx::SqlitePool>) -> bool {
     if let Some(pool) = db_pool {
-        match crate::db::queries::get_setting(pool, "gtsm_api_enabled").await {
+        match zen_db::queries::get_setting(pool, "gtsm_api_enabled").await {
             Ok(Some(val)) => val == "true", // Default to disabled unless explicitly set to "true"
             _ => false, // No setting = disabled (conserve bandwidth/CPU by default)
         }
@@ -139,7 +139,7 @@ async fn is_gtsm_api_enabled(db_pool: &Option<sqlx::SqlitePool>) -> bool {
 /// Reads the `gtsm_adsb_enabled` key from the settings DB.
 async fn is_gtsm_adsb_enabled(db_pool: &Option<sqlx::SqlitePool>) -> bool {
     if let Some(pool) = db_pool {
-        match crate::db::queries::get_setting(pool, "gtsm_adsb_enabled").await {
+        match zen_db::queries::get_setting(pool, "gtsm_adsb_enabled").await {
             Ok(Some(val)) => val == "true", // Default to disabled unless explicitly set to "true"
             _ => false,                     // No setting = disabled
         }

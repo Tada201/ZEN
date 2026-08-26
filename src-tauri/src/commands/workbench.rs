@@ -1,8 +1,8 @@
 use tauri::State;
 use crate::commands::AppState;
-use crate::db::models::WorkbenchTab;
-use crate::db::queries;
-use crate::error::{ZenError, ZenResult};
+use zen_db::models::WorkbenchTab;
+use zen_db::queries;
+use zen_core::error::{ZenError, ZenResult};
 
 fn validate_tab(tab: &WorkbenchTab) -> ZenResult<()> {
     if tab.id.trim().is_empty() || tab.chat_id.trim().is_empty() || tab.view_id.trim().is_empty() {

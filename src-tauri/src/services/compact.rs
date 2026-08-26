@@ -16,7 +16,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::agent::runner::{RunConfig, Runner};
 use crate::commands::AppState;
-use crate::db::queries;
+use zen_db::queries;
 
 pub const CONTEXT_COMPACTED_EVENT: &str = "context:compacted";
 

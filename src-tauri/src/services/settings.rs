@@ -1,4 +1,4 @@
-use crate::error::AppResult;
+use zen_core::error::AppResult;
 use crate::services::{is_secret_placeholder_write, redact_if_secret, SECRET_PRESENT_SENTINEL};
 use sqlx::SqlitePool;
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ impl SettingsService {
     pub async fn load_all(&self) -> AppResult<()> {
         let db = self.db_pool.read().await;
         if let Some(pool) = db.as_ref() {
-            let all = crate::db::queries::get_all_settings(pool).await?;
+            let all = zen_db::queries::get_all_settings(pool).await?;
             let mut cache = self.cache.write().await;
             for (k, v) in all {
                 cache.insert(k, v);
@@ -69,7 +69,7 @@ impl SettingsService {
         // Persist to SQLite if the pool is available
         let db = self.db_pool.read().await;
         if let Some(pool) = db.as_ref() {
-            crate::db::queries::set_setting(pool, &key, &value).await?;
+            zen_db::queries::set_setting(pool, &key, &value).await?;
         }
         Ok(())
     }
@@ -93,7 +93,7 @@ impl SettingsService {
 
         let db = self.db_pool.read().await;
         if let Some(pool) = db.as_ref() {
-            crate::db::queries::bulk_set_settings(pool, settings).await?;
+            zen_db::queries::bulk_set_settings(pool, settings).await?;
         }
         Ok(())
     }
@@ -105,7 +105,7 @@ impl SettingsService {
 
     pub async fn clear(&self) -> AppResult<()> {
         if let Some(pool) = self.db_pool.read().await.as_ref() {
-            crate::db::queries::clear_settings(pool).await?;
+            zen_db::queries::clear_settings(pool).await?;
         }
         self.cache.write().await.clear();
         Ok(())

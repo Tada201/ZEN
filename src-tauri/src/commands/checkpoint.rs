@@ -1,5 +1,5 @@
 use crate::commands::AppState;
-use crate::error::ZenResult;
+use zen_core::error::ZenResult;
 use tauri::State;
 
 /// Return whether a completed file mutation can be safely undone.

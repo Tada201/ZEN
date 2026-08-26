@@ -6,7 +6,7 @@
 
     async fn service_with_audit(permissions: ToolPermissions) -> (ToolService, SqlitePool) {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        crate::db::queries::init_audit_events(&pool).await.unwrap();
+        zen_db::queries::init_audit_events(&pool).await.unwrap();
 
         let security = Arc::new(SecurityService::new());
         security.set_db_pool(pool.clone()).await;
@@ -49,7 +49,7 @@
             crate::tools::permission::PermissionDecision::Allow
         ));
 
-        let events = crate::db::queries::list_audit_events(&pool, 10)
+        let events = zen_db::queries::list_audit_events(&pool, 10)
             .await
             .unwrap();
         assert_eq!(events.len(), 2);
@@ -88,7 +88,7 @@
             crate::tools::permission::PermissionDecision::Deny { .. }
         ));
 
-        let events = crate::db::queries::list_audit_events(&pool, 10)
+        let events = zen_db::queries::list_audit_events(&pool, 10)
             .await
             .unwrap();
         assert!(events

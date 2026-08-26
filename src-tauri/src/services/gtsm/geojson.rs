@@ -1,4 +1,4 @@
-use crate::error::{ZenError, ZenResult};
+use zen_core::error::{ZenError, ZenResult};
 use geojson::{GeoJson, Value};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
