@@ -269,7 +269,7 @@ pub async fn run_stream_loop(
             }
             _ = cleanup_interval.tick() => {
                 if let Some(pool) = &db_pool {
-                    let _ = super::history::cleanup_old_snapshots(pool, 48).await;
+                    let _ = zen_db::queries::cleanup_old_snapshots(pool, 48).await;
                 }
             }
         }
@@ -358,7 +358,7 @@ async fn record_snapshots(cache: &GtsmCache, pool: &sqlx::SqlitePool) {
                 (m.hex.clone(), m.lat, m.lon, m.alt_baro, Some(meta))
             })
             .collect();
-        if let Err(e) = super::history::record_snapshot(pool, "military", entities).await {
+        if let Err(e) = zen_db::queries::record_snapshot(pool, "military", entities).await {
             tracing::error!("Failed to snapshot military: {}", e);
         }
     }
@@ -377,7 +377,7 @@ async fn record_snapshots(cache: &GtsmCache, pool: &sqlx::SqlitePool) {
                 (q.id.clone(), q.lat, q.lon, q.depth, Some(meta))
             })
             .collect();
-        if let Err(e) = super::history::record_snapshot(pool, "earthquake", entities).await {
+        if let Err(e) = zen_db::queries::record_snapshot(pool, "earthquake", entities).await {
             tracing::error!("Failed to snapshot earthquakes: {}", e);
         }
     }
@@ -397,7 +397,7 @@ async fn record_snapshots(cache: &GtsmCache, pool: &sqlx::SqlitePool) {
                 (e.id.clone(), e.lat, e.lon, 0.0, Some(meta))
             })
             .collect();
-        if let Err(e) = super::history::record_snapshot(pool, "natural_event", entities).await {
+        if let Err(e) = zen_db::queries::record_snapshot(pool, "natural_event", entities).await {
             tracing::error!("Failed to snapshot natural events: {}", e);
         }
     }

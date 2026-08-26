@@ -10,7 +10,7 @@ const client = fs
   .map((f) => fs.readFileSync(new URL(f, clientDir), 'utf8'))
   .join('\n');
 const config = fs.readFileSync('src-tauri/crates/zen-mcp/src/config.rs', 'utf8');
-const safety = fs.readFileSync('src-tauri/src/tools/url_safety.rs', 'utf8');
+const safety = fs.readFileSync('src-tauri/crates/zen-security/src/url_safety.rs', 'utf8');
 const plan = fs.readFileSync('docs/architecture/mcp-phase-plan.md', 'utf8');
 
 assert.match(client, /build_pinned_http_client/);

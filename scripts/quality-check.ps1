@@ -47,29 +47,34 @@ Assert-NoMatches `
     "Raw frontend invoke calls found outside src/api/tauriClient.ts" `
     { Get-ChildItem src -Recurse -File | Where-Object { $_.FullName -notmatch 'src[/\\]api[/\\]tauriClient\.ts' } | Select-String -Pattern 'invoke<|invoke\(' }
 
+# Backend guards scan the app crate and every workspace crate. SQL belongs to
+# zen-db (queries/ plus its migration DDL and pool bootstrap); the tool
+# contracts themselves live in zen-tools/src/registry.rs, and the only
+# execution boundary is the app-side ToolService.
+$backendRoots = @("src-tauri/src", "src-tauri/crates") | Where-Object { Test-Path $_ }
+$sqlOwner = 'zen-db[/\\]src[/\\](queries|migrations)[/\\]|zen-db[/\\]src[/\\]pool\.rs'
+$toolOwner = 'src-tauri[/\\]src[/\\]services[/\\]tool([/\\]|\.rs)|zen-tools[/\\]src[/\\]registry\.rs'
+
 Assert-NoMatches `
-    "Inline SQL found outside src-tauri/src/db/queries" `
-    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]db[/\\]queries' -and $_.Name -ne "mod.rs" } | Select-String -Pattern 'sqlx::query|query_as::<|query_scalar' }
+    "Inline SQL found outside src-tauri/crates/zen-db/src/queries" `
+    { Get-ChildItem $backendRoots -Recurse -File -Filter *.rs | Where-Object { $_.FullName -notmatch $sqlOwner } | Select-String -Pattern 'sqlx::query|query_as::<|query_scalar' }
 
 Assert-NoMatches `
     "Direct registry execution found outside ToolService" `
-    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool([/\\]|\.rs)' -and $_.Name -ne "mod.rs" } | Select-String -Pattern 'execute_authorized|execute_with_permission' }
+    { Get-ChildItem $backendRoots -Recurse -File -Filter *.rs | Where-Object { $_.FullName -notmatch $toolOwner } | Select-String -Pattern 'execute_authorized|execute_with_permission' }
 
 Assert-NoMatches `
     "Direct Tool.execute(app, ...) calls found outside ToolService" `
-    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool([/\\]|\.rs)' -and $_.Name -ne "mod.rs" } | Select-String -Pattern '\.execute\(\s*app' }
+    { Get-ChildItem $backendRoots -Recurse -File -Filter *.rs | Where-Object { $_.FullName -notmatch $toolOwner } | Select-String -Pattern '\.execute\(\s*app' }
 
 Assert-NoMatches `
     "Direct AgentTool.run(...) calls found outside ToolService" `
-    { Get-ChildItem src-tauri/src -Recurse -File | Where-Object { $_.FullName -notmatch 'src-tauri[/\\]src[/\\]services[/\\]tool([/\\]|\.rs)' } | Select-String -Pattern 'tool\.run\(' }
+    { Get-ChildItem $backendRoots -Recurse -File -Filter *.rs | Where-Object { $_.FullName -notmatch $toolOwner } | Select-String -Pattern 'tool\.run\(' }
 
 Assert-NoMatches `
     "Backend command reads secret-like keys through SettingsService" `
     {
-        $dirs = @("src-tauri/src/commands", "src-tauri/src/agent", "src-tauri/src/tools", "src-tauri/src/search") | Where-Object { Test-Path $_ }
-        if ($dirs) {
-            Get-ChildItem $dirs -Recurse -File -ErrorAction SilentlyContinue | Select-String -Pattern 'settings_manager\.get\([^)]*(api_key|token|secret|credential|password)'
-        }
+        Get-ChildItem $backendRoots -Recurse -File -Filter *.rs -ErrorAction SilentlyContinue | Select-String -Pattern 'settings_manager\.get\([^)]*(api_key|token|secret|credential|password)'
     }
 
 $coveragePath = "src-tauri/tool-coverage.json"
@@ -203,7 +208,7 @@ if ($violations.Count -gt 0) {
     Fail "File size hard-limit violations found"
 }
 
-# ── Crate boundary guard (BIG_MIGRATION.md Phase 13, RULES.md §3.1) ──────────
+# ── Crate boundary guard (RULES.md §3.1) ─────────────────────────────────────
 # Library crates under src-tauri/crates must never depend on `tauri` or
 # `keyring`: host coupling and OS-keyring access belong to the app crate only.
 # A manifest match here means a dependency edge crossed the boundary.

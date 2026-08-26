@@ -64,7 +64,7 @@ A thread-scoped persistent objective modeled on Codex's Thread Goal.
 | Concern | Owner |
 |---|---|
 | Goal lifecycle rules + events | `src-tauri/src/services/goal.rs` |
-| Goal SQL | `src-tauri/src/db/queries/goals.rs` |
+| Goal SQL | `src-tauri/crates/zen-db/src/queries/goals.rs` |
 | Goal IPC | `src-tauri/src/commands/goal.rs` / `src/api/goalApi.ts` |
 | Goal frontend mirror | `src/lib/stores/goalStore.ts` |
 | Prompt queue state | `src/lib/stores/promptQueueStore.ts` |

@@ -42,7 +42,7 @@ impl zen_tools::Tool<tauri::AppHandle> for SystemMetricsTool {
         _args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
         let state = app.state::<AppState>();
-        let metrics_res: zen_core::error::AppResult<crate::models::SystemMetrics> =
+        let metrics_res: zen_core::error::AppResult<zen_core::SystemMetrics> =
             get_system_metrics(state).await;
         let metrics =
             metrics_res.map_err(|e: zen_core::error::ZenError| ToolError::ExecutionFailed {

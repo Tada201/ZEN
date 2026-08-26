@@ -1,6 +1,6 @@
 use crate::commands::{AppState, InitStatus};
 use zen_core::error::{AppError, AppResult};
-use crate::models::SystemMetrics;
+use zen_core::SystemMetrics;
 use tauri::{AppHandle, Emitter, Manager, State};
 use std::sync::OnceLock;
 use tokio::sync::oneshot;

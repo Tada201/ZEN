@@ -389,17 +389,16 @@ impl McpClient {
 
     // Poison-tolerant lock helpers: a panic by one previous holder must never
     // wedge MCP routing, so each recovers the map via PoisonError::into_inner
-    // instead of unwrapping.
-    pub(super) fn lock_feature_cache(
-        &self,
-    ) -> std::sync::MutexGuard<'_, HashMap<String, rpc::CacheEntry>> {
+    // instead of unwrapping. Kept module-private because the guarded types are
+    // private too — a wider visibility leaks them out of `client`.
+    fn lock_feature_cache(&self) -> std::sync::MutexGuard<'_, HashMap<String, rpc::CacheEntry>> {
         match self.feature_cache.lock() {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         }
     }
 
-    pub(super) fn lock_external_endpoints(
+    fn lock_external_endpoints(
         &self,
     ) -> std::sync::MutexGuard<'_, HashMap<String, ServerEndpoint>> {
         match self.external_endpoints.lock() {

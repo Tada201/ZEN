@@ -186,10 +186,10 @@ console.log('\nB. src-tauri/src/commands/mcp.rs — scope-aware commands');
       !/\.upsert_server\(|\.remove_server\(|\.set_enabled\(/.test(m[0])
     );
   });
-  section('McpScope + McpServerEntry are imported via crate::services', () => {
+  section('McpScope + McpServerEntry are imported from zen_mcp', () => {
     return (
-      /use\s+crate::services::\{[^}]*McpScope[^}]*\}/.test(src) &&
-      /use\s+crate::services::\{[^}]*McpServerEntry[^}]*\}/.test(src)
+      /use\s+zen_mcp::\{[^}]*McpScope[^}]*\}/.test(src) &&
+      /use\s+zen_mcp::\{[^}]*McpServerEntry[^}]*\}/.test(src)
     );
   });
 })();

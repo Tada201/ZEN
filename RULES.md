@@ -15,36 +15,13 @@ they are.
 The rebuild goal is not a rewrite. The goal is one obvious path for every
 responsibility.
 
-## ⚠️ TEMPORARY: Cargo Workspace Migration In Progress
-
-> **Status flag — remove at Phase 14 when `migration/complete` is tagged.**
->
-> The `src-tauri` backend is being converted from a single crate into a Cargo
-> workspace per [BIG_MIGRATION.md](BIG_MIGRATION.md) (Phases 0–14). Until the
-> migration completes:
->
-> 1. Read BIG_MIGRATION.md before any backend (`src-tauri/`) change and work
->    only within the current phase. Never stack phases; every phase must end
->    green with the gate suite (BIG_MIGRATION.md §5) and a
->    `migration/phase-NN-done` tag.
-> 2. **Always cross-check [Zen_rs_old/](Zen_rs_old/)** — the frozen
->    pre-migration snapshot of the backend (created 2026-08-22 from
->    `pre-workspace-migration`) — whenever the original structure, module
->    layout, line numbers, or behavior of a backend module is in doubt.
->    BIG_MIGRATION.md §2 cites file:line evidence against that tree, not the
->    live one. Never build, edit, or import from Zen_rs_old; it is reference
->    data only.
-> 3. Once extraction phases begin, new backend subsystems default to new
->    crates under `src-tauri/crates/`; resist adding code to the app crate.
->    No crate under `crates/` may depend on `tauri`.
-
 ## Non-Negotiable Rules
 
 1. Do not add business logic to Tauri commands.
 2. Do not call tools directly from features; use the canonical tool service.
 3. Do not access secrets through normal settings.
 4. Do not use raw `invoke`; add or use a typed frontend API wrapper.
-5. Do not add SQL outside `src-tauri/src/db/queries/*`.
+5. Do not add SQL outside `src-tauri/crates/zen-db/src/queries/*`.
 6. Do not add privileged behavior without routing through the security service.
 7. Do not create a second registry, manager, store, or mapping layer for an
    existing domain.
@@ -58,20 +35,62 @@ responsibility.
 ```txt
 Frontend UI
   -> typed frontend API wrappers
-  -> Tauri commands
-  -> backend services
-  -> domain modules
-  -> infrastructure and db queries
+  -> Tauri commands            (src-tauri/src/commands/*, app crate only)
+  -> app services              (src-tauri/src/services/*, app crate only)
+  -> domain crates             (src-tauri/crates/zen-*)
+  -> infrastructure            (zen-db queries, zen-core ports)
 ```
 
 Allowed dependency direction is down the stack only. Lower layers must not import
-or know about higher layers.
+or know about higher layers. Since the workspace migration this direction is
+**compiler-enforced**: a domain crate physically cannot reach `crate::commands`
+or `AppState`, because those symbols do not exist in its dependency graph.
+
+### Workspace Crate Map
+
+`src-tauri/` is a Cargo workspace: the `zen` app crate plus nine domain crates
+under `src-tauri/crates/`.
+
+| Crate | Owns |
+|---|---|
+| `zen-core` | Shared error types (`ZenError`) and the host-agnostic ports/traits other crates depend on |
+| `zen-db` | SQLite pool, migrations, models, and **every** SQL statement (`queries/*`) |
+| `zen-security` | Risk classification, approval policy, permission decisions, audit events, secret redaction, SSRF-safe URL validation |
+| `zen-tools` | Tool contracts (`Tool`, `AgentTool`), the catalog registry, the discovery manager, and tool risk defaults |
+| `zen-llm` | Provider construction, wire encoders, streaming, reasoning capability resolution |
+| `zen-mcp` | MCP config/discovery/consent and the client transport |
+| `zen-rag` | Document ingestion, chunking, vector store, conversation store |
+| `zen-media` | Speech/TTS runtimes, hardware probe, subprocess manager, runtime resources |
+| `zen-agent` | The agent loop: runner, orchestrator, router, event bus, skills, agent types, context |
+| `zen` (app) | Tauri commands, app services, leaf tool executors, window/tray/host wiring |
+
+Two rules keep this map honest:
+
+1. **No crate under `crates/` may depend on `tauri` or `keyring`.** Host coupling
+   and OS-keyring access stay in the app crate. This is CI-enforced (per-crate
+   manifest deny set plus a boundary grep). Crates that need a host reach it
+   through a generic parameter (`zen_tools::Tool<A>`) or a `zen-core` port.
+2. **Resist adding code to the app crate.** New backend behavior defaults to an
+   existing domain crate, or a new one. The app crate should only grow adapters:
+   a command that deserialises and calls one service method, a service that
+   sequences crate calls, or a tool executor that needs `AppHandle`. If new code
+   has no reason to touch `AppHandle`, `AppState`, or a Tauri window, it belongs
+   in a crate.
+
+Because zen-tools and zen-agent are generic over the host, the app crate holds
+**host-binding type aliases** (for example
+`pub type ToolRegistry = zen_tools::registry::ToolRegistry<tauri::AppHandle>;`).
+These are not migration leftovers — they are the seam. Rust has no trait
+aliases, so `impl` and `dyn` positions must spell the generic path
+(`zen_tools::Tool<tauri::AppHandle>`) while struct and type positions use the
+alias.
 
 ## Backend Ownership
 
 ### Commands
 
-Tauri commands are adapters only. They may:
+Tauri commands are adapters only. They live in the app crate and nowhere else.
+They may:
 
 - validate/deserialise request shape
 - call one service method
@@ -89,40 +108,38 @@ They may not:
 
 ### Services
 
-Services own workflows. Examples:
+Services own workflows. App-crate services (`src-tauri/src/services/*`) own the
+workflows that genuinely need the host; the rest is owned by a crate.
 
-- `ChatService`: sending messages, streaming lifecycle, chat persistence
-- `ToolService`: tool lookup, permission preflight, execution, audit events
-- `ProviderService`: provider construction, model discovery, provider health
-- `SettingsService`: non-secret preferences only
-- `SecretService`: API keys and credentials only
-- `SecurityService`: permission checks and audit logging
+- `ToolService` (app): tool lookup, permission preflight, execution, audit — it
+  needs `AppHandle` to emit approval events
+- `SecretService` (app): API keys and credentials; owns the OS keyring, which is
+  why it cannot move to a crate
+- `SettingsService` (app): non-secret preferences only
+- `CheckpointService`, `DocumentService`, `TerminalService`, `UsageService`,
+  `MediaService` (app): host-bound workflows
+- `SecurityService` (`zen_security::service`): permission checks and audit
+  logging
+- Provider construction and model discovery (`zen_llm`)
 
-### Domain Modules
+### Domain Crates
 
-Domain modules implement domain behavior, not app-wide orchestration. Examples:
-
-- `agent`
-- `tools`
-- `mcp`
-- `rag`
-- `terminal`
-- `canvas`
-- `gtsm`
-
-Domain modules may expose capabilities to services. They must not bypass
-services for privileged work.
+Domain crates implement domain behavior, not app-wide orchestration. They may
+expose capabilities to services and must not bypass `SecurityService` for
+privileged work. When a domain crate needs something only the app can provide
+(a window, a keyring entry, an event emitter), it declares a port in `zen-core`
+or takes a generic host parameter; the app crate supplies the adapter.
 
 ### Infrastructure
 
 Infrastructure modules own low-level adapters:
 
-- database queries
+- database queries (`zen-db`)
 - filesystem
-- HTTP clients
-- keychain or Stronghold
-- audit logs
-- event bus
+- HTTP clients (`zen-llm`, `zen-mcp`; never in `zen-core`)
+- keychain (app crate only)
+- audit logs (`zen-security`)
+- event bus (`zen-agent`)
 
 Business rules do not belong here.
 
@@ -322,7 +339,7 @@ honest progress surface that answers "what is the agent doing now?" at a glance.
 
 ## Database Rules
 
-- SQL lives only in `src-tauri/src/db/queries/*`.
+- SQL lives only in `src-tauri/crates/zen-db/src/queries/*`.
 - List queries require `LIMIT` and pagination or a documented cap.
 - Migrations must be idempotent and measured.
 - JSON columns should use typed JSON wrappers where practical.
@@ -336,6 +353,9 @@ Hard limits:
 - Rust hard fail: 900 lines
 - TS/TSX warning: 350 lines
 - TS/TSX hard fail: 500 lines
+
+These apply to the whole workspace: the app crate **and** every crate under
+`src-tauri/crates/`.
 
 Allowed exemptions must be listed in `docs/architecture/exemptions.md` with:
 
@@ -362,12 +382,19 @@ Minimum gates:
 
 - `npm run build`
 - TypeScript typecheck
-- `cargo check --all-targets`
-- `cargo clippy --all-targets`
-- `cargo test --all-targets`
+- `cargo check --workspace --all-targets`
+- `cargo clippy --workspace --all-targets`
+- `cargo test --workspace --all-targets`
+- `cargo deny check` (crate dependency + license audit)
+- workspace boundary check: no crate depends on `tauri` or `keyring`
 - dependency audit
 - bundle size report
-- file size check
+- file size check (app crate + `crates/**`)
+
+`cargo test --workspace` cannot run on a Windows dev box — tauri-linked test
+binaries abort with `STATUS_ENTRYPOINT_NOT_FOUND`. Locally, verify with
+`cargo test -p <crate>` per crate plus `cargo check -p zen --all-targets`; CI is
+the only place the whole-workspace test run is meaningful.
 
 New privileged code requires tests for:
 
@@ -386,10 +413,14 @@ exact-string assertions against files that no longer own the behavior.
 New architecture patterns require docs. Update the relevant file under
 `docs/architecture/` when adding or changing:
 
-- security policy
-- tool architecture
-- settings/secrets behavior
-- streaming behavior
+- security policy (owned by `zen-security`)
+- tool architecture (owned by `zen-tools`)
+- settings/secrets behavior (app-crate services; keyring stays app-side)
+- streaming behavior (owned by `zen-llm`)
+- agent loop, event bus, delegation (owned by `zen-agent`)
+- database schema or queries (owned by `zen-db`)
+- RAG/ingestion (owned by `zen-rag`)
+- media runtimes (owned by `zen-media`)
 - frontend state ownership
 - IPC contracts
 - feature maturity

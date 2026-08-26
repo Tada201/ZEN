@@ -17,7 +17,9 @@ const checks = [];
 const check = (label, condition) => checks.push([label, condition]);
 
 const models = read("src-tauri/crates/zen-db/src/models.rs");
-const migrations = read("src-tauri/src/db/mod.rs");
+const migrations = ["core_tables.rs", "chats.rs"]
+  .map((f) => read(`src-tauri/crates/zen-db/src/migrations/${f}`))
+  .join("\n");
 const queries = read("src-tauri/crates/zen-db/src/queries/chat.rs");
 const crud = read("src-tauri/src/commands/chat/crud.rs");
 const lifecycle = read("src-tauri/src/commands/chat/lifecycle.rs");

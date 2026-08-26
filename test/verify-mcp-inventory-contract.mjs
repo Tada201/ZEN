@@ -10,7 +10,7 @@ const lib = read("src-tauri/src/lib.rs");
 const prompt = read("src-tauri/crates/zen-agent/src/middleware/system_prompt.rs");
 const api = read("src/api/mcpApi.ts");
 const mock = read("src/api/mockClient.ts");
-const manager = read("src-tauri/src/tools/manager.rs");
+const manager = read("src-tauri/crates/zen-tools/src/manager.rs");
 const settings = read("src/components/settings/Tabs/plugins/MCPSettings.tsx");
 
 assert.match(discovery, /pub struct McpDiscoveryService/);
@@ -24,12 +24,12 @@ assert.match(discovery, /prompt_redacts_control_characters/);
 
 assert.match(command, /pub async fn mcp_get_inventory/);
 assert.match(command, /McpInventory/);
-assert.match(appState, /pub mcp_discovery: Arc<crate::services::McpDiscoveryService>/);
+assert.match(appState, /pub mcp_discovery: Arc<zen_mcp::McpDiscoveryService>/);
 assert.match(appState, /McpDiscoveryService::new\(mcp_config\.clone\(\)\)/);
 assert.match(lib, /commands::mcp::mcp_get_inventory/);
 
 assert.match(prompt, /Authoritative MCP inventory/);
-assert.match(prompt, /state\.mcp_discovery\.refresh\(\)\.await/);
+assert.match(prompt, /self\.ctx\.mcp_discovery\.refresh\(\)\.await/);
 assert.match(prompt, /Only `ready` MCP servers may be used/);
 assert.match(prompt, /Never invent a server, command, tool ID, URL, or argument/);
 

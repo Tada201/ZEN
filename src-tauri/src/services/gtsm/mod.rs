@@ -7,7 +7,6 @@ pub mod flights;
 pub mod fusion;
 pub mod geocoding;
 pub mod geofence;
-pub mod history;
 pub mod military;
 pub mod nasa_events;
 pub mod navigation;

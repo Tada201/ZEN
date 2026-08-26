@@ -231,7 +231,7 @@ fn managed_archive_ids(id: &str) -> Option<&'static [&'static str]> {
 }
 
 async fn download_verified_archive(archive: &RuntimeArchive) -> Result<Vec<u8>, String> {
-    let response = crate::utils::model_download_http_client()
+    let response = zen_media::http::model_download_http_client()
         .get(&archive.url)
         .send()
         .await

@@ -1,7 +1,9 @@
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 
-const schema = readFileSync(new URL("../src-tauri/src/db/mod.rs", import.meta.url), "utf8");
+const schema = ["traces.rs", "mod.rs"]
+  .map((f) => readFileSync(new URL(`../src-tauri/crates/zen-db/src/migrations/${f}`, import.meta.url), "utf8"))
+  .join("\n");
 const queries = readFileSync(new URL("../src-tauri/crates/zen-db/src/queries/execution_trace.rs", import.meta.url), "utf8");
 const command = readFileSync(new URL("../src-tauri/src/commands/chat/trace.rs", import.meta.url), "utf8");
 const registration = readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");

@@ -19,20 +19,25 @@
 //        tool name as *separate* parameters — not `tool_name` alone,
 //        not a re-split prefix.
 //
-//   B) Source-shape assertions on `src-tauri/src/mcp/client.rs`:
+//   B) Source-shape assertions on `src-tauri/crates/zen-mcp/src/client/`:
 //      * No more `strip_prefix("ext:")` / `split_once(':')` parsing
 //        of `ext:` names.
-//      * `pub async fn call_external_tool` exists with three
-//        parameters: a server-name string, a tool-name string, and
-//        the JSON arguments. (Confirms the un-prefixed wire contract.)
+//      * `pub async fn call_external_tool` takes a server-name string,
+//        a tool-name string, and the JSON arguments as separate
+//        parameters. (Confirms the un-prefixed wire contract.)
 //      * `pub fn is_external_tool` static method has been removed
 //        from `McpClient`. A small `pub fn is_external_tool_name` and
 //        `pub fn prefixed_external_tool_name` helper exists in
-//        module `crate::mcp::client` instead.
-//      * `sync_external_servers` accepts `&Arc<Self>` so adapters can
-//        hold a `Weak<McpClient>` back-reference without leaking.
-//      * Step 4 registers `Arc<McpToolAdapter>` instances via
-//        `registry.register(...)` — not `register_external(...)`.
+//        module `zen_mcp::client` instead.
+//      * `sync_external_servers` accepts `&Arc<Self>` and hands
+//        validated specs to the `ExternalToolRegistrar` port rather
+//        than constructing host-bound adapters itself.
+//
+//   B2) Source-shape assertions on the app-side registrar impl
+//      (`src-tauri/src/services/mcp_registrar.rs`): it constructs
+//      `McpToolAdapter::new(...)`, registers `Arc<McpToolAdapter>` via
+//      `registry.register(...)`, and derives the adapter's
+//      `Weak<McpClient>` from `Arc::downgrade`.
 //
 //   C) Source-shape assertions on `src-tauri/src/services/tool.rs`:
 //      * `execute_v2_authorized` has NO `is_external_tool` early-
@@ -57,10 +62,11 @@ import path from "node:path";
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = path.resolve(path.dirname(__filename), "..");
 const SRC = (p) => {
-  // `mcp/client.rs` was split into `client/{mod,sync,stdio_helpers,http_handshake,http_body}.rs`.
-  // Read the whole client directory as one blob so shape assertions that
-  // predate the split keep anchoring on the same content.
-  if (p === "src-tauri/src/mcp/client.rs") {
+  // The MCP client lives in `zen-mcp` as `client/{mod,sync,stdio_helpers,
+  // http_handshake,http_body,...}.rs`. Read the whole client directory as one
+  // blob so shape assertions that predate the split keep anchoring on the same
+  // content.
+  if (p === "src-tauri/crates/zen-mcp/src/client") {
     return ["mod", "sync", "stdio_helpers", "http_handshake", "http_body", "rpc"]
       .map((f) => {
         try {
@@ -127,7 +133,13 @@ function assertContainsAll(section, source, patterns) {
   }
 
   // Implements the v2 Tool trait so dispatch goes through registry.get.
-  if (!assertContainsAll(section, src, [/impl(?:\s*<[^>]+>)?\s+Tool\s+for\s+McpToolAdapter\b/])) {
+  // `zen_tools::Tool` is generic over the host context, so the impl spells
+  // the host type: `impl zen_tools::Tool<tauri::AppHandle> for McpToolAdapter`.
+  if (
+    !assertContainsAll(section, src, [
+      /impl\s+(?:zen_tools::)?Tool\s*(?:<[^>]+>)?\s+for\s+McpToolAdapter\b/,
+    ])
+  ) {
     allOk = false;
   }
 
@@ -176,11 +188,11 @@ function assertContainsAll(section, source, patterns) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Section B — src-tauri/src/mcp/client.rs
+// Section B — src-tauri/crates/zen-mcp/src/client/
 // ────────────────────────────────────────────────────────────────────────────
 {
-  const section = "mcp/client.rs";
-  const src = SRC("src-tauri/src/mcp/client.rs");
+  const section = "zen-mcp/client";
+  const src = SRC("src-tauri/crates/zen-mcp/src/client");
   let allOk = true;
 
   // No more strip_prefix("ext:") or split_once(':') for ext parsing.
@@ -218,7 +230,7 @@ function assertContainsAll(section, source, patterns) {
       section,
       src,
       [
-        /pub\s+fn\s+prefixed_external_tool_name\(\s*server_name\s*:\s*&str\s*,\s*tool_name\s*:\s*&str\s*\)\s*->\s*String\s*\{[^}]*format!\(\s*"ext:{}:{}"[^)]*\)/,
+        /pub\s+fn\s+prefixed_external_tool_name\(\s*server_name\s*:\s*&str\s*,\s*tool_name\s*:\s*&str\s*\)\s*->\s*String\s*\{\s*format!\(\s*"ext:(?:\{\}:\{\}"\s*,\s*server_name\s*,\s*tool_name|\{server_name\}:\{tool_name\}")/,
         /pub\s+fn\s+is_external_tool_name\(\s*name\s*:\s*&str\s*\)\s*->\s*bool\s*\{[^}]*\.starts_with\(\s*"ext:"\s*\)/,
       ],
     )
@@ -243,18 +255,12 @@ function assertContainsAll(section, source, patterns) {
   }
   // Negative assertion: the body must NOT recompute the prefix. The
   // un-prefixed `tool_name` reaches the wire directly as `params.name`.
-  // Tool calls now route through the shared `request_endpoint` in
-  // `client/rpc.rs`, which builds the legacy per-method path generically
-  // (`{}/{}` with `method`); a modern endpoint posts to the single URL.
-  if (
-    !assertContainsAll(
-      section,
-      src,
-      [
-        /format!\(\s*"\{\}\/\{\}"\s*,\s*endpoint\.url\.trim_end_matches\('\/'\)\s*,\s*method\s*\)/
-      ],
-    )
-  ) {
+  // Tool calls route through the shared `request_endpoint` in
+  // `client/rpc.rs`, which posts every method to the single endpoint URL —
+  // appending a `/{method}` subpath 404s on real servers (e.g. Exa), so
+  // the per-method path must not come back.
+  if (/endpoint\.url\.trim_end_matches\('\/'\)\s*,\s*method/.test(src)) {
+    fail(section, "per-method URL suffix is back; every method must POST to endpoint.url");
     allOk = false;
   }
 
@@ -277,46 +283,68 @@ function assertContainsAll(section, source, patterns) {
     allOk = false;
   }
 
-  // Step 4 adapter registration:
-  //   * Constructs McpToolAdapter::new via the new fields
-  //   * Wraps in Arc and registers via `registry.register(...)`
-  //   * Does NOT call `registry.register_external(...)` anymore
+  // Adapter construction crossed the crate boundary: zen-mcp cannot name
+  // `tauri::AppHandle`, so `sync_external_servers` hands a validated
+  // `ExternalToolSpec` to the `ExternalToolRegistrar` port instead of
+  // building the adapter itself. Section B2 pins the app-side half.
   if (
     !assertContainsAll(
       section,
       src,
       [
-        /McpToolAdapter::new\s*\(/,
-        /registry\.register\(\s*Arc::new\(\s*adapter\s*\)\s*\)/,
+        /self\s*\.registrar\s*\.register_external\(/,
+        /self\.registrar\.clear_external\(\)/,
       ],
     )
   ) {
     allOk = false;
   }
-  if (/registry\.register_external\s*\(/.test(src)) {
-    // Tolerate doc-comments mentioning the legacy method, but
-    // refute any code-path call inside the body of `sync_external_servers`.
-    const afterSync = src.split(/pub\s+async\s+fn\s+sync_external_servers/)[1] ?? "";
-    if (/registry\.register_external\s*\(/.test(afterSync)) {
-      fail(
-        section,
-        "sync_external_servers still calls registry.register_external(...) (should use registry.register(Arc::new(adapter)))",
-      );
+  {
+    const code = src.replace(/^\s*(?:\/\/\/?|\*).*$/gm, "");
+    if (/McpToolAdapter/.test(code)) {
+      fail(section, "zen-mcp must not name the host-bound McpToolAdapter in code");
       allOk = false;
     }
   }
 
-  // Adapter's Weak<McpClient> comes from Arc::downgrade(self) inside
-  // sync_external_servers, so the back-reference lifetime is bounded.
+  if (allOk) {
+    ok(section, "no string parsing of ext: prefix + registrar port handoff + Arc<Self> receiver");
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Section B2 — src-tauri/src/services/mcp_registrar.rs (host-bound half)
+// ────────────────────────────────────────────────────────────────────────────
+{
+  const section = "services/mcp_registrar.rs";
+  const src = SRC("src-tauri/src/services/mcp_registrar.rs");
+  let allOk = true;
+
+  // The registrar impl builds the adapter and registers it into the v2
+  // registry — the half of the old step 4 that needs the host type.
   if (
-    !/pub\s+async\s+fn\s+sync_external_servers[\s\S]*?Arc::downgrade\(\s*self\s*\)/.test(src)
+    !assertContainsAll(
+      section,
+      src,
+      [
+        /impl\s+ExternalToolRegistrar\s+for\s+McpRegistrar\b/,
+        /McpToolAdapter::new\s*\(/,
+        /registry\.write\(\)\.await\.register\(Arc::new\(adapter\)\)/,
+        /remove_by_prefix\("ext:"\)/,
+      ],
+    )
   ) {
-    fail(section, "sync_external_servers does not derive Weak<McpClient> via Arc::downgrade(self)");
+    allOk = false;
+  }
+
+  // The adapter's Weak<McpClient> comes from Arc::downgrade, so the
+  // registry -> adapter -> client back-reference stays bounded.
+  if (!assertContainsAll(section, src, [/Arc::downgrade\(client\)/])) {
     allOk = false;
   }
 
   if (allOk) {
-    ok(section, "no string parsing of ext: prefix + adapter registration + Arc<Self> receiver");
+    ok(section, "adapter construction + registry.register + Weak<McpClient> via downgrade");
   }
 }
 

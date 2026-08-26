@@ -60,11 +60,11 @@ Status: partially centralized.
 
 Findings:
 
-- `src-tauri/src/services/runtime_resource.rs` owns bundled/app-data model paths,
+- `src-tauri/crates/zen-media/src/runtime_resource.rs` owns bundled/app-data model paths,
   Whisper binary resolution, atomic model writes, downloaded-model removal,
   temporary audio read/remove cleanup, command setup, and synchronous PID
   cleanup.
-- `src-tauri/src/services/speech_service/mod.rs` still owns Whisper-specific
+- `src-tauri/crates/zen-media/src/speech_service/mod.rs` still owns Whisper-specific
   model validation, manual model download orchestration, watchdog health checks,
   and transcription.
 - App startup injects `ProcessManager` into `SpeechService` so the
@@ -82,9 +82,9 @@ Status: partially centralized.
 
 Findings:
 
-- `src-tauri/src/services/runtime_resource.rs` owns Piper binary and default
+- `src-tauri/crates/zen-media/src/runtime_resource.rs` owns Piper binary and default
   model path resolution plus command setup.
-- `src-tauri/src/services/tts_service/mod.rs` still owns synthesis-specific
+- `src-tauri/crates/zen-media/src/tts_service.rs` still owns synthesis-specific
   stdin/stdout handling and audio playback.
 - App startup injects `ProcessManager` into `TtsService` so spawned Piper
   processes are tracked while active.
@@ -101,10 +101,10 @@ Status: acceptable but should be bounded.
 
 Findings:
 
-- `src-tauri/src/rag/ingestion.rs` reads user-selected files.
-- `src-tauri/src/rag/session_memory.rs` writes session memory under the
+- `src-tauri/crates/zen-rag/src/ingestion.rs` reads user-selected files.
+- `src-tauri/crates/zen-rag/src/session_memory.rs` writes session memory under the
   workspace.
-- `src-tauri/src/rag/embedding.rs` downloads embedding models and writes to a
+- `src-tauri/crates/zen-rag/src/embedding.rs` downloads embedding models and writes to a
   model cache.
 
 Remaining work:

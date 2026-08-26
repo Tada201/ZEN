@@ -195,9 +195,9 @@ Give every chat a clear, visible execution mode comparable to Claude Code plan m
 
 ### Likely touchpoints
 
-- `src-tauri/src/tools/permission.rs`
-- `src-tauri/src/tools/mod.rs`
-- `src-tauri/src/agent/runner/tool_dispatch.rs`
+- `src-tauri/crates/zen-security/src/policy.rs`
+- `src-tauri/crates/zen-tools/src/registry.rs`
+- `src-tauri/crates/zen-agent/src/runner/dispatch/`
 - `src/atlas/components/PermissionModeMenu.tsx`
 - `src/components/settings/Tabs/ToolsSettings.tsx`
 - `src/lib/constants/permissionModes.ts`
@@ -416,9 +416,7 @@ Let users leave work running, return later, and understand what happened.
 
 ### Likely touchpoints
 
-- `src-tauri/src/agent/task_queue.rs`
-- `src-tauri/src/agent/task.rs`
-- `src-tauri/src/agent/orchestrator/`
+- `src-tauri/crates/zen-agent/src/orchestrator/`
 - `src/atlas/hooks/stream/useAgentEvents.ts`
 - `src/components/widgets/orchestrator/`
 
@@ -493,8 +491,8 @@ Support compatible discovery/import for:
 
 - `src/lib/features/frontendFeatures.ts`
 - `src/atlas/components/SkillsSettingsContent.tsx`
-- `src-tauri/src/agent/middleware/`
-- `src-tauri/src/agent/`
+- `src-tauri/crates/zen-agent/src/middleware/`
+- `src-tauri/crates/zen-agent/src/`
 - `AGENTS.md`, `CLAUDE.md`, and project rules
 
 ## P1.5 Deep-research and orchestrator reload safety

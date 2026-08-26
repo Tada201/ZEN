@@ -47,7 +47,7 @@ chat:done ------------------> Frontend useChatChunkEvent
 
 ### 1. Backend emits `chat:done` with the persisted message ID
 
-`src-tauri/src/agent/runner/loop.rs`
+`src-tauri/crates/zen-agent/src/runner/turn_loop.rs`
 
 ```rust
 self.emit(AgentEvent::ChatDone(ChatDonePayload {
@@ -125,7 +125,7 @@ pub async fn update_message_steps(
 
 ### 5. Query layer stores `steps_json` only for assistant rows
 
-`src-tauri/src/db/queries/message.rs`
+`src-tauri/crates/zen-db/src/queries/message.rs`
 
 ```rust
 pub async fn update_message_steps(

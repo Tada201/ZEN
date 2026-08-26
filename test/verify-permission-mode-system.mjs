@@ -9,7 +9,7 @@ const check = (label, ok, detail = "") => {
   }
 };
 
-// `src-tauri/src/tools/permission.rs` is a re-export shim now; the permission
+// The permission
 // rules engine lives in the `zen-security` crate's policy module.
 const permission = readFileSync("src-tauri/crates/zen-security/src/policy.rs", "utf8");
 check(
@@ -25,7 +25,7 @@ check(
   /"plan_mode"\s*=>\s*\{[\s\S]*?else\s*\{\s*PermissionDecision::Deny/.test(permission),
 );
 
-// `src-tauri/src/tools/manager.rs` is an alias shim; the discovery manager that
+// The discovery manager that
 // reads the permission-mode setting lives in the `zen-tools` crate.
 const manager = readFileSync("src-tauri/crates/zen-tools/src/manager.rs", "utf8");
 check(

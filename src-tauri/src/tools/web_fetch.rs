@@ -198,7 +198,7 @@ async fn nine_router_fetch_fallback(app: &AppHandle, url: &str) -> Result<String
     )
     .map_err(|e| format!("9Router endpoint auth safety check failed: {e}"))?;
 
-    let client = crate::utils::default_http_client();
+    let client = zen_media::http::default_http_client();
     let models_url = format!("{}/models", nine_router_base_url.trim_end_matches('/'));
 
     let mut selected_model = "kr/claude-sonnet-4.5".to_string(); // Premium fallback model

@@ -18,25 +18,46 @@ No feature should construct or execute a tool directly.
 
 ## Ownership Map
 
-There are still two backend tool surfaces:
+Since the workspace migration, the tool contracts and registries live in the
+`zen-tools` crate; the app crate holds the executors that need Tauri's
+`AppHandle` plus the host-binding aliases.
 
-- `src-tauri/src/tools/*`: app/system tool registry used by `ToolService`
-- `src-tauri/src/agent/tools/*`: legacy agent-facing tool definitions,
-  progressive metadata, and compatibility adapters
+Crate-owned (`src-tauri/crates/zen-tools/src/`):
+
+- `registry.rs`: the `Tool`/`AgentTool` contracts, `ToolRegistry<A>`,
+  `AgentToolRegistry<A>`, `default_tool_risk`, and the lazy-source port
+- `manager.rs`: `ToolManager<A>` — discovery, tool metadata, meta-tool
+  definitions
+- `capability.rs`: static capability/status metadata
+- `calculator.rs`: the one pure executor with no host dependency
+
+App-crate (`src-tauri/src/`):
+
+- `tools/mod.rs`: `init_tool_registry` plus the host bindings
+  `ToolRegistry`/`GlobalToolRegistry`/`ToolManager` (aliases of the generic
+  zen-tools types at `tauri::AppHandle`)
+- `tools/*`: system tool executors (`fs_tools`, `web_fetch`, `sys_metrics`,
+  `terminal_tools`, `image_tool`)
+- `agent/tools/*`: agent-facing executors plus progressive discovery metadata
+- `services/tool.rs`: `ToolService`, the only execution boundary
 
 Supporting owners:
 
-- `ToolService`: only execution boundary for production tool calls.
-- `SecurityService`: permission decisions and audit persistence.
+- `ToolService` (app): only execution boundary for production tool calls.
+- `SecurityService` (`zen_security::service`): permission decisions and audit
+  persistence.
 - `ToolManager`: discovery, tool metadata aggregation, and permission settings.
-- `GlobalToolRegistry`: v2 production tool registry.
-- `agent::tools::ToolRegistry`: legacy/progressive registry retained during
-  Phase 3.5 only.
-- `McpServer`: external tool exposure adapter; it must call `ToolService`.
+- `GlobalToolRegistry`: the production tool registry.
+- `agent::tools::ToolRegistry`: the agent-side execution registry (an alias of
+  `zen_tools::AgentToolRegistry<tauri::AppHandle>`), fed by progressive
+  discovery.
+- `McpServer` (`zen-mcp`): external tool exposure adapter; it must call
+  `ToolService`.
 
-The two surfaces are accepted temporarily during Phase 3.5. New production tools
-must be added through the `src-tauri/src/tools/*` v2 path and exposed through
-`ToolService`. Do not add a third registry or a direct execution path.
+Because zen-tools is generic over the host (RULES.md §3.1 forbids `tauri` in
+crates) and Rust has no trait aliases, `impl` and `dyn` positions must spell
+`zen_tools::Tool<tauri::AppHandle>`; struct and type positions use the app-crate
+aliases. Do not add a third registry or a direct execution path.
 
 ## Adding A Tool
 
@@ -56,10 +77,14 @@ Required:
 
 Recommended sequence:
 
-1. Add the implementation under `src-tauri/src/tools/<domain>.rs`.
-2. Implement the v2 `Tool` trait and return a bounded, structured output.
+1. Add the implementation. If it needs `AppHandle`/`AppState`, put it under
+   `src-tauri/src/tools/<domain>.rs`; if it is pure, it belongs in
+   `src-tauri/crates/zen-tools/src/`.
+2. Implement the `Tool` trait (`zen_tools::Tool<tauri::AppHandle>` in the app
+   crate) and return a bounded, structured output.
 3. Register the tool in `init_tool_registry`.
-4. Add or verify `default_tool_risk` and metadata.
+4. Add or verify `default_tool_risk` (in `zen-tools/src/registry.rs`) and
+   metadata.
 5. Route all agent, MCP, and UI calls through `ToolService`.
 6. Add lightweight backend tests for allow, deny, malformed input, and audit
    behavior when the tool is privileged.
@@ -78,36 +103,29 @@ Forbidden:
 
 MCP is an adapter, not a second tool system.
 
-- MCP HTTP remains localhost-only for this phase.
+- MCP HTTP remains localhost-only.
 - Remote MCP remains unsupported until authentication and token policy are
   designed.
 - MCP startup must fail if `ToolService` is unavailable.
 - MCP tool execution must use the same permission, audit, and registry path as
   agent/UI execution.
 
-## Agent Compatibility
+## Agent Tools
 
-Agent-facing tools may still read progressive metadata from
-`src-tauri/src/agent/tools/*`, but production execution should move toward the
-v2 `ToolService` path.
+Agent-facing executors live in `src-tauri/src/agent/tools/*` and register into
+`agent::tools::ToolRegistry` (the `AgentToolRegistry<tauri::AppHandle>` alias).
+Progressive discovery feeds that registry through
+`zen_tools::registry::LazyToolSource`, so the agent sees a small starting catalog
+and pulls the rest on demand.
 
-Allowed legacy usage:
-
-- progressive discovery metadata
-- compatibility adapters that delegate into `ToolService`
-- temporary wrappers with documented migration intent
+This is a second *executor* surface, not a second tool system: permission
+preflight, execution, and audit still go through `ToolService`.
 
 Not allowed:
 
 - new privileged behavior implemented only in `agent::tools`
 - direct execution from the agent runner that bypasses `ToolService`
 - duplicate versions of the same production tool with different permissions
-
-## Migration Rule
-
-When touching an existing tool, prefer moving it toward the canonical
-`ToolService` path. Do not expand the older surface unless the change is part of
-a deliberate migration.
 
 ## Review Checklist
 

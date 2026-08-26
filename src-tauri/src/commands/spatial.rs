@@ -10,7 +10,7 @@ fn map_catalog_directory(app: &AppHandle) -> Result<std::path::PathBuf, ZenError
 
 // GTSM Types
 use zen_db::models::{GtsmGeofence, GtsmMarker};
-use crate::services::gtsm::history::{TelemetrySnapshot, TrackPoint};
+use zen_db::queries::{TelemetrySnapshot, TrackPoint};
 use crate::services::gtsm::types::{NavigationRoute, RoutingProfile};
 use crate::services::gtsm::{
     Earthquake, Flight, FusionEvent, GeocodingResult, GeofenceZone, MilitaryAircraft, Route,
@@ -380,7 +380,7 @@ pub async fn get_telemetry_history(
     entity_type: String,
     timestamp: i64,
 ) -> Result<Vec<TelemetrySnapshot>, ZenError> {
-    crate::services::gtsm::history::query_history(&state.db().await?, &entity_type, timestamp)
+    zen_db::queries::query_history(&state.db().await?, &entity_type, timestamp)
         .await
         .map_err(|e| ZenError::Internal(e.to_string()))
 }
@@ -394,7 +394,7 @@ pub async fn get_telemetry_history_page(
     offset: Option<i64>,
 ) -> Result<Page<TelemetrySnapshot>, ZenError> {
     let (limit, offset) = normalize_page(limit, offset);
-    let items = crate::services::gtsm::history::query_history_page(
+    let items = zen_db::queries::query_history_page(
         &state.db().await?,
         &entity_type,
         timestamp,
@@ -413,7 +413,7 @@ pub async fn get_entity_track(
     start_time: i64,
     end_time: i64,
 ) -> Result<Vec<TrackPoint>, ZenError> {
-    crate::services::gtsm::history::query_entity_track(
+    zen_db::queries::query_entity_track(
         &state.db().await?,
         &entity_id,
         start_time,
@@ -433,7 +433,7 @@ pub async fn get_entity_track_page(
     offset: Option<i64>,
 ) -> Result<Page<TrackPoint>, ZenError> {
     let (limit, offset) = normalize_page(limit, offset);
-    let items = crate::services::gtsm::history::query_entity_track_page(
+    let items = zen_db::queries::query_entity_track_page(
         &state.db().await?,
         &entity_id,
         start_time,
@@ -450,11 +450,11 @@ pub async fn get_entity_track_page(
 pub async fn get_telemetry_stats(
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, ZenError> {
-    let (total, entities) = crate::services::gtsm::history::get_storage_stats(&state.db().await?)
+    let (total, entities) = zen_db::queries::get_storage_stats(&state.db().await?)
         .await
         .map_err(|e| ZenError::Internal(e.to_string()))?;
 
-    let time_range = crate::services::gtsm::history::get_available_timerange(&state.db().await?)
+    let time_range = zen_db::queries::get_available_timerange(&state.db().await?)
         .await
         .map_err(|e| ZenError::Internal(e.to_string()))?;
 

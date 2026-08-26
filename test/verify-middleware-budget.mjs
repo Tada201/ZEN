@@ -1,9 +1,9 @@
 // Per-layer middleware budget verifier.
 //
 // Static-source verifier for the budget enforcement contract. The
-// `MiddlewareBudgets` struct in `src-tauri/crates/zen-agent/src/runner/helpers.rs`
+// `MiddlewareBudgets` struct in `src-tauri/crates/zen-agent/src/runner/helpers/`
 // is the single owner of the budget-split math. Each built-in
-// middleware in `src-tauri/crates/zen-agent/src/middleware.rs` owns one layer and
+// middleware in `src-tauri/crates/zen-agent/src/middleware/` owns one layer and
 // must wire its `*_budget` field. The migration moved the inline
 // summary + compaction logic from `loop.rs` into the middleware
 // placeholders so the budgets actually take effect.

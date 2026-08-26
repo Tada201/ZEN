@@ -136,7 +136,7 @@ jobs:
   # permission/policy and tool-execution surface (RULES.md testing
   # gates), so their line coverage is reported every backend run.
   # Informational for now — promote to a hard floor once a baseline
-  # has settled across a few runs (see BIG_MIGRATION.md Phase 13).
+  # has settled across a few runs (see docs/architecture/history/BIG_MIGRATION.md).
   # ──────────────────────────────────────────────────────────────
   coverage:
     name: Coverage (privileged crates)
@@ -262,9 +262,9 @@ jobs:
         working-directory: src-tauri
         run: cargo test --workspace
 
-      # Capture the event-contract baseline fixture (BIG_MIGRATION.md Phase 0 /
-      # R5), carried as debt since Phase 6 because it cannot be produced on the
-      # dev box. Only regenerates when missing so a committed baseline is never
+      # Capture the event-contract baseline fixture (RULES.md R5 event
+      # contract), carried as debt through the workspace migration because it
+      # cannot be produced on the dev box. Only regenerates when missing so a committed baseline is never
       # silently overwritten; a drift check against a committed baseline is a
       # follow-up once this first capture lands.
       - name: Capture event-contract baseline (if missing)

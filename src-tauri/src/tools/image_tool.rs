@@ -235,7 +235,7 @@ Use for: drawing, painting, creating artwork, illustrations, sketches, photo-rea
         })?;
 
         // Make the HTTP request
-        let client = crate::utils::default_http_client();
+        let client = zen_media::http::default_http_client();
         let mut request = client.post(&endpoint).json(&request_body);
         if !nine_router_api_key.is_empty() {
             request = request.bearer_auth(&nine_router_api_key);

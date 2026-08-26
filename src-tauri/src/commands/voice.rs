@@ -582,7 +582,7 @@ pub async fn download_piper_model(
         "Downloading Piper model"
     );
 
-    let client = crate::utils::model_download_http_client();
+    let client = zen_media::http::model_download_http_client();
 
     // Download model
     let model_response = client

@@ -554,7 +554,7 @@ pub async fn fetch_9router_image_models(
     crate::utils::validate_remote_auth_safety(&endpoint, !api_key.is_empty())
         .map_err(|e| zen_core::error::ZenError::Custom(e.to_string()))?;
 
-    let client = crate::utils::default_http_client();
+    let client = zen_media::http::default_http_client();
     let mut request = client.get(&endpoint);
     if !api_key.is_empty() {
         request = request.bearer_auth(&api_key);

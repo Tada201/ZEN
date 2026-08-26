@@ -47,10 +47,12 @@ through typed wrappers in `src/api/`; components should not call raw Tauri
 
 ### Backend
 
-The Tauri backend lives under `src-tauri/` and is written in Rust. It owns agent
-orchestration, provider calls, tool registration, permission checks, event
-identity, terminal/filesystem access, and persistence. SQL is isolated under
-`src-tauri/src/db/queries/`.
+The Tauri backend lives under `src-tauri/` and is written in Rust. It is a Cargo
+workspace: the `zen` app crate owns Tauri commands, host-bound services, and
+leaf tool executors, while nine domain crates under `src-tauri/crates/` own the
+agent loop, providers, tools, security policy, MCP, RAG, media runtimes, and
+persistence. See the Workspace Crate Map in [RULES.md](RULES.md). SQL is isolated
+under `src-tauri/crates/zen-db/src/queries/`.
 
 ### Message ordering and persistence
 

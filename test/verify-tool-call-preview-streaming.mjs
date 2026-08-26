@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
-const llmTypes = readFileSync(new URL("../src-tauri/src/llm/mod.rs", import.meta.url), "utf8");
+const llmTypes = readFileSync(new URL("../src-tauri/crates/zen-llm/src/lib.rs", import.meta.url), "utf8");
 assert.match(llmTypes, /ToolCallDelta\s*\{/);
 assert.match(llmTypes, /ToolCallReady\s*\{/);
 assert.match(llmTypes, /arguments_snapshot:\s*String/);

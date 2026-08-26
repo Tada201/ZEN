@@ -1,11 +1,17 @@
-# test/fixtures — event-contract snapshots (BIG_MIGRATION.md Phase 0, R5)
+# test/fixtures — event-contract snapshots (R5)
 
-`event-snapshot-baseline.jsonl` must be captured from the PRE-migration tree
-(tag `pre-workspace-migration`) before Phase 6 begins. Every line is
-`{"event": <tauri event name>, "shape": <recursive payload shape>}` appended
-by `src-tauri/src/agent/event_snapshot.rs` (feature `event-snapshot`).
+`event-snapshot-baseline.jsonl` is the frontend event-contract baseline: the set
+of `{event, shape}` pairs the backend is allowed to emit. Every line is
+`{"event": <tauri event name>, "shape": <recursive payload shape>}` appended by
+`src-tauri/crates/zen-agent/src/event_snapshot.rs` (feature `event-snapshot`).
 
-## Why the file is not committed yet
+Renaming an event or changing a payload shape breaks the frontend silently, so
+any backend change that touches event emission should be checked against a fresh
+capture. The workspace migration recorded in
+[docs/architecture/history/BIG_MIGRATION.md](../../docs/architecture/history/BIG_MIGRATION.md)
+introduced this fixture for exactly that reason (risk R5).
+
+## Why the file is not committed
 
 The 2026-08-22 capture attempt on the dev box failed at test-binary load
 (`STATUS_ENTRYPOINT_NOT_FOUND`, a known local-environment DLL issue that
@@ -32,10 +38,10 @@ npx tauri dev --features event-snapshot
 # drive one chat: send a message, run one tool approval, spawn one subagent
 ```
 
-## Diffing in later phases
+## Diffing after a change
 
-Re-run the same capture after Phase 6 (and any phase touching event emission)
-and compare the DEDUPLICATED set of `{event, shape}` pairs:
+Re-run the same capture and compare the DEDUPLICATED set of `{event, shape}`
+pairs:
 
 ```powershell
 Sort-Object -Unique (Get-Content event-snapshot-baseline.jsonl) |

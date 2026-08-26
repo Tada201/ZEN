@@ -78,7 +78,7 @@ async fn tavily_search(
     max_results: usize,
     depth: &str,
 ) -> Result<Vec<SearchResult>, String> {
-    let response = crate::utils::default_http_client()
+    let response = zen_media::http::default_http_client()
         .post("https://api.tavily.com/search")
         .bearer_auth(api_key)
         .json(&json!({
@@ -118,7 +118,7 @@ async fn exa_search(
     query: &str,
     max_results: usize,
 ) -> Result<Vec<SearchResult>, String> {
-    let response = crate::utils::default_http_client()
+    let response = zen_media::http::default_http_client()
         .post("https://api.exa.ai/search")
         .header("x-api-key", api_key)
         .json(&json!({
@@ -273,7 +273,7 @@ async fn nine_router_search_fallback(
         .unwrap_or_default();
 
     // 2. Fetch models to perform dynamic search model discovery
-    let client = crate::utils::default_http_client();
+    let client = zen_media::http::default_http_client();
     let models_url = format!("{}/models", nine_router_base_url.trim_end_matches('/'));
 
     let mut selected_model = "kr/claude-sonnet-4.5".to_string(); // Premium fallback model

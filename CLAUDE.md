@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Build Desktop Installer** (MSI): `npm run build:tauri` (uses `tauri.conf.json` with `com.zen.app` identifier).
 
 ### Backend (Rust/Tauri)
-- **Run Tests**: `cargo test` in the `src-tauri` directory.
+- **Run Tests**: `cargo test --workspace` in `src-tauri`. On Windows this aborts with `STATUS_ENTRYPOINT_NOT_FOUND` on tauri-linked test binaries; locally run `cargo test -p <crate>` per crate plus `cargo check -p zen --all-targets`.
 - **Run Backend**: Automatically started and managed by `npm run dev:tauri`.
 
 ### Dev vs Prod Isolation
@@ -30,12 +30,19 @@ Zen is a high-fidelity OSINT data analysis platform built with:
 - **Backend**: Rust (Axum/Tauri 2.0).
 
 ### Key Modules
-- **`src-tauri/`**: Contains the Rust backend including:
-  - `agent/`: Orchestration logic, tools, and swarm patterns.
-  - `commands/`: Tauri commands for frontend-backend interaction.
-  - `llm/`: LLM integrations (Anthropic, Ollama, OpenAI-compatible).
-  - `rag/`: RAG pipeline and vector storage.
-  - `canvas/`: 4D geospatial and drawing capabilities.
+`src-tauri/` is a Cargo workspace: the `zen` app crate plus nine domain crates
+under `src-tauri/crates/`. See RULES.md "Workspace Crate Map" for the full
+ownership table and the two boundary rules (no `tauri`/`keyring` in crates;
+resist adding code to the app crate).
+
+- **`src-tauri/src/`** — the `zen` app crate: Tauri commands, app services
+  (secrets/keyring, settings, checkpoints, terminal), leaf tool executors that
+  need `AppHandle`, and window/tray wiring.
+- **`src-tauri/crates/`** — `zen-core` (errors + ports), `zen-db` (all SQL),
+  `zen-security` (risk/approval/audit/redaction), `zen-tools` (tool contracts +
+  registry), `zen-llm` (providers + streaming), `zen-mcp`, `zen-rag`,
+  `zen-media` (speech/TTS runtimes), `zen-agent` (runner, orchestrator, event
+  bus, skills).
 - **`src/`**: Contains the React frontend:
   - `atlas/`: High-fidelity UI components following the Atlas design system.
   - `components/chat/`: Agentic chat interface components.
@@ -56,4 +63,4 @@ Zen is a high-fidelity OSINT data analysis platform built with:
 - **Tauri v2 Invoke**: Frontend `invoke()` calls must use camelCase for parameters.
 - **Component Design**: All components must follow the UI Atlas design system.
 - **No Any**: Avoid using `any` in TypeScript code; use proper interfaces.
-- **Initialization**: Use `InitState<T>` for Rust services.
+- **Initialization**: Use `zen_agent::init_state::InitState<T>` for Rust services.

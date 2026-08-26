@@ -6,7 +6,7 @@ const backend = [
   "model_select.rs", "outcome.rs", "params.rs", "tool.rs",
 ].map((f) => readFileSync(new URL(`../src-tauri/src/agent/tools/spawn_tools/${f}`, import.meta.url), "utf8")).join("");
 const progressive = readFileSync(new URL("../src-tauri/src/agent/tools/progressive.rs", import.meta.url), "utf8");
-const capability = readFileSync(new URL("../src-tauri/src/tools/capability.rs", import.meta.url), "utf8");
+const capability = readFileSync(new URL("../src-tauri/crates/zen-tools/src/capability.rs", import.meta.url), "utf8");
 const systemPrompt = readFileSync(new URL("../src-tauri/crates/zen-agent/src/middleware/system_prompt.rs", import.meta.url), "utf8");
 const runner =
   readFileSync(new URL("../src-tauri/crates/zen-agent/src/runner/turn_loop.rs", import.meta.url), "utf8") +

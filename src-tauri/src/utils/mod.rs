@@ -9,11 +9,11 @@ static PUBLIC_NO_REDIRECT_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new
 static DUCKDUCKGO_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 static GTSM_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
-// `default_http_client` and `model_download_http_client` moved to the
-// zen-media crate in Phase 10 (its speech/tts services need them and it must
-// stay tauri-free). Re-exported here so existing `crate::utils::*` call sites
-// keep the same path and there is a single client instance (SSOT).
-pub use zen_media::http::{default_http_client, model_download_http_client};
+// The shared general-purpose and model-download clients live in
+// `zen_media::http` (zen-media's speech/tts services need them and it must stay
+// tauri-free); call sites import them from there. The clients below are
+// app-specific: they carry redirect and timeout policy that only these callers
+// want.
 
 pub fn public_no_redirect_http_client() -> &'static reqwest::Client {
     PUBLIC_NO_REDIRECT_HTTP_CLIENT.get_or_init(|| {

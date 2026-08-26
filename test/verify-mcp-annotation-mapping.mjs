@@ -9,7 +9,7 @@
 // adapter's stored field) and the post-process override in the
 // permission check.
 //
-//   A) src-tauri/src/mcp/client.rs — `risk_level_from_annotations`
+//   A) src-tauri/crates/zen-mcp/src/client/ — `risk_level_from_annotations`
 //      helper exists with the documented mapping table:
 //        * absent           → Medium
 //        * destructive      → High
@@ -21,11 +21,11 @@
 //      and `risk_level_from_annotations(annotations.as_ref())` into
 //      `McpToolAdapter::new(...)`.
 //
-//   B) src-tauri/src/tools/permission.rs — `build_context` is exposed
+//   B) src-tauri/crates/zen-security/src/approval.rs — `build_context` is exposed
 //      beyond the current module so the post-process gate can call it
 //      without re-evaluating the layered from_input logic.
 //
-//   C) src-tauri/src/tools/mod.rs — `ToolRegistry::check_permission`
+//   C) src-tauri/crates/zen-tools/src/registry.rs — `ToolRegistry::check_permission`
 //      has a post-process override: if `decision == Allow` AND
 //      `tool.annotations()?.destructive_hint == Some(true)`, rewrite
 //      to `Confirm { context: ... }`. We test that this is the only
@@ -46,10 +46,11 @@ import path from "node:path";
 const __filename = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = path.resolve(path.dirname(__filename), "..");
 const SRC = (p) => {
-  // `mcp/client.rs` was split into `client/{mod,sync,stdio_helpers,http_handshake,http_body}.rs`.
-  // Read the whole client directory as one blob so shape assertions that
-  // predate the split keep anchoring on the same content.
-  if (p === "src-tauri/src/mcp/client.rs") {
+  // The MCP client lives in `zen-mcp` as `client/{mod,sync,stdio_helpers,
+  // http_handshake,http_body,...}.rs`. Read the whole client directory as one
+  // blob so shape assertions that predate the split keep anchoring on the same
+  // content.
+  if (p === "src-tauri/crates/zen-mcp/src/client") {
     return ["mod", "sync", "stdio_helpers", "http_handshake", "http_body"]
       .map((f) => {
         try {
@@ -85,7 +86,7 @@ function assertContainsAll(section, source, patterns) {
 
 // JS port of `risk_level_from_annotations` for the runtime contract
 // scenario. Keep this in lock-step with the Rust source shape
-// (src-tauri/src/mcp/client.rs); the verifier asserts both shapes
+// (src-tauri/crates/zen-mcp/src/client/); the verifier asserts both shapes
 // agree for the same input annotations, so a drift in either side
 // will fail the test.
 function riskLevelFromAnnotations(ann) {
@@ -100,11 +101,11 @@ function riskLevelFromAnnotations(ann) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Section A — src-tauri/src/mcp/client.rs
+// Section A — src-tauri/crates/zen-mcp/src/client/
 // ─────────────────────────────────────────────────────────────────────────
 {
-  const section = "mcp/client.rs";
-  const src = SRC("src-tauri/src/mcp/client.rs");
+  const section = "zen-mcp/client";
+  const src = SRC("src-tauri/crates/zen-mcp/src/client");
   let allOk = true;  // The helper is public and lives alongside the existing
   // `prefixed_external_tool_name` / `is_external_tool_name` helpers.
   // The trailing `,?` after the `Option<&crate::tools::ToolAnnotations>`
@@ -184,7 +185,7 @@ function riskLevelFromAnnotations(ann) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Section B — src-tauri/src/tools/permission.rs (build_context visibility)
+// Section B — zen-security approval.rs (build_context visibility)
 // ─────────────────────────────────────────────────────────────────────────
 {
   const section = "zen-security/approval.rs";
@@ -213,7 +214,7 @@ function riskLevelFromAnnotations(ann) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Section C — src-tauri/src/tools/mod.rs (ToolRegistry::check_permission
+// Section C — zen-tools registry.rs (ToolRegistry::check_permission
 //                                  destructive-annotation override)
 // ─────────────────────────────────────────────────────────────────────────
 {

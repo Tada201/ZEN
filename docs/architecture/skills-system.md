@@ -7,7 +7,7 @@ only when it is invoked.
 
 ## Discovery
 
-`SkillsManager` (`src-tauri/src/agent/skills/manager.rs`) scans two root kinds:
+`SkillsManager` (`src-tauri/crates/zen-agent/src/skills/manager.rs`) scans two root kinds:
 
 - **User** — `~/.zen/skills/<name>/SKILL.md` (`SkillScope::User`, lowest precedence)
 - **Repo** — `.agents/skills/<name>/SKILL.md` walked from the workspace root down

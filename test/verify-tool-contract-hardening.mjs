@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const managerSource = readFileSync(
-  new URL("../src-tauri/src/tools/manager.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-tools/src/manager.rs", import.meta.url),
   "utf8",
 );
 const pipelineSource = readFileSync(
@@ -14,7 +14,7 @@ const serviceSource = ["mod.rs", "agent_exec.rs", "approval.rs", "audit.rs", "au
     ? "../src-tauri/src/services/tool.rs"
     : `../src-tauri/src/services/tool/${f}`, import.meta.url), "utf8")).join("\n");
 const toolsSource = readFileSync(
-  new URL("../src-tauri/src/tools/mod.rs", import.meta.url),
+  new URL("../src-tauri/crates/zen-tools/src/registry.rs", import.meta.url),
   "utf8",
 );
 
