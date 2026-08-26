@@ -6,7 +6,7 @@ use zen_core::error::{ZenError, ZenResult};
 use zen_mcp::resources::{
     McpPrompt, McpPromptMessage, McpResource, McpResourceContents, McpResourceTemplate,
 };
-use crate::services::{McpInventory, McpScope, McpServerEntry, PendingConsent};
+use zen_mcp::{McpInventory, McpScope, McpServerEntry, PendingConsent};
 
 /// Read the raw config document for `scope` (User or Workspace).
 /// Returns an empty `{"mcpServers": {}}` payload if no file exists yet.

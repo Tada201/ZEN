@@ -7,7 +7,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 
-use crate::services::{
+use zen_security::service::{
     AuditEvent, PermissionDecision as SecurityDecision, PermissionRequest,
     PrivilegedOperation, RiskLevel as SecurityRiskLevel, SecurityService,
 };
@@ -39,7 +39,7 @@ pub struct AgentToolParams {
     pub tool: Option<Arc<dyn zen_tools::AgentTool<tauri::AppHandle>>>,
     pub app: AppHandle,
     pub chat_id: String,
-    pub tool_call: crate::agent::types::ToolCall,
+    pub tool_call: zen_agent::types::ToolCall,
     pub token: CancellationToken,
     pub depth: u32,
     pub allowed_tools: Option<Arc<Mutex<HashSet<String>>>>,
@@ -66,9 +66,7 @@ pub struct ToolApprovalDecision {
     pub args_hash: String,
 }
 
-// Moved to zen-agent in BIG_MIGRATION.md Phase 11; re-exports keep app
-// call sites compiling (relocation doctrine §4.6).
-pub use zen_agent::ports::{ToolApprovalExecutionContext, ToolApprovalOutcome};
+use zen_agent::ports::{ToolApprovalExecutionContext, ToolApprovalOutcome};
 
 struct MutationCapture {
     path: PathBuf,

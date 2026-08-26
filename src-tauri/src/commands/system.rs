@@ -188,7 +188,7 @@ pub async fn get_system_stats(state: State<'_, AppState>) -> AppResult<SystemMet
 #[tauri::command]
 pub async fn get_hardware_info(
     state: State<'_, AppState>,
-) -> AppResult<crate::services::HardwareInfo> {
+) -> AppResult<zen_media::hardware::HardwareInfo> {
     let hardware = state.hardware.lock().await;
     Ok(hardware.get_info())
 }

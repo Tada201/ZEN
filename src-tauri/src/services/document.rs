@@ -394,7 +394,7 @@ impl DocumentService {
             )));
         }
 
-        let token_estimate = crate::agent::runner::helpers::estimate_tokens(&extracted) as i64;
+        let token_estimate = zen_agent::runner::helpers::estimate_tokens(&extracted) as i64;
 
         // Metadata cards: sheet names for spreadsheets (cheap re-open, no cell
         // scan); page_count is left for the frontend/PDF path in a later phase.

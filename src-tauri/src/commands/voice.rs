@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::commands::AppState;
 use zen_core::error::ZenError;
-use crate::services::SpeechService;
+use zen_media::speech_service::SpeechService;
 
 const MAX_VOICE_MODEL_BYTES: u64 = 600 * 1024 * 1024;
 const MAX_VOICE_CONFIG_BYTES: u64 = 2 * 1024 * 1024;
@@ -14,7 +14,7 @@ const MAX_VOICE_CONFIG_BYTES: u64 = 2 * 1024 * 1024;
 pub async fn get_whisper_model_status(
     state: State<'_, AppState>,
     model_name: String,
-) -> Result<crate::services::speech_service::ModelFileStatus, ZenError> {
+) -> Result<zen_media::speech_service::ModelFileStatus, ZenError> {
     let speech_lock = state.speech.read().await;
     let speech = speech_lock
         .as_ref()
@@ -25,7 +25,7 @@ pub async fn get_whisper_model_status(
 #[tauri::command]
 pub async fn get_whisper_runtime_status(
     state: State<'_, AppState>,
-) -> Result<crate::services::speech_service::WhisperRuntimeStatus, ZenError> {
+) -> Result<zen_media::speech_service::WhisperRuntimeStatus, ZenError> {
     let speech_lock = state.speech.read().await;
     let speech = speech_lock
         .as_ref()
@@ -37,7 +37,7 @@ pub async fn get_whisper_runtime_status(
 pub async fn download_whisper_model(
     state: State<'_, AppState>,
     model_name: String,
-) -> Result<crate::services::speech_service::ModelFileStatus, ZenError> {
+) -> Result<zen_media::speech_service::ModelFileStatus, ZenError> {
     let mut speech_lock = state.speech.write().await;
     let speech = speech_lock
         .as_mut()
@@ -619,7 +619,7 @@ pub async fn download_piper_model(
         .map_err(|e| ZenError::Internal(format!("Failed to read config response: {e}")))?;
 
     // Atomic writes
-    let runtime = crate::services::runtime_resource::RuntimeResources::new(
+    let runtime = zen_media::runtime_resource::RuntimeResources::new(
         &app_data_dir,
         &app.path().resource_dir().unwrap_or_default(),
     );

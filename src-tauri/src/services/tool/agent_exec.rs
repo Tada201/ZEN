@@ -9,7 +9,7 @@ impl ToolService {
     pub async fn execute_agent_tool(
         &self,
         params: AgentToolParams,
-    ) -> crate::agent::types::ToolResult {
+    ) -> zen_agent::types::ToolResult {
         let AgentToolParams {
             tool,
             app,
@@ -21,7 +21,7 @@ impl ToolService {
             delegation_allowed,
         } = params;
         if tool_call.name == "spawn_agent" && !delegation_allowed {
-            return crate::agent::types::ToolResult {
+            return zen_agent::types::ToolResult {
                 tool_call_id: tool_call.id,
                 content: serde_json::json!({"error": "Nested delegation is disabled for sub-agents."}),
                 is_error: true,
@@ -53,7 +53,7 @@ impl ToolService {
                     };
 
                     if !already_allowed {
-                        return crate::agent::types::ToolResult {
+                        return zen_agent::types::ToolResult {
                             tool_call_id: tool_call.id.clone(),
                             content: serde_json::json!({
                                 "error": "Tool execution requires user confirmation.",
@@ -66,7 +66,7 @@ impl ToolService {
                     }
                 }
                 Ok(zen_security::PermissionDecision::Deny { reason }) => {
-                    return crate::agent::types::ToolResult {
+                    return zen_agent::types::ToolResult {
                         tool_call_id: tool_call.id.clone(),
                         content: serde_json::json!({
                             "error": format!("Tool execution denied by security policy: {}", reason),
@@ -77,7 +77,7 @@ impl ToolService {
                     };
                 }
                 Err(e) => {
-                    return crate::agent::types::ToolResult {
+                    return zen_agent::types::ToolResult {
                         tool_call_id: tool_call.id.clone(),
                         content: serde_json::json!({
                             "error": format!("Tool permission check failed: {}", e),
@@ -108,7 +108,7 @@ impl ToolService {
             {
                 Ok(permit) => permit,
                 Err(e) => {
-                    return crate::agent::types::ToolResult {
+                    return zen_agent::types::ToolResult {
                         tool_call_id: tool_call.id.clone(),
                         content: serde_json::json!({
                             "error": e,
@@ -122,7 +122,7 @@ impl ToolService {
             let captures = match self.capture_file_mutations(&app, &chat_id, &v2_tool_call).await {
                 Ok(captures) => captures,
                 Err(error) => {
-                    return crate::agent::types::ToolResult {
+                    return zen_agent::types::ToolResult {
                         tool_call_id: tool_call.id,
                         content: serde_json::json!({
                             "error": error,
@@ -220,7 +220,7 @@ impl ToolService {
                         error: None,
                     })
                     .await;
-                    crate::agent::types::ToolResult {
+                    zen_agent::types::ToolResult {
                         tool_call_id: tool_call.id,
                         content: val,
                         is_error: false,
@@ -243,7 +243,7 @@ impl ToolService {
                         error: content.get("error").and_then(|v| v.as_str()),
                     })
                     .await;
-                    crate::agent::types::ToolResult {
+                    zen_agent::types::ToolResult {
                         tool_call_id: tool_call.id.clone(),
                         content,
                         is_error: true,
@@ -271,13 +271,13 @@ impl ToolService {
                             .execute_v2_authorized(app, chat_id, v2_tool_call, "agent_tool")
                             .await
                         {
-                            Ok(content) => crate::agent::types::ToolResult {
+                            Ok(content) => zen_agent::types::ToolResult {
                                 tool_call_id: tool_call.id,
                                 content,
                                 is_error: false,
                                 duration_ms: start.elapsed().as_millis() as u64,
                             },
-                            Err(e) => crate::agent::types::ToolResult {
+                            Err(e) => zen_agent::types::ToolResult {
                                 tool_call_id: tool_call.id,
                                 content: serde_json::json!({
                                     "error": e,
@@ -302,13 +302,13 @@ impl ToolService {
                                 .execute_v2_authorized(app, chat_id, v2_tool_call, "agent_tool")
                                 .await
                             {
-                                Ok(content) => crate::agent::types::ToolResult {
+                                Ok(content) => zen_agent::types::ToolResult {
                                     tool_call_id: tool_call.id,
                                     content,
                                     is_error: false,
                                     duration_ms: start.elapsed().as_millis() as u64,
                                 },
-                                Err(e) => crate::agent::types::ToolResult {
+                                Err(e) => zen_agent::types::ToolResult {
                                     tool_call_id: tool_call.id,
                                     content: serde_json::json!({
                                         "error": e,
@@ -320,7 +320,7 @@ impl ToolService {
                                 },
                             }
                         } else {
-                            crate::agent::types::ToolResult {
+                            zen_agent::types::ToolResult {
                                 tool_call_id: tool_call.id,
                                 content: serde_json::json!({
                                     "error": "Tool execution requires user confirmation.",
@@ -333,7 +333,7 @@ impl ToolService {
                         }
                     }
                     Ok(zen_security::PermissionDecision::Deny { reason }) => {
-                        crate::agent::types::ToolResult {
+                        zen_agent::types::ToolResult {
                             tool_call_id: tool_call.id,
                             content: serde_json::json!({
                                 "error": format!("Tool execution denied by security policy: {}", reason),
@@ -343,7 +343,7 @@ impl ToolService {
                             duration_ms: 0,
                         }
                     }
-                    Err(e) => crate::agent::types::ToolResult {
+                    Err(e) => zen_agent::types::ToolResult {
                         tool_call_id: tool_call.id,
                         content: serde_json::json!({
                             "error": format!("Tool permission check failed: {}", e),
@@ -378,7 +378,7 @@ impl ToolService {
                     "Use spawn_agent if you need a specialized expert."
                         .to_string()
                 };
-                crate::agent::types::ToolResult {
+                zen_agent::types::ToolResult {
                     tool_call_id: tool_call.id,
                     content: serde_json::json!({
                         "error": format!("Tool '{}' not found", tool_call.name),

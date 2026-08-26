@@ -1,5 +1,5 @@
 use zen_core::error::AppResult;
-use crate::services::{is_secret_placeholder_write, redact_if_secret, SECRET_PRESENT_SENTINEL};
+use zen_security::secrets::{is_secret_placeholder_write, redact_if_secret, SECRET_PRESENT_SENTINEL};
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::Arc;

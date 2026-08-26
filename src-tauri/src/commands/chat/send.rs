@@ -23,7 +23,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::agent::runner::Runner;
+use zen_agent::runner::Runner;
 use crate::commands::AppState;
 use zen_db::models::ChatMessage;
 use zen_db::queries;
@@ -47,7 +47,7 @@ mod validate;
 type CancelTokens = Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>;
 /// Shared alias for the per-chat pause registry held by `AppState`.
 type PauseControls =
-    Arc<tokio::sync::Mutex<HashMap<String, Arc<crate::commands::ChatPauseControl>>>>;
+    Arc<tokio::sync::Mutex<HashMap<String, Arc<zen_agent::context::ChatPauseControl>>>>;
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -201,7 +201,7 @@ pub async fn send_message(
         if let Some(old_control) = controls.remove(&chat_id) {
             old_control.resume();
         }
-        controls.insert(chat_id.clone(), Arc::new(crate::commands::ChatPauseControl::new()));
+        controls.insert(chat_id.clone(), Arc::new(zen_agent::context::ChatPauseControl::new()));
     }
 
     // 4. Convert history to ChatMessage format

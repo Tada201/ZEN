@@ -1,7 +1,8 @@
 use crate::commands::AppState;
 use zen_db::models::{ModelInfo, ProviderConfig};
 use zen_core::error::{AppResult, ZenResult};
-use crate::services::{is_secret_key, data_cleanup};
+use crate::services::data_cleanup;
+use zen_security::secrets::is_secret_key;
 use crate::tools::ToolManager;
 use zen_tools::manager::ToolMetadata;
 use serde::Serialize;
@@ -201,7 +202,7 @@ pub async fn get_setting(state: State<'_, AppState>, key: String) -> AppResult<O
 #[tauri::command]
 pub async fn set_setting(state: State<'_, AppState>, key: String, value: String) -> AppResult<()> {
     if is_workspace_root_key(&key) {
-        crate::workspace::canonicalize_workspace_root(std::path::Path::new(&value)).map_err(
+        zen_agent::utils::canonicalize_workspace_root(std::path::Path::new(&value)).map_err(
             |e| zen_core::error::ZenError::Custom(format!("Invalid workspace root: {e}")),
         )?;
     }
@@ -317,7 +318,7 @@ pub async fn set_settings(
         .or_else(|| settings.get("workspace_path"))
         .cloned();
     if let Some(workspace_root) = workspace_root.as_deref() {
-        crate::workspace::canonicalize_workspace_root(std::path::Path::new(workspace_root))
+        zen_agent::utils::canonicalize_workspace_root(std::path::Path::new(workspace_root))
             .map_err(|e| {
                 zen_core::error::ZenError::Custom(format!("Invalid workspace root: {e}"))
             })?;

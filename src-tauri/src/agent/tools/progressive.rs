@@ -453,9 +453,9 @@ impl ProgressiveToolRegistry {
 
     pub fn setup_agent_tools(
         &mut self,
-        agent_registry: Arc<crate::agent::types::AgentRegistry>,
-        hook_registry: Arc<crate::agent::hooks::HookRegistry>,
-        skills_manager: Arc<crate::agent::skills::SkillsManager>,
+        agent_registry: Arc<zen_agent::types::AgentRegistry>,
+        hook_registry: Arc<zen_agent::hooks::HookRegistry>,
+        skills_manager: Arc<zen_agent::skills::SkillsManager>,
     ) {
         // Board management — lightweight UI scratch pad
         self.tool_factory.insert(

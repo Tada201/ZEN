@@ -15,8 +15,8 @@
 //! `commands/chat/crud.rs::delete_chat` and `bulk_delete_chats`
 //! alongside `recall_cache` and `session_permissions`.
 
-use crate::agent::runner::context_breakdown::{ContextSectionId, SectionCategory};
-use crate::agent::runner::ContextBreakdownPayload;
+use zen_agent::runner::context_breakdown::{ContextSectionId, SectionCategory};
+use zen_agent::runner::ContextBreakdownPayload;
 use crate::commands::AppState;
 use serde::Serialize;
 use tauri::State;
@@ -247,7 +247,7 @@ fn derive_snapshot(payload: &ContextBreakdownPayload) -> ContextSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::runner::context_breakdown::{ContextSectionId, SectionCategory};
+    use zen_agent::runner::context_breakdown::{ContextSectionId, SectionCategory};
 
     /// Round-trip guard: every `ContextSectionId` variant must produce
     /// the same kebab-case string via serde's auto-rename AND via the

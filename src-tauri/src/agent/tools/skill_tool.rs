@@ -3,7 +3,7 @@
 //! Mirrors Codex/codebuff skill tool surface: single tool, two actions.
 //! Bodies are read from disk on demand; metadata comes from `SkillsManager`.
 
-use crate::agent::skills::SkillsManager;
+use zen_agent::skills::SkillsManager;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -77,10 +77,10 @@ impl zen_tools::AgentTool<tauri::AppHandle> for SkillTool {
         // Executor exception (Appendix B): tools keep AppHandle, so the
         // shared context is fetched from managed state here.
         let ctx = _app
-            .try_state::<crate::services::agent_context::AgentContext>()
+            .try_state::<zen_agent::context::AgentContext>()
             .map(|s| s.inner().clone());
         let cwd = match &ctx {
-            Some(ctx) => crate::agent::skills::cwd_for_chat(ctx, &_chat_id).await,
+            Some(ctx) => zen_agent::skills::cwd_for_chat(ctx, &_chat_id).await,
             None => std::env::current_dir().unwrap_or_default(),
         };
 
@@ -153,7 +153,7 @@ impl zen_tools::AgentTool<tauri::AppHandle> for SkillTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::skills::SkillsManager;
+    use zen_agent::skills::SkillsManager;
     use zen_tools::AgentTool as _;
 
     #[test]

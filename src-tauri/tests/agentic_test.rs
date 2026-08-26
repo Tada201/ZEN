@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use tauri::Manager;
 use tokio_util::sync::CancellationToken;
 
-use tauri_app_lib::agent::runner::Runner;
-use tauri_app_lib::agent::types::{Agent, ModelTier};
+use zen_agent::runner::Runner;
+use zen_agent::types::{Agent, ModelTier};
 use tauri_app_lib::commands::AppState;
 use zen_db::models::{ChatMessage, ChatResponse, ModelInfo};
 use zen_core::error::ZenResult;
@@ -59,7 +59,7 @@ async fn test_agentic_loop_execution() {
 
     let runner = Runner::new(
         app_handle
-            .state::<tauri_app_lib::services::agent_context::AgentContext>()
+            .state::<zen_agent::context::AgentContext>()
             .inner()
             .clone(),
         state.agent_registry.clone(),

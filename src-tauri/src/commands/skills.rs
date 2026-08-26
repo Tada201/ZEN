@@ -6,7 +6,7 @@
 //! - `set_skill_enabled` - toggle a skill's enabled state (persisted in settings)
 //! - `suggest_slash` - autocomplete suggestions for the chat input popover
 
-use crate::agent::skills::{
+use zen_agent::skills::{
     is_valid_skill_name, parse_slash_command, suggest_slash_commands, BuiltinCommand, SlashCommand,
     SlashSuggestionKind, AGENTS_DIR_NAME, SKILLS_DIR_NAME, SKILLS_FILENAME, ZEN_HOME_DIR,
 };
@@ -25,7 +25,7 @@ pub const SKILL_EXISTS_PREFIX: &str = "skill-exists:";
 fn resolve_cwd(workspace_root: Option<&str>) -> PathBuf {
     workspace_root
         .and_then(|root| {
-            crate::workspace::canonicalize_workspace_root(std::path::Path::new(root)).ok()
+            zen_agent::utils::canonicalize_workspace_root(std::path::Path::new(root)).ok()
         })
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
 }
@@ -230,7 +230,7 @@ fn resolve_skill_dir(
     let root = match scope {
         "repo" => {
             let ws = workspace_root
-                .and_then(|r| crate::workspace::canonicalize_workspace_root(Path::new(r)).ok())
+                .and_then(|r| zen_agent::utils::canonicalize_workspace_root(Path::new(r)).ok())
                 .ok_or_else(|| {
                     ZenError::Custom("open a workspace to save a project skill".into())
                 })?;

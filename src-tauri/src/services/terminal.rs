@@ -9,7 +9,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
 
 use zen_core::error::{ZenError, ZenResult};
-use crate::services::{AuditEvent, PermissionDecision, PrivilegedOperation, SecurityService};
+use zen_security::service::{AuditEvent, PermissionDecision, PrivilegedOperation, SecurityService};
 use crate::terminal::TerminalManager;
 
 pub struct TerminalSession {

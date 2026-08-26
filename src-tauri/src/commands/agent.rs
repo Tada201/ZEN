@@ -2,7 +2,7 @@ use crate::commands::AppState;
 use zen_core::error::ZenResult;
 use serde::Serialize;
 use tauri::State;
-use crate::agent::types::{AgentConfigMode, AgentProfile};
+use zen_agent::types::{AgentConfigMode, AgentProfile};
 
 #[derive(Debug, Serialize)]
 pub struct AgentInfoResponse {

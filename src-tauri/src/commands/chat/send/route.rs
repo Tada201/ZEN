@@ -12,7 +12,7 @@ pub(super) struct RouteParams<'a> {
     pub resolved_provider_name: String,
     pub llm_provider: Arc<dyn zen_llm::LlmProvider>,
     pub chat_messages: Vec<ChatMessage>,
-    pub agent: crate::agent::types::Agent,
+    pub agent: zen_agent::types::Agent,
     pub config: ChatRequestConfig,
     pub generative_ui_addendum: Option<String>,
     pub token: CancellationToken,
@@ -82,7 +82,7 @@ pub(super) async fn try_orchestrator(
     tokio::spawn(async move {
         let result = orchestrator
             .run_orchestrator_loop(
-                crate::agent::orchestrator::execution::OrchestratorRunParams {
+                zen_agent::orchestrator::execution::OrchestratorRunParams {
                     provider: provider_clone,
                     model: &model_inner,
                     messages: chat_messages,
@@ -157,7 +157,7 @@ pub(super) async fn spawn_runner(params: RouteParams<'_>) {
     );
     let runner = {
         let mut r = Runner::new(
-            app.state::<crate::services::agent_context::AgentContext>().inner().clone(),
+            app.state::<zen_agent::context::AgentContext>().inner().clone(),
             state.agent_registry.clone(),
             state.hook_registry.clone(),
         )

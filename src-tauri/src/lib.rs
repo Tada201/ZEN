@@ -273,7 +273,7 @@ pub fn run() {
                 state.init_progress.set_status(&bg_app_handle, "bg.speech", "running", None).await;
                 let _p = std::time::Instant::now();
                 let hardware_info = state.hardware.lock().await.get_info();
-                let speech_service = crate::services::SpeechService::with_process_manager(
+                let speech_service = zen_media::speech_service::SpeechService::with_process_manager(
                     &app_dir,
                     &resource_dir,
                     hardware_info,
@@ -289,14 +289,14 @@ pub fn run() {
                 // ── TTS service ──
                 state.init_progress.set_status(&bg_app_handle, "bg.tts", "running", None).await;
                 let _p = std::time::Instant::now();
-                let tts_service = crate::services::TtsService::with_process_manager(
+                let tts_service = zen_media::tts_service::TtsService::with_process_manager(
                     &app_dir,
                     &resource_dir,
                     state.process_manager.clone(),
                 )
                 .unwrap_or_else(|e| {
                     tracing::warn!(error = %e, "Failed to initialize TTS service (background)");
-                    crate::services::TtsService::new_dummy()
+                    zen_media::tts_service::TtsService::new_dummy()
                 });
                 *state.tts.write().await = Some(tts_service);
                 state.init_progress.set_status(&bg_app_handle, "bg.tts", "done", Some(_p.elapsed().as_millis() as u64)).await;
@@ -392,8 +392,8 @@ pub fn run() {
                         return;
                     }
                 };
-                let orchestrator = crate::agent::orchestrator::Orchestrator::new(
-                    bg_app_handle.state::<crate::services::agent_context::AgentContext>().inner().clone(),
+                let orchestrator = zen_agent::orchestrator::Orchestrator::new(
+                    bg_app_handle.state::<zen_agent::context::AgentContext>().inner().clone(),
                     state.agent_registry.clone(),
                     state.hook_registry.clone(),
                 ).with_db_pool(pool);

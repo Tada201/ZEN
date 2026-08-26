@@ -150,9 +150,9 @@ pub(super) async fn spawn_deep_research(params: DeepResearchRoute<'_>) {
         }),
     );
     tokio::spawn(async move {
-        crate::agent::deep_research::run_deep_research(
-            crate::agent::deep_research::DeepResearchParams {
-                ctx: app.state::<crate::services::agent_context::AgentContext>().inner().clone(),
+        zen_agent::deep_research::run_deep_research(
+            zen_agent::deep_research::DeepResearchParams {
+                ctx: app.state::<zen_agent::context::AgentContext>().inner().clone(),
                 db: db_clone,
                 llm_provider: &*provider_clone,
                 chat_id: chat_id_inner.clone(),

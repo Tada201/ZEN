@@ -4,9 +4,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 use zen_core::error::{AppResult, ZenError};
-use crate::services::{
-    AuditEvent, PermissionDecision, PrivilegedOperation, SecretService, SettingsService,
-};
+use crate::services::{SecretService, SettingsService};
+use zen_security::service::{AuditEvent, PermissionDecision, PrivilegedOperation};
 
 const CAMERA_CATALOG_URL_KEY: &str = "maps.camera_catalog_url";
 const CAMERA_CATALOG_TOKEN_KEY: &str = "maps_camera_catalog_token";
@@ -214,7 +213,7 @@ fn parse_local_catalog(bytes: &[u8]) -> AppResult<(Vec<CameraCatalogEntry>, usiz
     Ok((validate_entries(accepted)?, rejected))
 }
 
-pub async fn import_local_camera_catalog(app_data_dir: &Path, source_name: String, bytes: Vec<u8>, security: &crate::services::SecurityService) -> AppResult<LocalCameraCatalogImportReport> {
+pub async fn import_local_camera_catalog(app_data_dir: &Path, source_name: String, bytes: Vec<u8>, security: &zen_security::service::SecurityService) -> AppResult<LocalCameraCatalogImportReport> {
     let result = (|| {
         let (entries, rejected) = parse_local_catalog(&bytes)?;
         std::fs::create_dir_all(app_data_dir).map_err(|error| ZenError::Internal(format!("Could not prepare local catalog storage: {error}")))?;
@@ -242,7 +241,7 @@ fn load_local_catalog(app_data_dir: &Path) -> AppResult<Option<Vec<CameraCatalog
 async fn fetch_configured_catalog(
     settings: &SettingsService,
     secrets: &SecretService,
-    security: &crate::services::SecurityService,
+    security: &zen_security::service::SecurityService,
 ) -> AppResult<Option<Vec<CameraCatalogEntry>>> {
     let Some(catalog_url) = settings.get(CAMERA_CATALOG_URL_KEY).await? else {
         return Ok(None);
@@ -315,7 +314,7 @@ pub async fn get_camera_catalog_snapshot(
     app_data_dir: &Path,
     settings: &SettingsService,
     secrets: &SecretService,
-    security: &crate::services::SecurityService,
+    security: &zen_security::service::SecurityService,
 ) -> AppResult<CameraCatalogSnapshot> {
     let checked_at = now_millis();
     let mut entries = built_in_camera_catalog();
@@ -380,7 +379,7 @@ pub async fn list_camera_catalog(
     app_data_dir: &Path,
     settings: &SettingsService,
     secrets: &SecretService,
-    security: &crate::services::SecurityService,
+    security: &zen_security::service::SecurityService,
 ) -> AppResult<Vec<CameraCatalogEntry>> {
     Ok(get_camera_catalog_snapshot(app_data_dir, settings, secrets, security).await?.entries)
 }
@@ -392,7 +391,7 @@ pub async fn resolve_camera_playback(
     app_data_dir: &Path,
     settings: &SettingsService,
     secrets: &SecretService,
-    security: &crate::services::SecurityService,
+    security: &zen_security::service::SecurityService,
 ) -> AppResult<CameraPlaybackDescriptor> {
     let snapshot = get_camera_catalog_snapshot(app_data_dir, settings, secrets, security).await?;
     let camera = snapshot
@@ -425,7 +424,7 @@ pub async fn test_camera_catalog(
     app_data_dir: &Path,
     settings: &SettingsService,
     secrets: &SecretService,
-    security: &crate::services::SecurityService,
+    security: &zen_security::service::SecurityService,
 ) -> AppResult<usize> {
     let snapshot = get_camera_catalog_snapshot(app_data_dir, settings, secrets, security).await?;
     let configured = snapshot

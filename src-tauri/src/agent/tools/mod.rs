@@ -1,10 +1,10 @@
-// Phase 5 Pre-task A (BIG_MIGRATION.md): the canonical `AgentTool` trait and
-// the execution-side registry moved to zen-tools (`agent_tool.rs`,
-// `registry.rs::AgentToolRegistry`). There is no trait alias (trait aliases
-// are not stable): impl headers and `dyn` positions use
-// `zen_tools::AgentTool<tauri::AppHandle>` directly. The old local
-// `ToolRegistry` is re-pointed at zen-tools' `AgentToolRegistry` — the
-// in-tree duplicate registry is gone. Delete this alias in Phase 14.
+//! App-side agent tool executors.
+//!
+//! The `AgentTool` trait and the execution-side registry live in zen-tools
+//! (`agent_tool.rs`, `registry.rs::AgentToolRegistry`). Rust has no trait
+//! aliases, so `impl` headers and `dyn` positions spell
+//! `zen_tools::AgentTool<tauri::AppHandle>` directly; the `ToolRegistry` alias
+//! below is the host binding for struct/type positions.
 pub mod browser_tools;
 pub mod drawing_tools;
 pub mod fs_tools;
@@ -20,11 +20,6 @@ pub mod skill_tool;
 pub mod spawn_tools;
 pub mod task_tools;
 pub mod terminal_tools;
-
-// Moved to zen-agent (BIG_MIGRATION.md Phase 11); re-exports keep
-// `crate::agent::tools::{child_runner, handoff_context}` compiling.
-pub use zen_agent::child_runner;
-pub use zen_agent::handoff_context;
 
 use std::sync::Arc;
 

@@ -7,7 +7,7 @@
 
 use zen_db::queries;
 use zen_core::error::ZenError;
-use crate::services::agent_context::AgentContext;
+use zen_agent::context::AgentContext;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 

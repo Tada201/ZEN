@@ -44,7 +44,7 @@ pub(super) fn handoff_fields_from_input(input: &Value) -> (Option<String>, Vec<S
 /// interleaved text so the payload field stays absent.
 pub(super) async fn collect_intermediate_segments(
     commentary: &Arc<tokio::sync::Mutex<Vec<(u64, String)>>>,
-) -> Option<Vec<crate::agent::event_bus::SubagentCommentarySegment>> {
+) -> Option<Vec<zen_agent::event_bus::SubagentCommentarySegment>> {
     let raw = commentary.lock().await;
-    crate::agent::event_bus::SubagentCommentarySegment::snapshot(&raw)
+    zen_agent::event_bus::SubagentCommentarySegment::snapshot(&raw)
 }

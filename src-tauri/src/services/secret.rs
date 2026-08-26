@@ -2,9 +2,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use zen_core::error::{AppResult, ZenError};
-use crate::services::{
-    is_secret_key, is_secret_placeholder_write, AuditEvent, PermissionDecision,
-    PrivilegedOperation, SecurityService, SettingsService, SECRET_PRESENT_SENTINEL,
+use crate::services::SettingsService;
+use zen_security::secrets::{
+    is_secret_key, is_secret_placeholder_write, SECRET_PRESENT_SENTINEL,
+};
+use zen_security::service::{
+    AuditEvent, PermissionDecision, PrivilegedOperation, SecurityService,
 };
 
 const KEYRING_SERVICE: &str = "zen";
@@ -216,7 +219,7 @@ fn audit_decision<T>(result: &AppResult<T>) -> PermissionDecision {
 
 #[cfg(test)]
 mod tests {
-    use crate::services::{is_secret_placeholder_write, redact_if_secret, SECRET_PRESENT_SENTINEL};
+    use zen_security::secrets::{is_secret_placeholder_write, redact_if_secret, SECRET_PRESENT_SENTINEL};
 
     #[test]
     fn secret_keys_are_redacted() {

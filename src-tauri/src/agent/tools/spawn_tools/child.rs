@@ -9,9 +9,9 @@ use anyhow::Result;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::agent::hooks::HookRegistry;
-use crate::agent::tools::child_runner;
-use crate::agent::types::AgentRegistry;
+use zen_agent::hooks::HookRegistry;
+use zen_agent::child_runner;
+use zen_agent::types::AgentRegistry;
 use crate::commands::AppState;
 
 use super::completion::{emit_completion_events, CompletionParams};
@@ -137,7 +137,7 @@ impl SpawnAgentTool {
         }
         // Phase 11: inject_workspace_agents_md reads the workspace root off
         // the context instead of a host handle.
-        let agent_ctx = app.state::<crate::services::agent_context::AgentContext>().inner().clone();
+        let agent_ctx = app.state::<zen_agent::context::AgentContext>().inner().clone();
         child_runner::inject_workspace_agents_md(&agent_ctx.workspace_folder, &mut resolved).await;
 
         let handoff = child_runner::build_subagent_handoff(
@@ -229,7 +229,7 @@ impl SpawnAgentTool {
 
         // Register this sub-agent instance with the SwarmCoordinator so the
         // swarm view stays consistent with actual running sub-agents.
-        let swarm_agent = crate::agent::types::Agent {
+        let swarm_agent = zen_agent::types::Agent {
             id: spawn_id.clone(),
             name: resolved.agent.name.clone(),
             instructions: resolved.agent.instructions.clone(),
@@ -257,8 +257,8 @@ impl SpawnAgentTool {
         state
             .agent
             .event_bus
-            .emit(crate::agent::event_bus::AgentEvent::AgentSpawn(
-                crate::agent::event_bus::AgentSpawnPayload {
+            .emit(zen_agent::event_bus::AgentEvent::AgentSpawn(
+                zen_agent::event_bus::AgentSpawnPayload {
                     spawn_id: spawn_id.clone(),
                     parent_agent: label.to_string(),
                     child_agent_id: resolved.agent.id.clone(),
@@ -274,8 +274,8 @@ impl SpawnAgentTool {
         state
             .agent
             .event_bus
-            .emit(crate::agent::event_bus::AgentEvent::SubagentStep(
-                crate::agent::event_bus::SubagentStepPayload {
+            .emit(zen_agent::event_bus::AgentEvent::SubagentStep(
+                zen_agent::event_bus::SubagentStepPayload {
                     chat_id: chat_id.clone(),
                     spawn_id: spawn_id.clone(),
                     parent_tool_call_id: parent_tool_call_id.clone(),
@@ -417,8 +417,8 @@ impl SpawnAgentTool {
                 state
                     .agent
                     .event_bus
-                    .emit(crate::agent::event_bus::AgentEvent::SubagentStep(
-                        crate::agent::event_bus::SubagentStepPayload {
+                    .emit(zen_agent::event_bus::AgentEvent::SubagentStep(
+                        zen_agent::event_bus::SubagentStepPayload {
                             chat_id: chat_id.clone(),
                             spawn_id: spawn_id.clone(),
                             parent_tool_call_id: parent_tool_call_id.clone(),
@@ -482,8 +482,8 @@ impl SpawnAgentTool {
                 state
                     .agent
                     .event_bus
-                    .emit(crate::agent::event_bus::AgentEvent::SubagentStep(
-                        crate::agent::event_bus::SubagentStepPayload {
+                    .emit(zen_agent::event_bus::AgentEvent::SubagentStep(
+                        zen_agent::event_bus::SubagentStepPayload {
                             chat_id: chat_id.clone(),
                             spawn_id: spawn_id.clone(),
                             parent_tool_call_id: parent_tool_call_id.clone(),

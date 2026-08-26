@@ -1,5 +1,5 @@
 use crate::commands::AppState;
-use crate::services::{AuditEvent, PermissionDecision, PrivilegedOperation};
+use zen_security::service::{AuditEvent, PermissionDecision, PrivilegedOperation};
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{json, Value};

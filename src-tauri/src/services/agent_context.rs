@@ -15,6 +15,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tokio_util::sync::CancellationToken;
 
+use zen_agent::context::AgentContext;
 use zen_agent::init_state::InitState;
 use zen_agent::ports::{
     BoardPort, BoardWatchGuard, GraphExpressionSnapshot, GraphSessionSnapshot, GraphSessionSource,
@@ -395,6 +396,3 @@ pub fn build(app: &AppHandle) -> AgentContext {
     }
 }
 
-// Re-exported so historical `crate::services::agent_context::AgentContext`
-// paths keep compiling (relocation doctrine §4.6).
-pub use zen_agent::context::AgentContext;

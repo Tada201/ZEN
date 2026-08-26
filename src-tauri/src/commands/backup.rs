@@ -1,7 +1,7 @@
 use crate::commands::AppState;
 use zen_db::models::{Chat, Message};
 use zen_core::error::{ZenError, ZenResult};
-use crate::services::is_secret_key;
+use zen_security::secrets::is_secret_key;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};

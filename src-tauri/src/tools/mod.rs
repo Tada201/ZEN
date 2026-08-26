@@ -10,7 +10,6 @@
 //! positions use these aliases.
 pub mod fs_tools;
 pub mod image_tool;
-pub mod manager;
 pub mod operational_map;
 pub mod sys_metrics;
 pub mod terminal_tools;
@@ -21,7 +20,7 @@ use tokio::sync::RwLock;
 
 pub type ToolRegistry = zen_tools::registry::ToolRegistry<tauri::AppHandle>;
 pub type GlobalToolRegistry = Arc<RwLock<ToolRegistry>>;
-pub use manager::ToolManager;
+pub type ToolManager = zen_tools::manager::ToolManager<tauri::AppHandle>;
 
 /// Register built-in tool executors. The executors themselves stay in the
 /// app crate (they reach AppState through the AppHandle); only the registry

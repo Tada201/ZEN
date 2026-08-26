@@ -14,7 +14,7 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::agent::runner::{RunConfig, Runner};
+use zen_agent::runner::{RunConfig, Runner};
 use crate::commands::AppState;
 use zen_db::queries;
 
@@ -78,7 +78,7 @@ pub async fn compact_chat_context(
 
     let (messages_summarized, messages_kept) =
         Runner::compact_conversation_now(
-            app.state::<crate::services::agent_context::AgentContext>().inner().clone(),
+            app.state::<zen_agent::context::AgentContext>().inner().clone(),
             db,
             chat_id.to_string(),
             active_model,

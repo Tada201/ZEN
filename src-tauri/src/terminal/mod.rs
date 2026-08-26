@@ -95,7 +95,7 @@ impl PtySession {
 pub struct TerminalManager {
     sessions: HashMap<String, PtySession>,
     /// Optional reference to process manager for cleanup tracking
-    process_manager: Option<Arc<crate::services::process_manager::ProcessManager>>,
+    process_manager: Option<Arc<zen_media::process_manager::ProcessManager>>,
 }
 
 impl TerminalManager {
@@ -108,7 +108,7 @@ impl TerminalManager {
 
     /// Create a new TerminalManager with process manager integration
     pub fn with_process_manager(
-        process_manager: Arc<crate::services::process_manager::ProcessManager>,
+        process_manager: Arc<zen_media::process_manager::ProcessManager>,
     ) -> Self {
         Self {
             sessions: HashMap::new(),
@@ -261,7 +261,7 @@ impl TerminalManager {
         command: &str,
         cwd: Option<String>,
         timeout_ms: u64,
-        process_manager: Option<Arc<crate::services::process_manager::ProcessManager>>,
+        process_manager: Option<Arc<zen_media::process_manager::ProcessManager>>,
         token: tokio_util::sync::CancellationToken,
     ) -> Result<CommandResult> {
         let mut child = if cfg!(target_os = "windows") {

@@ -35,24 +35,26 @@ use tauri::Emitter;
 
 use zen_db::models::ChatMessage;
 
-use crate::agent::event_bus::EventBus;
-use crate::agent::hooks::HookRegistry;
-use crate::agent::orchestrator::Orchestrator;
-use crate::agent::runner::ContextBreakdownPayload;
-use crate::agent::swarm::SwarmCoordinator;
-use crate::agent::types::AgentRegistry;
+use zen_agent::event_bus::EventBus;
+use zen_agent::hooks::HookRegistry;
+use zen_agent::orchestrator::Orchestrator;
+use zen_agent::runner::ContextBreakdownPayload;
+use zen_agent::swarm::SwarmCoordinator;
+use zen_agent::types::AgentRegistry;
 use zen_core::error::{ZenError, ZenResult};
 use zen_llm::{LlmProvider, ProviderRegistry};
 use crate::services::{
-    checkpoint::CheckpointService, process_manager::ProcessManager, DocumentService,
-    HardwareService, MediaService, SecretService, SecurityService, SettingsService,
-    SpeechService, TerminalService, ToolService, TtsService, UsageService,
+    checkpoint::CheckpointService, DocumentService, MediaService, SecretService, SettingsService,
+    TerminalService, ToolService, UsageService,
 };
+use zen_media::hardware::HardwareService;
+use zen_media::process_manager::ProcessManager;
+use zen_media::speech_service::SpeechService;
+use zen_media::tts_service::TtsService;
+use zen_security::service::SecurityService;
 use crate::tools::ToolManager;
 
-// Moved to zen-agent in BIG_MIGRATION.md Phase 11; re-export keeps app call
-// sites compiling (relocation doctrine §4.6).
-pub use zen_agent::init_state::InitState;
+use zen_agent::init_state::InitState;
 
 pub struct AgentState {
     pub event_bus: Arc<EventBus>,
@@ -236,9 +238,7 @@ impl Default for SetupFlags {
         Self::new()
     }
 }
-// Moved to zen-agent in BIG_MIGRATION.md Phase 11; re-export keeps app call
-// sites compiling (relocation doctrine §4.6).
-pub use zen_agent::context::ChatPauseControl;
+use zen_agent::context::ChatPauseControl;
 
 // Phase 6: the former `wait_for_chat_resume` AppHandle wrapper was deleted —
 // its logic core lives on `ChatPauseControl::wait_while_paused` and every
@@ -252,7 +252,7 @@ pub struct AppState {
     pub llm: InitState<Arc<dyn LlmProvider>>,
     pub tools: crate::tools::GlobalToolRegistry,
     pub tool_registry_v1: Arc<RwLock<crate::agent::tools::ToolRegistry>>,
-    pub skills_manager: Arc<crate::agent::skills::SkillsManager>,
+    pub skills_manager: Arc<zen_agent::skills::SkillsManager>,
     pub agent_registry: Arc<AgentRegistry>,
     pub hook_registry: Arc<HookRegistry>,
     pub agent: AgentState,
@@ -276,9 +276,9 @@ pub struct AppState {
         Arc<tokio::sync::Mutex<HashMap<String, crate::canvas::session::GraphSession>>>,
     pub session_memory: Arc<RwLock<Arc<zen_rag::session_memory::SessionMemoryManager>>>,
     pub mcp_client: Arc<zen_mcp::McpClient>,
-    pub mcp_config: Arc<crate::services::McpConfigService>,
-    pub mcp_discovery: Arc<crate::services::McpDiscoveryService>,
-    pub mcp_consent: Arc<crate::services::McpConsentStore>,
+    pub mcp_config: Arc<zen_mcp::McpConfigService>,
+    pub mcp_discovery: Arc<zen_mcp::McpDiscoveryService>,
+    pub mcp_consent: Arc<zen_mcp::McpConsentStore>,
     pub pending_tool_approvals:
         Arc<tokio::sync::Mutex<HashMap<String, crate::services::tool::PendingToolApproval>>>,
     pub pending_orchestrator_approvals:
@@ -357,7 +357,7 @@ impl AppState {
         ));
         // SkillsManager uses the OS home dir for ~/.zen/skills/ discovery.
         let skills_manager = Arc::new(
-            crate::agent::skills::SkillsManager::new(dirs::home_dir().unwrap_or_default()),
+            zen_agent::skills::SkillsManager::new(dirs::home_dir().unwrap_or_default()),
         );
         let tool_registry_v2 = Arc::new(RwLock::new(crate::tools::init_tool_registry(
             zen_security::ToolPermissions::default(),
@@ -443,12 +443,12 @@ impl AppState {
         let checkpoints = Arc::new(CheckpointService::new());
 
         let security_for_mcp_config = security.clone();
-        let mcp_config = Arc::new(crate::services::McpConfigService::new(
+        let mcp_config = Arc::new(zen_mcp::McpConfigService::new(
             workspace_folder_arc.clone(),
             security_for_mcp_config,
         ));
-        let mcp_discovery = Arc::new(crate::services::McpDiscoveryService::new(mcp_config.clone()));
-        let mcp_consent = Arc::new(crate::services::McpConsentStore::new(security.clone()));
+        let mcp_discovery = Arc::new(zen_mcp::McpDiscoveryService::new(mcp_config.clone()));
+        let mcp_consent = Arc::new(zen_mcp::McpConsentStore::new(security.clone()));
         // Phase 8: registrar port wraps the v2 registry; the client's Weak
         // back-reference is wired right after the Arc exists (cycle break).
         let mcp_registrar = Arc::new(crate::services::mcp_registrar::McpRegistrar::new(
@@ -555,7 +555,7 @@ impl AppState {
 
         match chat.workspace_root {
             Some(root) if !root.trim().is_empty() =>
-                crate::workspace::canonicalize_workspace_root(std::path::Path::new(&root))
+                zen_agent::utils::canonicalize_workspace_root(std::path::Path::new(&root))
                     .map_err(|e| ZenError::Custom(format!("Invalid session workspace root: {e}"))),
             _ => Ok(global_workspace),
         }
@@ -589,7 +589,7 @@ impl AppState {
     }
 
     pub async fn set_workspace_folder(&self, path: impl AsRef<std::path::Path>) -> ZenResult<()> {
-        let canonical = crate::workspace::canonicalize_workspace_root(path.as_ref())
+        let canonical = zen_agent::utils::canonicalize_workspace_root(path.as_ref())
             .map_err(|e| ZenError::Custom(format!("Invalid workspace root: {e}")))?;
 
         {

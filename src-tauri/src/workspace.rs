@@ -86,9 +86,6 @@ pub fn validate_workspace_path(workspace_root: &Path, requested_path: &Path) -> 
     Ok(clean_path)
 }
 
-// Moved to zen-agent in BIG_MIGRATION.md Phase 11; re-export keeps app call sites compiling (§4.6).
-pub use zen_agent::utils::canonicalize_workspace_root;
-
 /// Resolves a path string (absolute or relative) to an absolute path within workspace
 pub fn resolve_workspace_path(workspace_root: &Path, path_str: &str) -> Result<PathBuf> {
     let requested = PathBuf::from(path_str);

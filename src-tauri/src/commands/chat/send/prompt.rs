@@ -218,8 +218,8 @@ pub(super) async fn resolve_voice_display(
 pub(super) fn build_agent(
     instructions: String,
     tool_ids: Vec<String>,
-) -> crate::agent::types::Agent {
-    crate::agent::types::Agent {
+) -> zen_agent::types::Agent {
+    zen_agent::types::Agent {
         id: "zen_assistant".to_string(),
         name: "Zen".to_string(),
         instructions,
@@ -229,6 +229,6 @@ pub(super) fn build_agent(
         context_window: None,
         max_messages_in_memory: None,
         description: Some("Customized assistant".to_string()),
-        model_tier: crate::agent::types::ModelTier::Local,
+        model_tier: zen_agent::types::ModelTier::Local,
     }
 }
