@@ -12,6 +12,12 @@ documented legacy tool compatibility boundary, and Phase 4 keeps incremental
 message/catch-block cleanup, but the core security, tool, typed IPC, and
 frontend state-ownership contracts are in place.
 
+Backend layout note: `src-tauri/` became a Cargo workspace in 2026-08 — the
+`zen` app crate plus nine domain crates under `src-tauri/crates/`. Backend paths
+in the phase sections below were written against the pre-workspace tree; see the
+"Workspace Crate Map" in `RULES.md` for the current owner of each area, and
+`docs/architecture/history/BIG_MIGRATION.md` for the record of that move.
+
 ## Phase 0: Architecture Contract
 
 Status: mostly complete.
@@ -90,7 +96,9 @@ Follow-up:
 - Ensure every production tool has metadata, risk level, permission policy, and
   tests or an exemption.
 - Migrate legacy `src-tauri/src/agent/tools/*` tools into v2 only when touched
-  or when a security issue requires it.
+  or when a security issue requires it. (Leaf executors deliberately stayed in
+  the app crate through the workspace migration because they hold the
+  `tauri::AppHandle` binding; the traits and registries live in zen-tools.)
 
 ## Phase 3.5: Backend Consolidation
 
@@ -106,6 +114,7 @@ Goals:
 Completed:
 
 - `src-tauri/src/agent/runner/loop.rs` was brought below the Rust hard limit.
+  (It later moved into zen-agent as `runner/{turn_loop,step_exec}.rs`.)
 - Tool ownership, runtime resources, terminal execution, speech/TTS resource
   setup, and privileged-operation documentation are in place.
 - Lightweight backend tests cover security/tool policy and runtime resources.
@@ -201,13 +210,16 @@ Completed backend hard-limit targets:
 
 - `src-tauri/src/agent/runner/loop.rs` was reduced below the Rust hard limit by
   extracting lifecycle, memory bootstrap, turn persistence, and tool
-  authorization helpers.
+  authorization helpers. It was later split again and moved into zen-agent as
+  `runner/{turn_loop,step_exec}.rs`.
 - `src-tauri/src/canvas/session.rs` was reduced below the Rust hard limit by
   extracting session contracts and parser/color/time helpers.
 - `src-tauri/src/agent/workflow.rs` was reduced below the Rust hard limit by
-  extracting workflow contracts, events, metrics, result, and error types.
+  extracting workflow contracts, events, metrics, result, and error types. The
+  workflow surface was later removed entirely.
 - `src-tauri/src/agent/swarm.rs` was reduced below the Rust hard limit by
-  extracting swarm contracts, events, state, result, and error types.
+  extracting swarm contracts, events, state, result, and error types. It now
+  lives at `src-tauri/crates/zen-agent/src/swarm.rs`.
 
 Completed frontend hard-limit targets:
 
@@ -223,17 +235,24 @@ Completed frontend hard-limit targets:
 - `src/components/workbench/CesiumMapRenderer.tsx` was reduced by extracting
   Cesium setup, controls, clustering, entity-layer sync, and visual-layer sync.
 
-Remaining backend warning-size targets:
+Remaining backend warning-size targets. These are the post-migration paths;
+`docs/architecture/exemptions.md` is the authoritative list with owners and
+split plans.
 
 - `src-tauri/src/canvas/session.rs`
-- `src-tauri/src/agent/runner/loop.rs`
-- `src-tauri/src/db/mod.rs`
-- `src-tauri/src/agent/router.rs`
-- `src-tauri/src/llm/anthropic.rs`
-- `src-tauri/src/agent/plugins.rs`
-- `src-tauri/src/agent/memory.rs`
-- `src-tauri/src/agent/tools/progressive.rs`
-- `src-tauri/src/tools/permission.rs`
+- `src-tauri/src/agent/tools/fs_tools.rs`
+- `src-tauri/src/commands/settings.rs`, `src-tauri/src/commands/spatial.rs`
+- `src-tauri/crates/zen-agent/src/`: `event_bus.rs`, `router.rs`, `plugins.rs`,
+  `runner/{turn_loop,step_exec,dispatch/executors,voice_display,context_breakdown}.rs`,
+  `orchestrator/execution.rs`
+- `src-tauri/crates/zen-tools/src/manager.rs`
+- `src-tauri/crates/zen-llm/src/ollama/mod.rs`,
+  `src-tauri/crates/zen-llm/src/openai_compat/stream_tests.rs`
+
+The former `src-tauri/src/db/mod.rs`, `llm/anthropic.rs`,
+`agent/tools/progressive.rs`, `tools/permission.rs` and `agent/memory.rs`
+entries were resolved by the workspace migration — each was split during its
+move into zen-db, zen-llm, zen-agent or zen-security.
 
 Remaining frontend hard-limit targets:
 
@@ -340,14 +359,32 @@ Completed:
 - Secret artifact guard exists.
 - Runtime binary fetch/check scripts exist.
 - Backend lightweight test gate exists.
-- File-size gate exists with exemptions.
-- Architecture gates for raw invoke, raw SQL, and direct tool execution exist.
+- File-size gate exists with exemptions, and scans the workspace crates as well
+  as the app crate.
+- Architecture gates for raw invoke, raw SQL, and direct tool execution exist,
+  and their scan roots cover `src-tauri/crates/**`.
+- Clippy is enforced through `[workspace.lints.clippy]` in the manifests, so a
+  bare `cargo clippy --workspace` denies the lint set. CI runs it with
+  `--all-targets`.
+- Crate boundaries are enforced: a tauri/keyring grep plus `cargo deny check`
+  gate every manifest change, and a per-crate test matrix runs the extracted
+  crates independently.
+- `cargo test --workspace` runs on the Windows CI runner, which is the only
+  place the tauri-linked test binaries execute.
 
 Remaining:
 
-- Full `cargo test --all-targets` still has a known Windows loader issue.
-- `cargo clippy --all-targets` is not yet enforced.
-- Dependency audit and bundle budget checks are not yet enforced.
+- CI is manual-only (`workflow_dispatch`) to conserve hosted-runner minutes, so
+  none of these gates run automatically on push.
+- Full `cargo test --workspace` cannot run on the Windows dev box — it aborts
+  with `STATUS_ENTRYPOINT_NOT_FOUND` before any test executes. Per-crate
+  `cargo test -p <crate>` works locally for the tauri-free crates.
+- The event-contract baseline fixture
+  (`test/fixtures/event-snapshot-baseline.jsonl`) has never been captured; the
+  CI step that would capture it exists but has not run.
+- Coverage is an informational floor (`--fail-under-lines 50` on zen-security
+  and zen-tools), not a ratchet.
+- Bundle budget checks are not yet enforced in CI.
 - Full Tauri release build remains manual/deferred because compile time is high.
 
 ## Human Decisions Required

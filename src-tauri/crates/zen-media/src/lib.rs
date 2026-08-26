@@ -1,11 +1,9 @@
 //! zen-media — speech (whisper) and TTS (piper) runtimes plus their
-//! supporting hardware probe, subprocess lifecycle and HTTP helpers
-//! (BIG_MIGRATION.md Phase 10).
+//! supporting hardware probe, subprocess lifecycle and HTTP helpers.
 //!
 //! Tauri-free: the TTS seam emits through `zen_core::ports::EventSink`. The
-//! app crate keeps the composition role (constructing services, wrapping the
-//! `AppHandle` in a `TauriEventSink`) and re-exports these types via §4.6
-//! shims until Phase 14.
+//! app crate keeps the composition role — constructing the services and
+//! wrapping its `AppHandle` in a `TauriEventSink`.
 
 pub mod hardware;
 pub mod http;

@@ -1,8 +1,9 @@
-//! Shared HTTP error mapping for provider clients (Phase 7).
+//! Shared HTTP error mapping for provider clients.
 //!
-//! Verbatim twin of the app crate's `error::http_err` — zen-llm cannot depend
-//! on the app, and zen-core must stay reqwest-free. Phase 14 may move this
-//! into a shared adapter crate if a third consumer appears.
+//! Deliberate twin of the app crate's `error::http_err`: zen-llm cannot depend
+//! on the app, and zen-core must stay reqwest-free. If a third consumer ever
+//! needs it, hoist it into a shared adapter crate rather than adding reqwest to
+//! zen-core.
 
 use zen_core::ZenError;
 

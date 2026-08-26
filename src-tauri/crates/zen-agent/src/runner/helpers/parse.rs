@@ -174,7 +174,7 @@ pub fn prune_stale_reads(conversation: &mut [zen_db::models::ChatMessage]) {
                         }
                         "apply_patch" => {
                             if let Some(patch_str) = tc.args.get("patch").and_then(|v| v.as_str()) {
-                                if let Ok(hunks) = crate::patch_parser::parse_patches(patch_str) {
+                                if let Ok(hunks) = zen_security::patch_parser::parse_patches(patch_str) {
                                     for hunk in hunks {
                                         mutated_paths.insert(hunk.path().to_string_lossy().to_string());
                                     }

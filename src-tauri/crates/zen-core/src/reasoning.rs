@@ -1,8 +1,8 @@
 //! Reasoning capability DTOs — the shared wire/domain contract for how a
-//! model's reasoning support is detected, normalized, and encoded
-//! (BIG_MIGRATION.md §3.3; moved from src/llm/reasoning/mod.rs in Phase 3
-//! so zen-db can persist it without depending on the future zen-llm crate;
-//! the resolver/registry logic stays in the app crate until Phase 7).
+//! model's reasoning support is detected, normalized, and encoded. They live
+//! here rather than in zen-llm so zen-db can persist them without depending on
+//! the provider layer; the resolver and per-model registry data live in
+//! `zen_llm::reasoning`.
 
 use serde::{Deserialize, Serialize};
 

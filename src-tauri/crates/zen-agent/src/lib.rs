@@ -23,7 +23,6 @@ pub mod init_state;
 pub mod instance;
 pub mod middleware;
 pub mod orchestrator;
-pub mod patch_parser;
 pub mod plugins;
 pub mod prompt_safety;
 pub mod rate_limiter;

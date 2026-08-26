@@ -249,7 +249,10 @@ Reason: (historical) MCP config parsing and persistence orchestration share one 
 Split or Fix Plan: Done in Phase 8 (config parsing vs persistence split inside zen-mcp).
 Expires: resolved migration/phase-08-done
 
-File: src-tauri/src/services/speech_service/mod.rs (784)
+File: src-tauri/src/services/speech_service/mod.rs (784) — RESOLVED Phase 10:
+moved to src-tauri/crates/zen-media/src/speech_service/ and split during the
+move into mod.rs (565) + server.rs (230), both under the 700 warn band; no
+successor exemption.
 Owner: backend/media
 Rule Exempted: Rust warning file-size limit
 Reason: Speech service owns capture, VAD pipeline wiring, and transcription orchestration in one module.
@@ -354,14 +357,17 @@ Expires: resolved migration/phase-12-done
 
 ### Closed backend entries (kept as record)
 
+These file paths are pre-workspace-migration; they no longer exist. Each line
+records where the responsibility ended up so an old reference can be resolved.
+
 File: src-tauri/src/commands/chat.rs
-Result: Resolved earlier — split into src-tauri/src/commands/chat/{mod,send,crud,lifecycle,...}.rs. Current offender status is tracked by the send.rs entry above.
+Result: Resolved before the migration — split into src-tauri/src/commands/chat/{mod,send,crud,lifecycle,...}.rs, which is still the app-side home. Current offender status is tracked by the send.rs entry above.
 
 File: src-tauri/src/mcp/server.rs
-Result: Resolved — full MCP server handlers were decomposed; no mcp/*.rs file exceeds 700 lines today (largest: stdio.rs at 499).
+Result: Resolved — the MCP server handlers were decomposed, then moved to the zen-mcp crate. No file under src-tauri/crates/zen-mcp/src/** exceeds 700 lines (largest: client/mod.rs at 642).
 
 File: src-tauri/src/mcp/types.rs
-Result: Resolved — now 251 lines; no exemption required.
+Result: Resolved — decomposed, then moved to src-tauri/crates/zen-mcp/src/types.rs; no exemption required.
 
 ## Frontend Exemptions
 
