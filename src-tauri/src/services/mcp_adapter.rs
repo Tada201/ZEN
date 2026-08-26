@@ -51,7 +51,7 @@ use async_trait::async_trait;
 use std::sync::Weak;
 use tauri::AppHandle;
 
-use crate::mcp::McpClient;
+use zen_mcp::McpClient;
 use crate::tools::permission::RiskLevel;
 use crate::tools::{ToolAnnotations, ToolError, ToolOutput};
 
@@ -92,7 +92,7 @@ impl McpToolAdapter {
         mcp_client: Weak<McpClient>,
     ) -> Self {
         let prefixed_name =
-            crate::mcp::client::prefixed_external_tool_name(&server_name, &origin_tool_name);
+            zen_mcp::client::prefixed_external_tool_name(&server_name, &origin_tool_name);
         Self {
             server_name,
             origin_tool_name,

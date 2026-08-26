@@ -86,8 +86,8 @@ pub async fn get_provider_catalog(state: State<'_, AppState>) -> ZenResult<Vec<P
     let settings = state.settings_manager.get_all().await?;
     let mut entries = Vec::new();
 
-    for provider_id in crate::llm::provider_meta::catalog_names() {
-        let Some(meta) = crate::llm::provider_meta::PROVIDER_CATALOG
+    for provider_id in zen_llm::provider_meta::catalog_names() {
+        let Some(meta) = zen_llm::provider_meta::PROVIDER_CATALOG
             .iter()
             .find(|provider| provider.name == provider_id)
         else {
@@ -360,7 +360,7 @@ pub async fn discover_models(
     api_key: Option<String>,
 ) -> ZenResult<Vec<ModelInfo>> {
     let p_type = provider.to_lowercase();
-    let target_base_url = base_url.unwrap_or_else(|| crate::llm::default_base_url(&p_type));
+    let target_base_url = base_url.unwrap_or_else(|| zen_llm::default_base_url(&p_type));
     let target_api_key = api_key.unwrap_or_default();
 
     // Prevent transmitting bearer credentials over plain HTTP
@@ -376,7 +376,7 @@ pub async fn discover_models(
         api_format: None,
     };
 
-    let provider_instance = crate::llm::make_provider(&config);
+    let provider_instance = zen_llm::make_provider(&config);
     provider_instance.list_models().await
 }
 
@@ -409,10 +409,10 @@ pub async fn get_all_available_models(
         // silently drift from provider construction and settings metadata.
         let mut all_models = Vec::new();
         let all_settings = state.settings_manager.get_all().await?;
-        for p_name in crate::llm::provider_meta::catalog_names() {
+        for p_name in zen_llm::provider_meta::catalog_names() {
             // Settings keys use snake_case (frontend camelCase is mapped via
             // settingsMapper.ts → mapStateToSqlite before persist).
-            let api_key_key = crate::llm::provider_meta::PROVIDER_CATALOG
+            let api_key_key = zen_llm::provider_meta::PROVIDER_CATALOG
                 .iter()
                 .find(|meta| meta.name == p_name)
                 .and_then(|meta| meta.api_key_key)
@@ -431,7 +431,7 @@ pub async fn get_all_available_models(
                 .unwrap_or(false);
             let is_local_runtime = p_name == "ollama" || p_name == "lmstudio";
             let is_local_gateway = p_name == "nine_router";
-            let is_no_key_builtin = crate::llm::provider_meta::PROVIDER_CATALOG
+            let is_no_key_builtin = zen_llm::provider_meta::PROVIDER_CATALOG
                 .iter()
                 .find(|meta| meta.name == p_name)
                 .is_some_and(|meta| meta.api_key_key.is_none());
@@ -699,7 +699,7 @@ pub async fn test_provider_connection(
             .trim_end_matches('/')
             .to_string();
     }
-    let provider_instance = crate::llm::make_provider(&config);
+    let provider_instance = zen_llm::make_provider(&config);
 
     let healthy = tokio::time::timeout(
         std::time::Duration::from_secs(12),

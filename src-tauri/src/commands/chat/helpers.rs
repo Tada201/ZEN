@@ -190,7 +190,7 @@ pub fn parse_triage_verdict(raw: &str) -> Option<bool> {
 /// so the user's explicit toggle still triggers research on genuine requests.
 /// Only a clear DIRECT verdict downgrades the message to the normal runner.
 pub(crate) async fn deep_research_warranted(
-    provider: &dyn crate::llm::LlmProvider,
+    provider: &dyn zen_llm::LlmProvider,
     model: &str,
     content: &str,
 ) -> bool {
@@ -215,7 +215,7 @@ pub(crate) async fn deep_research_warranted(
         },
     ];
 
-    let config = crate::llm::ChatRequestConfig {
+    let config = zen_llm::ChatRequestConfig {
         temperature: Some(0.0),
         max_tokens: Some(4),
         ..Default::default()

@@ -88,8 +88,8 @@ pub async fn export_diagnostics(
         "data_categories": data_status.items.iter().map(|item| serde_json::json!({ "category": item.category, "exists": item.exists })).collect::<Vec<_>>(),
         "mcp": {
             "supported_protocol_versions": [
-                crate::mcp::types::MODERN_PROTOCOL_VERSION,
-                crate::mcp::types::PROTOCOL_VERSION,
+                zen_mcp::types::MODERN_PROTOCOL_VERSION,
+                zen_mcp::types::PROTOCOL_VERSION,
             ],
             "server_count": mcp_servers.len(),
             "servers": mcp_servers,

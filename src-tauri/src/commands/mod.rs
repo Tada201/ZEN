@@ -42,7 +42,7 @@ use crate::agent::runner::ContextBreakdownPayload;
 use crate::agent::swarm::SwarmCoordinator;
 use crate::agent::types::AgentRegistry;
 use crate::error::{ZenError, ZenResult};
-use crate::llm::{LlmProvider, ProviderRegistry};
+use zen_llm::{LlmProvider, ProviderRegistry};
 use crate::services::{
     checkpoint::CheckpointService, process_manager::ProcessManager, DocumentService,
     HardwareService, MediaService, SecretService, SecurityService, SettingsService,
@@ -268,14 +268,14 @@ pub struct AppState {
     pub security: Arc<SecurityService>,
     pub chat_cancellation_tokens: Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
     pub chat_pause_controls: Arc<tokio::sync::Mutex<HashMap<String, Arc<ChatPauseControl>>>>,
-    pub rag: InitState<Arc<dyn crate::rag::VectorStore>>,
+    pub rag: InitState<Arc<dyn zen_rag::VectorStore>>,
     /// Arc-shared with `AgentContext` (Phase 6 seam); `Deref`-transparent.
-    pub conversation_store: Arc<InitState<Arc<crate::rag::conversation_store::ConversationStore>>>,
+    pub conversation_store: Arc<InitState<Arc<zen_rag::conversation_store::ConversationStore>>>,
     pub workspace_folder: Arc<RwLock<PathBuf>>,
     pub graph_sessions:
         Arc<tokio::sync::Mutex<HashMap<String, crate::canvas::session::GraphSession>>>,
-    pub session_memory: Arc<RwLock<Arc<crate::rag::session_memory::SessionMemoryManager>>>,
-    pub mcp_client: Arc<crate::mcp::McpClient>,
+    pub session_memory: Arc<RwLock<Arc<zen_rag::session_memory::SessionMemoryManager>>>,
+    pub mcp_client: Arc<zen_mcp::McpClient>,
     pub mcp_config: Arc<crate::services::McpConfigService>,
     pub mcp_discovery: Arc<crate::services::McpDiscoveryService>,
     pub mcp_consent: Arc<crate::services::McpConsentStore>,
@@ -423,7 +423,7 @@ impl AppState {
         let default_workspace = crate::workspace::get_default_workspace();
         let workspace_folder_arc = Arc::new(RwLock::new(default_workspace.clone()));
         let shared_session_memory = Arc::new(
-            crate::rag::session_memory::SessionMemoryManager::new(default_workspace),
+            zen_rag::session_memory::SessionMemoryManager::new(default_workspace),
         );
         let process_manager = Arc::new(ProcessManager::new());
         let event_bus = Arc::new(EventBus::default());
@@ -485,7 +485,7 @@ impl AppState {
             session_memory: Arc::new(RwLock::new(shared_session_memory)),
             mcp_config: mcp_config.clone(),
             mcp_client: {
-                let client = Arc::new(crate::mcp::McpClient::new(
+                let client = Arc::new(zen_mcp::McpClient::new(
                     mcp_registrar.clone(),
                     mcp_config,
                     mcp_discovery.clone(),
@@ -561,7 +561,7 @@ impl AppState {
         }
     }
 
-    pub async fn rag(&self) -> ZenResult<Arc<dyn crate::rag::VectorStore>> {
+    pub async fn rag(&self) -> ZenResult<Arc<dyn zen_rag::VectorStore>> {
         self.rag.get().await
     }
 
@@ -599,7 +599,7 @@ impl AppState {
 
         {
             let mut session_memory = self.session_memory.write().await;
-            *session_memory = Arc::new(crate::rag::session_memory::SessionMemoryManager::new(
+            *session_memory = Arc::new(zen_rag::session_memory::SessionMemoryManager::new(
                 canonical.clone(),
             ));
         }
@@ -612,7 +612,7 @@ impl AppState {
         &self,
         query_vec: Vec<f32>,
         limit: usize,
-    ) -> ZenResult<Vec<crate::rag::SearchResult>> {
+    ) -> ZenResult<Vec<zen_rag::SearchResult>> {
         let rag = self.rag.get().await?;
         rag.search(query_vec, limit)
             .await

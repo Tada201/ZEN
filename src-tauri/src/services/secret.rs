@@ -119,7 +119,7 @@ impl SecretService {
     /// so unrelated credentials are never guessed or deleted.
     pub async fn delete_known_secrets(&self, custom_provider_ids: &[String]) -> AppResult<usize> {
         let mut keys = std::collections::BTreeSet::new();
-        for provider in crate::llm::provider_meta::PROVIDER_CATALOG {
+        for provider in zen_llm::provider_meta::PROVIDER_CATALOG {
             if let Some(key) = provider.api_key_key {
                 keys.insert(key.to_string());
             }

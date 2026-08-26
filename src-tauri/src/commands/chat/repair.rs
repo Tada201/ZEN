@@ -12,7 +12,7 @@ use crate::commands::AppState;
 use crate::db::models::ChatMessage;
 use crate::db::queries;
 use crate::error::{ZenError, ZenResult};
-use crate::llm::ChatRequestConfig;
+use zen_llm::ChatRequestConfig;
 
 /// Repair task instructions: return ONLY the corrected diagram, no prose.
 const REPAIR_SYSTEM_PROMPT: &str = r#"You are a Mermaid diagram repair specialist.

@@ -2,7 +2,7 @@
 //! registered, discoverable, or present in any active agent allowlist.
 
 use crate::commands::AppState;
-use crate::rag::session_memory::create_memory_entry;
+use zen_rag::session_memory::create_memory_entry;
 use anyhow::Result;
 use async_trait::async_trait;
 /// Agent Tools for Session-Scoped Vector Memory

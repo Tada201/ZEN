@@ -11,7 +11,7 @@ pub(super) async fn triage(
     app: &AppHandle,
     chat_id: &str,
     deep_research_on: bool,
-    llm_provider: &dyn crate::llm::LlmProvider,
+    llm_provider: &dyn zen_llm::LlmProvider,
     active_model: &str,
     content: &str,
 ) -> bool {
@@ -42,7 +42,7 @@ pub(super) struct DeepResearchRoute<'a> {
     pub chat_id: String,
     pub active_model: String,
     pub content: String,
-    pub llm_provider: Arc<dyn crate::llm::LlmProvider>,
+    pub llm_provider: Arc<dyn zen_llm::LlmProvider>,
     pub config: ChatRequestConfig,
     pub thinking: Option<ThinkingConfig>,
     pub token: CancellationToken,
@@ -85,7 +85,7 @@ pub(super) async fn spawn_deep_research(params: DeepResearchRoute<'_>) {
     // protocol (e.g. adaptive effort to a budget-only model).
     let mut research_config = config.clone();
     research_config.resolved_reasoning = thinking.as_ref().map(|t| {
-        let intent = crate::llm::ReasoningIntent {
+        let intent = zen_llm::ReasoningIntent {
             enabled: t.enabled,
             effort: t.effort.clone(),
             budget_tokens: t.budget_tokens,

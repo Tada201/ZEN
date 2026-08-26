@@ -4,10 +4,7 @@ pub mod canvas;
 pub mod commands;
 pub mod db;
 pub mod error;
-pub mod llm;
-pub mod mcp;
 pub mod models;
-pub mod rag;
 pub mod search;
 pub mod services;
 pub mod terminal;
@@ -15,7 +12,7 @@ pub mod tools;
 pub mod utils;
 pub mod workspace;
 
-use crate::rag::VectorStore;
+use zen_rag::VectorStore;
 use commands::AppState;
 use std::sync::Arc;
 use tauri::Manager;
@@ -319,7 +316,7 @@ pub fn run() {
                 let dimension: usize = 768;
 
                 let lance_store = Arc::new(
-                    crate::rag::lancedb_store::LanceDbStore::new(
+                    zen_rag::lancedb_store::LanceDbStore::new(
                         rag_uri.clone(),
                         "documents".to_string(),
                         dimension,
@@ -330,7 +327,7 @@ pub fn run() {
                     state.init_progress.set_status(&bg_app_handle, "bg.lancedb", "error", Some(_p.elapsed().as_millis() as u64)).await;
                     tracing::warn!(error = %e, "Failed to initialize LanceDB vector store (background)");
                 } else {
-                    state.rag.set(lance_store.clone() as Arc<dyn crate::rag::VectorStore>).await;
+                    state.rag.set(lance_store.clone() as Arc<dyn zen_rag::VectorStore>).await;
                     state.init_progress.set_status(&bg_app_handle, "bg.lancedb", "done", Some(_p.elapsed().as_millis() as u64)).await;
                     tracing::info!(
                         elapsed_ms = _p.elapsed().as_millis(),
@@ -342,7 +339,7 @@ pub fn run() {
                     state.init_progress.set_status(&bg_app_handle, "bg.conversation_store", "running", None).await;
                     let _p = std::time::Instant::now();
                     let conversation_store = Arc::new(
-                        crate::rag::conversation_store::ConversationStore::new(
+                        zen_rag::conversation_store::ConversationStore::new(
                             rag_uri.clone(),
                             "conversation_vectors".to_string(),
                             dimension,
@@ -363,10 +360,10 @@ pub fn run() {
                     // ── Ollama embeddings ──
                     state.init_progress.set_status(&bg_app_handle, "bg.rag", "running", None).await;
                     let _p = std::time::Instant::now();
-                    match crate::rag::embedding::create_default_ollama_embedding().await {
+                    match zen_rag::embedding::create_default_ollama_embedding().await {
                         Ok(embed_model) => {
                             state.documents.set_rag_store(
-                                lance_store as Arc<dyn crate::rag::VectorStore>,
+                                lance_store as Arc<dyn zen_rag::VectorStore>,
                                 embed_model,
                             ).await;
                             state.init_progress.set_status(&bg_app_handle, "bg.rag", "done", Some(_p.elapsed().as_millis() as u64)).await;

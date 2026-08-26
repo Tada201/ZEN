@@ -362,7 +362,7 @@ impl ToolService {
                 // `ext:*` tool before the registry knows about it lands
                 // here (no `v2_exists` yet) and surfaces a clean "tool
                 // not found" instead of a misleading network error.
-                let hint = if crate::mcp::client::is_external_tool_name(&tool_call.name) {
+                let hint = if zen_mcp::client::is_external_tool_name(&tool_call.name) {
                     // External tools are not part of the local delegation
                     // path. Point the model at a concrete next action:
                     // confirm the server wiring.

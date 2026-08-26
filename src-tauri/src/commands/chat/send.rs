@@ -28,7 +28,7 @@ use crate::commands::AppState;
 use crate::db::models::ChatMessage;
 use crate::db::queries;
 use crate::error::ZenResult;
-use crate::llm::ChatRequestConfig;
+use zen_llm::ChatRequestConfig;
 
 use super::helpers::{
     deep_research_warranted, default_tool_intent_ids, default_yolo_tool_ids, has_tool_intent,

@@ -3,7 +3,7 @@ use tauri::{AppHandle, State};
 
 use crate::commands::AppState;
 use crate::error::{ZenError, ZenResult};
-use crate::mcp::resources::{
+use zen_mcp::resources::{
     McpPrompt, McpPromptMessage, McpResource, McpResourceContents, McpResourceTemplate,
 };
 use crate::services::{McpInventory, McpScope, McpServerEntry, PendingConsent};
@@ -202,7 +202,7 @@ pub async fn mcp_deny_server(
     // Best-effort: revoke any keyring-stored OAuth token so a re-approve
     // re-authorizes from scratch rather than reusing a credential the user
     // just rejected.
-    let _ = crate::mcp::oauth::clear_token(state.secret_manager.as_ref(), &name).await;
+    let _ = zen_mcp::oauth::clear_token(state.secret_manager.as_ref(), &name).await;
     let client = state.mcp_client.clone();
     let ui = crate::services::mcp_registrar::ui_bridge(&app);
     tokio::spawn(async move {
@@ -228,7 +228,7 @@ pub async fn mcp_authorize_oauth(
     scopes: Option<String>,
     resource_metadata_url: Option<String>,
 ) -> ZenResult<()> {
-    let token = crate::mcp::oauth::authorize(
+    let token = zen_mcp::oauth::authorize(
         &crate::services::mcp_registrar::OpenerBrowser::new(app.clone()),
         &server_url,
         resource_metadata_url.as_deref(),
@@ -237,7 +237,7 @@ pub async fn mcp_authorize_oauth(
     )
     .await
     .map_err(|e| ZenError::Custom(format!("MCP OAuth authorization failed: {e}")))?;
-    crate::mcp::oauth::store_token(state.secret_manager.as_ref(), &name, &token)
+    zen_mcp::oauth::store_token(state.secret_manager.as_ref(), &name, &token)
         .await
         .map_err(|e| ZenError::Custom(format!("MCP OAuth token store failed: {e}")))?;
     let client = state.mcp_client.clone();

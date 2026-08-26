@@ -20,7 +20,7 @@ pub async fn get_conversation_memories(
     chat_id: Option<String>,
     query: Option<String>,
     limit: Option<usize>,
-) -> Result<Vec<crate::rag::conversation_store::ConversationSearchResult>, String> {
+) -> Result<Vec<zen_rag::conversation_store::ConversationSearchResult>, String> {
     let store = state
         .conversation_store
         .get()
@@ -158,7 +158,7 @@ pub async fn list_session_memories_page(
 #[tauri::command]
 pub async fn get_memory_stats(
     state: State<'_, AppState>,
-) -> Result<crate::rag::conversation_store::ConversationStats, String> {
+) -> Result<zen_rag::conversation_store::ConversationStats, String> {
     let store = state
         .conversation_store
         .get()

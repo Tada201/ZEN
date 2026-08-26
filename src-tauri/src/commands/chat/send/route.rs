@@ -10,7 +10,7 @@ pub(super) struct RouteParams<'a> {
     pub content: String,
     pub active_model: String,
     pub resolved_provider_name: String,
-    pub llm_provider: Arc<dyn crate::llm::LlmProvider>,
+    pub llm_provider: Arc<dyn zen_llm::LlmProvider>,
     pub chat_messages: Vec<ChatMessage>,
     pub agent: crate::agent::types::Agent,
     pub config: ChatRequestConfig,

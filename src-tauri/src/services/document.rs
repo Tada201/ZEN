@@ -6,8 +6,8 @@ use uuid::Uuid;
 
 use crate::db::models::Document;
 use crate::error::{AppError, AppResult};
-use crate::rag::embedding::EmbeddingModel;
-use crate::rag::{ingestion::IngestionEngine, DocumentChunk, VectorStore};
+use zen_rag::embedding::EmbeddingModel;
+use zen_rag::{ingestion::IngestionEngine, DocumentChunk, VectorStore};
 
 pub struct DocumentService {
     pub db_pool: Arc<RwLock<Option<SqlitePool>>>,
@@ -402,7 +402,7 @@ impl DocumentService {
         {
             tokio::task::spawn_blocking({
                 let p = stored.blob_path.clone();
-                move || crate::rag::office_extract::spreadsheet_sheet_names(&p)
+                move || zen_rag::office_extract::spreadsheet_sheet_names(&p)
             })
             .await
             .ok()

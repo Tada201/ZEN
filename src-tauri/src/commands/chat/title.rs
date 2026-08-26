@@ -167,7 +167,7 @@ pub async fn generate_session_title(
             &model,
             messages,
             None,
-            crate::llm::ChatRequestConfig::default(),
+            zen_llm::ChatRequestConfig::default(),
             Box::new(|_| {}),
             tokio_util::sync::CancellationToken::new(),
         )

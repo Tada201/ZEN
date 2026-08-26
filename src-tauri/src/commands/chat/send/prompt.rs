@@ -26,7 +26,7 @@ pub(super) struct ToolIdParams<'a> {
     pub tools_enabled_str: Option<&'a str>,
     pub tool_yolo_mode_str: Option<&'a str>,
     pub tools_yolo_mode_str: Option<&'a str>,
-    pub llm_provider: &'a dyn crate::llm::LlmProvider,
+    pub llm_provider: &'a dyn zen_llm::LlmProvider,
     pub active_model: &'a str,
     pub content: &'a str,
 }

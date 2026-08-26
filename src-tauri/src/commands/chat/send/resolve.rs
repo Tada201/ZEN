@@ -5,7 +5,7 @@ use super::*;
 
 /// Everything the parallel fan-out returns for this turn.
 pub(super) struct TurnInputs {
-    pub llm_provider: Arc<dyn crate::llm::LlmProvider>,
+    pub llm_provider: Arc<dyn zen_llm::LlmProvider>,
     pub history: Vec<crate::db::models::Message>,
     pub tools_enabled_str: Option<String>,
     pub tool_yolo_mode_str: Option<String>,
@@ -151,11 +151,11 @@ pub(super) async fn apply_regenerate_truncate(
 /// reasoning resolver; the command only forwards intent.
 pub(super) fn apply_reasoning(
     config: &mut ChatRequestConfig,
-    llm_provider: &dyn crate::llm::LlmProvider,
+    llm_provider: &dyn zen_llm::LlmProvider,
     active_model: &str,
     thinking: &ThinkingConfig,
 ) {
-    let intent = crate::llm::ReasoningIntent {
+    let intent = zen_llm::ReasoningIntent {
         enabled: thinking.enabled,
         effort: thinking.effort.clone(),
         budget_tokens: thinking.budget_tokens,

@@ -194,7 +194,7 @@ impl SpawnAgentTool {
         // the model's resolved capability so an unsupported level is clamped or
         // dropped rather than sent raw. Empty means inherit → no override.
         let child_config = {
-            let mut cfg = crate::llm::ChatRequestConfig::default();
+            let mut cfg = zen_llm::ChatRequestConfig::default();
             let configured_effort = if explicit_model.is_some() || adhoc_instructions.is_some() {
                 None
             } else {
@@ -202,7 +202,7 @@ impl SpawnAgentTool {
             };
             if let Some(effort) = configured_effort {
                 let capability = provider.reasoning_capability(&resolved.model);
-                let intent = crate::llm::ReasoningIntent {
+                let intent = zen_llm::ReasoningIntent {
                     enabled: true,
                     effort: Some(effort),
                     budget_tokens: None,
