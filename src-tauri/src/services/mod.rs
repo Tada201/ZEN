@@ -16,10 +16,7 @@ pub mod mcp_registrar;
 
 
 pub mod media;
-pub mod permissions;
 pub mod secret;
-pub mod secret_policy;
-pub mod security;
 pub mod settings;
 pub mod terminal;
 pub mod tool;
@@ -39,10 +36,10 @@ pub use hardware::{HardwareInfo, HardwareService};
 pub use logging::init_backend_logging;
 
 pub use secret::SecretService;
-pub use secret_policy::{
+pub use zen_security::secrets::{
     is_secret_key, is_secret_placeholder_write, redact_if_secret, SECRET_PRESENT_SENTINEL,
 };
-pub use security::{
+pub use zen_security::service::{
     AuditEvent, PermissionDecision, PermissionRequest, PrivilegedOperation, RiskLevel,
     SecurityService,
 };
