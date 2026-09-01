@@ -27,7 +27,7 @@ jobs:
       manifests: ${{ steps.filter.outputs.manifests }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Path filter
         id: filter
         uses: dorny/paths-filter@v3
@@ -51,7 +51,7 @@ jobs:
     if: needs.changes.outputs.manifests == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # RULES.md §3.1: library crates must never depend on tauri or keyring.
       # Match uncommented dependency lines only.
@@ -109,7 +109,7 @@ jobs:
           - zen-policy-tests
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -145,7 +145,7 @@ jobs:
     if: needs.changes.outputs.backend == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -173,7 +173,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -210,7 +210,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -297,7 +297,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -332,7 +332,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
         uses: actions/setup-node@v4
